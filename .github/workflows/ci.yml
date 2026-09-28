@@ -1,0 +1,20 @@
+name: checks
+on:
+  pull_request:
+  push: { branches: [main] }
+
+# Keep this small: a Free organisation has limited Actions minutes, and we would
+# rather spend them on linting than on anything clever.
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell scripts
+        run: sudo apt-get update && sudo apt-get install -y shellcheck && shellcheck scripts/*.sh tools/*.sh
+      - name: YAML
+        run: pipx install yamllint && yamllint -d relaxed ansible charts observability
+      - name: Helm chart renders
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm template test charts/cell --set cell=app-01 --set image.repository=nginx > /dev/null

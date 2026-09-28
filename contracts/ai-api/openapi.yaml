@@ -1,0 +1,70 @@
+openapi: 3.1.0
+info:
+  title: JengaSec AI API
+  version: 1.0.0
+  description: >
+    Read-only telemetry for AI cells, and a gateway for permitted actions.
+    Event one runs the gateway in shadow mode: every action is authorised, recorded and scored,
+    but only `alert` takes effect.
+servers:
+  - url: https://ai.range.example/api/v1
+security:
+  - cellToken: []
+components:
+  securitySchemes:
+    cellToken:
+      type: http
+      scheme: bearer
+      description: One token per AI cell, scoped to one enterprise. Never share it.
+  schemas:
+    Event:
+      $ref: "../telemetry-event.schema.json"
+paths:
+  /telemetry/events:
+    get:
+      summary: Page through events for your enterprise
+      parameters:
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 1000, default: 200 } }
+      responses:
+        "200": { description: Events and a next cursor }
+        "401": { description: Missing or unknown token }
+        "429": { description: Over your rate limit — back off }
+  /telemetry/stream:
+    get:
+      summary: Server-sent events, same shape, live
+      responses:
+        "200": { description: text/event-stream }
+  /assets:
+    get:
+      summary: What exists in your enterprise (cells, hostnames, services)
+      responses:
+        "200": { description: Asset inventory }
+  /alerts:
+    get:
+      summary: Platform baseline alerts, for comparison with your own detections
+      responses:
+        "200": { description: Alerts }
+  /actions/{type}:
+    post:
+      summary: Request an action (shadow mode in event one)
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            enum: [alert, block-ip, revoke-session, disable-account, rate-limit, isolate-workload, snapshot-evidence]
+      responses:
+        "202": { description: Recorded, with an action_id }
+        "403": { description: Outside your scope, or over budget }
+  /actions/{id}/revert:
+    post:
+      summary: Undo an action you requested
+      responses:
+        "202": { description: Recorded }
+  /decisions:
+    post:
+      summary: Publish a decision-log entry (this is what judges score)
+      responses:
+        "201": { description: Stored }

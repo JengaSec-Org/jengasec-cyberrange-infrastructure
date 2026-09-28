@@ -1,0 +1,45 @@
+{{- if .Values.image.repository }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  namespace: {{ .Values.cell }}
+  labels:
+    {{- include "cell.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.app.replicas }}
+  selector: { matchLabels: { app: app } }
+  template:
+    metadata:
+      labels:
+        app: app
+        {{- include "cell.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: deployer
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports: [{ containerPort: {{ .Values.app.port }} }]
+          envFrom:
+            - secretRef: { name: db-credentials }
+          readinessProbe:
+            httpGet: { path: {{ .Values.app.healthPath }}, port: {{ .Values.app.port }} }
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet: { path: {{ .Values.app.healthPath }}, port: {{ .Values.app.port }} }
+            initialDelaySeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+  namespace: {{ .Values.cell }}
+spec:
+  selector: { app: app }
+  ports: [{ port: 80, targetPort: {{ .Values.app.port }} }]
+{{- end }}

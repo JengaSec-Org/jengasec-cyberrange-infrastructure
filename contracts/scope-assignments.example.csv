@@ -1,0 +1,5 @@
+red_team,enterprise,target_cell,wg_range,notes
+RED-01,zawadi-bank,app-01,10.60.1.0/24,
+RED-02,zawadi-bank,app-01,10.60.2.0/24,
+RED-03,zawadi-bank,app-02,10.60.3.0/24,
+RED-29,zawadi-bank,ai-01,10.60.29.0/24,AI Red: attacks the decision-maker via sensor services

@@ -1,0 +1,21 @@
+---
+# Apply to everything. Safe to run again: every task is idempotent.
+#   ansible-playbook site.yml --check     # show what would change
+#   ansible-playbook site.yml             # apply
+- name: Base configuration for every VM
+  hosts: all
+  become: true
+  roles:
+    - common
+
+- name: Kubernetes control plane
+  hosts: k3s_server
+  become: true
+  roles:
+    - k3s_server
+
+- name: Kubernetes workers
+  hosts: k3s_agent
+  become: true
+  roles:
+    - k3s_agent

@@ -1,0 +1,7 @@
+---
+# Named accounts on every VM. Add yourself here in a pull request with your PUBLIC key only.
+# Access tier comes from docs/access-tiers.md — this file grants shell, so keep it short.
+jengasec_admins:
+  - name: example
+    comment: "EXAMPLE — remove"
+    key: "ssh-ed25519 AAAA... example@jengasec"

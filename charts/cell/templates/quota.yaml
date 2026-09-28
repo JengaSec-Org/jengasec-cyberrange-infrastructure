@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ .Values.cell }}-quota
+  namespace: {{ .Values.cell }}
+spec:
+  hard:
+    requests.cpu: {{ .Values.quota.requestsCpu | quote }}
+    requests.memory: {{ .Values.quota.requestsMemory }}
+    limits.cpu: {{ .Values.quota.limitsCpu | quote }}
+    limits.memory: {{ .Values.quota.limitsMemory }}
+    persistentvolumeclaims: {{ .Values.quota.pvcs | quote }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: {{ .Values.cell }}-limits
+  namespace: {{ .Values.cell }}
+spec:
+  limits:
+    - type: Container
+      default: { cpu: 500m, memory: 512Mi }
+      defaultRequest: { cpu: 100m, memory: 128Mi }

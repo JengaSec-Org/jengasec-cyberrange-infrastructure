@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cell
+description: One JengaSec team environment — namespace, limits, isolation, database, ingress
+type: application
+version: 0.1.0
+appVersion: "1"

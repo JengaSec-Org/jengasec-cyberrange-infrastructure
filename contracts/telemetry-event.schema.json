@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jengasec.example/contracts/telemetry-event.schema.json",
+  "title": "JengaSec telemetry event",
+  "description": "The normalised event the AI API serves. Vector produces these from application and ingress logs.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "ts",
+    "enterprise",
+    "cell",
+    "source",
+    "event_type",
+    "severity"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "description": "Stable id, used as evidence reference"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "received_ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the platform saw it; late arrivals are normal"
+    },
+    "enterprise": {
+      "enum": [
+        "zawadi-bank",
+        "afya-health"
+      ]
+    },
+    "cell": {
+      "type": "string",
+      "pattern": "^(app|ai)-[0-9]{2}$"
+    },
+    "asset": {
+      "type": "string",
+      "description": "Which thing it happened on: app, database, ingress, node"
+    },
+    "source": {
+      "enum": [
+        "application",
+        "ingress",
+        "network",
+        "host",
+        "kubernetes",
+        "platform"
+      ]
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Normalised type: authentication_failure, http_request, privilege_change, data_export, container_restart"
+    },
+    "severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "actor": {
+      "type": "object",
+      "properties": {
+        "ip": {
+          "type": "string"
+        },
+        "team": {
+          "type": "string",
+          "description": "Red or Blue team code, resolved from the address range"
+        },
+        "user": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "cell": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "object": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "outcome": {
+      "enum": [
+        "success",
+        "failure",
+        "denied",
+        "error",
+        "unknown"
+      ]
+    },
+    "attack_mapping": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "ATT&CK technique ids, when the platform can tell"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Everything else, including the original log fields"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{{- if .Values.database.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: {{ .Values.cell }}
+type: Opaque
+stringData:
+  DB_HOST: db
+  DB_NAME: {{ .Values.database.name }}
+  DB_USER: {{ .Values.database.user }}
+  DB_PASSWORD: {{ randAlphaNum 24 | quote }}   # generated once at install; rotate with helm upgrade --reuse-values
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db
+  namespace: {{ .Values.cell }}
+spec:
+  serviceName: db
+  replicas: 1
+  selector: { matchLabels: { app: db } }
+  template:
+    metadata:
+      labels: { app: db }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 70, fsGroup: 70, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: postgres
+          image: {{ .Values.database.image }}
+          env:
+            - { name: POSTGRES_DB,       valueFrom: { secretKeyRef: { name: db-credentials, key: DB_NAME } } }
+            - { name: POSTGRES_USER,     valueFrom: { secretKeyRef: { name: db-credentials, key: DB_USER } } }
+            - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: db-credentials, key: DB_PASSWORD } } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ containerPort: 5432 }]
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: { requests: { storage: {{ .Values.database.storage }} } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: {{ .Values.cell }}
+spec:
+  selector: { app: db }
+  ports: [{ port: 5432 }]
+{{- end }}

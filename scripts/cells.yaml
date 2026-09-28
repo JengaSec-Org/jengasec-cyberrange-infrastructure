@@ -1,0 +1,16 @@
+# The 14 Application cells. Add nothing else here — AI cells need no cluster space in event one.
+cells:
+  - { name: app-01, enterprise: zawadi-bank, service: "Internet banking" }
+  - { name: app-02, enterprise: zawadi-bank, service: "Mobile banking API" }
+  - { name: app-03, enterprise: zawadi-bank, service: "Customer authentication" }
+  - { name: app-04, enterprise: zawadi-bank, service: "Payments" }
+  - { name: app-05, enterprise: zawadi-bank, service: "Loan applications" }
+  - { name: app-06, enterprise: zawadi-bank, service: "Staff portal" }
+  - { name: app-07, enterprise: zawadi-bank, service: "Customer support" }
+  - { name: app-08, enterprise: afya-health, service: "Patient portal" }
+  - { name: app-09, enterprise: afya-health, service: "Appointments API" }
+  - { name: app-10, enterprise: afya-health, service: "Records service" }
+  - { name: app-11, enterprise: afya-health, service: "Billing" }
+  - { name: app-12, enterprise: afya-health, service: "Pharmacy orders" }
+  - { name: app-13, enterprise: afya-health, service: "Staff portal" }
+  - { name: app-14, enterprise: afya-health, service: "Referrals" }

@@ -1,0 +1,17 @@
+# never commit these
+ansible/inventory.ini
+ansible/group_vars/**/vault.yml
+*.key
+*.pem
+*_rsa
+*_ed25519
+*.conf.generated
+wg-configs/
+snapshots/
+.env
+.env.*
+kubeconfig*
+__pycache__/
+*.pyc
+.venv/
+out/

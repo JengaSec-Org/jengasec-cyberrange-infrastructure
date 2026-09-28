@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jengasec.example/contracts/logging-contract.schema.json",
+  "title": "JengaSec application log line",
+  "description": "One JSON object per line on stdout. Everything an application logs must fit this shape.",
+  "type": "object",
+  "required": [
+    "ts",
+    "level",
+    "cell",
+    "event",
+    "outcome"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC, ISO 8601, e.g. 2026-10-10T09:15:02.113Z"
+    },
+    "level": {
+      "enum": [
+        "debug",
+        "info",
+        "warn",
+        "error"
+      ]
+    },
+    "cell": {
+      "type": "string",
+      "pattern": "^(app|ai)-[0-9]{2}$",
+      "description": "Your cell code, e.g. app-07"
+    },
+    "event": {
+      "type": "string",
+      "description": "What happened, lower_snake_case: login_success, login_failure, transfer_created, record_exported"
+    },
+    "outcome": {
+      "enum": [
+        "success",
+        "failure",
+        "denied",
+        "error"
+      ]
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Same value across all lines for one request"
+    },
+    "source_ip": {
+      "type": "string",
+      "description": "Client address as your app sees it"
+    },
+    "user": {
+      "type": "string",
+      "description": "Account or session identifier, never a password or token"
+    },
+    "target": {
+      "type": "string",
+      "description": "What was acted on: an account id, a record id, an endpoint"
+    },
+    "severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "description": "Only if your app judges it; the platform may override"
+    },
+    "detail": {
+      "type": "object",
+      "description": "Anything else, as key/value. No secrets, no card numbers, no full identity documents."
+    }
+  },
+  "examples": [
+    {
+      "ts": "2026-10-10T09:15:02.113Z",
+      "level": "warn",
+      "cell": "app-03",
+      "event": "login_failure",
+      "outcome": "failure",
+      "request_id": "7f2a",
+      "source_ip": "10.60.12.4",
+      "user": "j.mwangi",
+      "detail": {
+        "attempt": 5
+      }
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+# Vector does two jobs: ships every log to Loki, and turns logs into telemetry events for the AI API.
+# Owner: OBS. Keep this file in the repo — the running config is generated from it.
+sources:
+  containers:
+    type: kubernetes_logs
+
+transforms:
+  parsed:
+    type: remap
+    inputs: [containers]
+    source: |
+      . = parse_json(.message) ?? { "message": .message }
+      .cell = .cell || string!(.kubernetes.pod_namespace)
+
+  telemetry:
+    type: remap
+    inputs: [parsed]
+    source: |
+      # Shape into contracts/telemetry-event.schema.json
+      .event_id = uuid_v4()
+      .received_ts = now()
+      .source = "application"
+      .event_type = .event || "log"
+      .severity = .severity || "low"
+
+sinks:
+  loki:
+    type: loki
+    inputs: [parsed]
+    endpoint: http://loki:3100
+    labels:
+      cell: "{{ cell }}"
+      level: "{{ level }}"
+    encoding: { codec: json }
+
+  ai_api:
+    type: http
+    inputs: [telemetry]
+    uri: http://ai-api.platform.svc:8000/api/v1/ingest
+    method: post
+    encoding: { codec: json }
+    auth: { strategy: bearer, token: "${INGEST_TOKEN}" }

@@ -1,0 +1,24 @@
+---
+# Control plane. Pin the version in docs/versions.md and set k3s_version in group_vars.
+- name: Download k3s installer
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /usr/local/bin/k3s-install.sh
+    mode: "0755"
+
+- name: Install k3s server
+  ansible.builtin.command:
+    cmd: /usr/local/bin/k3s-install.sh
+    creates: /usr/local/bin/k3s
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version | default('') }}"
+    INSTALL_K3S_EXEC: "server --disable traefik=false --write-kubeconfig-mode 0640"
+
+- name: Read the join token
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_file
+
+- name: Share the token with the workers
+  ansible.builtin.set_fact:
+    k3s_join_token: "{{ k3s_token_file.content | b64decode | trim }}"

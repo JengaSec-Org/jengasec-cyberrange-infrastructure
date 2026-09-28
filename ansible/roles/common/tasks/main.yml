@@ -1,0 +1,52 @@
+---
+# Base for every VM: named users, hardened SSH, time, metrics agent, basic packages.
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - chrony
+      - curl
+      - git
+      - htop
+      - prometheus-node-exporter
+      - unattended-upgrades
+      - vim
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create named admin accounts
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    comment: "{{ item.comment | default('') }}"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+    state: present
+  loop: "{{ jengasec_admins }}"
+  loop_control: { label: "{{ item.name }}" }
+
+- name: Install their public keys
+  ansible.posix.authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.key }}"
+    state: present
+  loop: "{{ jengasec_admins }}"
+  loop_control: { label: "{{ item.name }}" }
+
+- name: Harden SSH
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    validate: "sshd -t -f %s"
+  loop:
+    - { regexp: '^#?PermitRootLogin',        line: 'PermitRootLogin no' }
+    - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+    - { regexp: '^#?X11Forwarding',          line: 'X11Forwarding no' }
+  notify: Restart ssh
+
+- name: Time synchronisation running
+  ansible.builtin.service:
+    name: chrony
+    state: started
+    enabled: true

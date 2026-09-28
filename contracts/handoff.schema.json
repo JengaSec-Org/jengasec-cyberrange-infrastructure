@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jengasec.example/contracts/handoff.schema.json",
+  "title": "Detection to response handoff",
+  "description": "What a Detection & Triage cell hands to a Response & Recovery cell in the same enterprise.",
+  "type": "object",
+  "required": [
+    "handoff_id",
+    "ts",
+    "from_cell",
+    "to_cell",
+    "incident_id",
+    "hypothesis",
+    "confidence",
+    "severity",
+    "evidence",
+    "recommended_actions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "handoff_id": {
+      "type": "string"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "from_cell": {
+      "type": "string"
+    },
+    "to_cell": {
+      "type": "string"
+    },
+    "incident_id": {
+      "type": "string",
+      "description": "Groups handoffs and decisions about one incident"
+    },
+    "hypothesis": {
+      "type": "string",
+      "description": "What the detection cell believes is happening, in plain words"
+    },
+    "attack_mapping": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "telemetry event_id values"
+    },
+    "affected": {
+      "type": "object",
+      "properties": {
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "accounts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "recommended_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "alert, block-ip, revoke-session, disable-account, rate-limit, isolate-workload, snapshot-evidence"
+          },
+          "parameters": {
+            "type": "object"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "After this, the response cell should re-check before acting"
+    }
+  }
+}
