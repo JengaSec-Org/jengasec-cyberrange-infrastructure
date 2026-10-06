@@ -1,0 +1,161 @@
+name: jengasec-observability
+
+services:
+  reference-app:
+    build:
+      context: ./reference-app
+    environment:
+      JENGASEC_CELL: app-01
+    init: true
+    labels:
+      jengasec.observability.collect: "true"
+    ports:
+      - "${JENGASEC_REFERENCE_BIND:-127.0.0.1}:${JENGASEC_REFERENCE_PORT:-8080}:8080"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  loki:
+    image: >-
+      grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
+    command:
+      - -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "${JENGASEC_LOKI_BIND:-127.0.0.1}:${JENGASEC_LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/loki
+        - -config.file=/etc/loki/local-config.yaml
+        - -verify-config=true
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  vector:
+    image: >-
+      timberio/vector:0.58.0-debian@sha256:1c1ea358c617ea0b23003d5af87f7a678b30f8f7096437e680380c47fc13d2d9
+    command:
+      - --config
+      - /etc/vector/vector.yaml
+    depends_on:
+      loki:
+        condition: service_healthy
+      reference-app:
+        condition: service_healthy
+    environment:
+      JENGASEC_ENTERPRISE: zawadi-bank
+    ports:
+      - "${JENGASEC_VECTOR_BIND:-127.0.0.1}:${JENGASEC_VECTOR_PORT:-9598}:9598"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./vector/vector.yaml:/etc/vector/vector.yaml:ro
+    healthcheck:
+      test:
+        - CMD
+        - vector
+        - validate
+        - --skip-healthchecks
+        - /etc/vector/vector.yaml
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  prometheus:
+    image: >-
+      prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=24h
+      - --web.enable-lifecycle
+    depends_on:
+      reference-app:
+        condition: service_healthy
+      vector:
+        condition: service_healthy
+    ports:
+      - "${JENGASEC_PROMETHEUS_BIND:-127.0.0.1}:${JENGASEC_PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --spider
+        - --quiet
+        - http://127.0.0.1:9090/-/ready
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  grafana:
+    image: >-
+      grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
+    depends_on:
+      loki:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: >-
+        /var/lib/grafana/dashboards/jengasec-codespaces.json
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "${JENGASEC_GRAFANA_BIND:-127.0.0.1}:${JENGASEC_GRAFANA_PORT:-3000}:3000"
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - http://127.0.0.1:3000/api/health
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  contract-tests:
+    profiles:
+      - tests
+    build:
+      context: ..
+      dockerfile: observability/tests/Dockerfile
+    volumes:
+      - ..:/workspace:ro
+
+volumes:
+  grafana-data:
+  loki-data:
+  prometheus-data:

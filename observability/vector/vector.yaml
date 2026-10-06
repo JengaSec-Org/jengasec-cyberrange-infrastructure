@@ -1,0 +1,103 @@
+api:
+  enabled: true
+  address: 0.0.0.0:8686
+
+sources:
+  reference_logs:
+    type: docker_logs
+    include_labels:
+      - jengasec.observability.collect=true
+
+  vector_metrics:
+    type: internal_metrics
+
+transforms:
+  normalized_telemetry:
+    type: remap
+    inputs:
+      - reference_logs
+    drop_on_error: true
+    source: |
+      original = parse_json!(.message)
+
+      level = string!(original.level)
+      cell = string!(original.cell)
+      event_type = string!(original.event)
+      outcome = string!(original.outcome)
+      ts = parse_timestamp!(string!(original.ts), format: "%+")
+      enterprise = get_env_var!("JENGASEC_ENTERPRISE")
+
+      assert!(includes(["debug", "info", "warn", "error"], level))
+      assert!(match(cell, r'^(app|ai)-[0-9]{2}$'))
+      assert!(includes(["success", "failure", "denied", "error"], outcome))
+      assert!(includes(["zawadi-bank", "afya-health"], enterprise))
+
+      severity = if exists(original.severity) {
+        string!(original.severity)
+      } else if level == "error" {
+        "high"
+      } else if level == "warn" {
+        "medium"
+      } else {
+        "low"
+      }
+      assert!(includes(["low", "medium", "high", "critical"], severity))
+
+      actor = {}
+      if exists(original.source_ip) {
+        actor.ip = string!(original.source_ip)
+      }
+      if exists(original.user) {
+        actor.user = string!(original.user)
+      }
+
+      target = {"cell": cell}
+      if exists(original.target) {
+        target.object = string!(original.target)
+      }
+
+      normalized = {
+        "event_id": uuid_v4(),
+        "ts": ts,
+        "received_ts": now(),
+        "enterprise": enterprise,
+        "cell": cell,
+        "asset": "reference-app",
+        "source": "application",
+        "event_type": event_type,
+        "severity": severity,
+        "target": target,
+        "outcome": outcome,
+        "metadata": {"original": original}
+      }
+
+      if length(keys(actor)) > 0 {
+        normalized.actor = actor
+      }
+
+      . = normalized
+
+sinks:
+  loki:
+    type: loki
+    inputs:
+      - normalized_telemetry
+    endpoint: http://loki:3100
+    healthcheck:
+      enabled: false
+    labels:
+      enterprise: "{{ enterprise }}"
+      cell: "{{ cell }}"
+      source: "{{ source }}"
+      event_type: "{{ event_type }}"
+      severity: "{{ severity }}"
+    encoding:
+      codec: json
+    batch:
+      timeout_secs: 1
+
+  prometheus_exporter:
+    type: prometheus_exporter
+    inputs:
+      - vector_metrics
+    address: 0.0.0.0:9598
