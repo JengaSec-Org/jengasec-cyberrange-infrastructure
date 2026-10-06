@@ -1,0 +1,10 @@
+{
+  "event_id": "97082810-647a-4de8-817f-2569082f8439",
+  "ts": "2026-10-06T12:00:00.000Z",
+  "enterprise": "zawadi-bank",
+  "cell": "app-01",
+  "source": "application",
+  "event_type": "reference_smoke",
+  "severity": "low",
+  "raw_message": "this is not a contract field"
+}

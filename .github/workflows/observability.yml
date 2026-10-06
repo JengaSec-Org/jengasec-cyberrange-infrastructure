@@ -1,0 +1,51 @@
+name: observability
+
+on:
+  pull_request:
+    paths:
+      - .devcontainer/**
+      - .github/workflows/observability.yml
+      - Makefile
+      - contracts/**
+      - observability/**
+      - scripts/smoke-observability.sh
+      - scripts/start-observability.sh
+      - scripts/stop-observability.sh
+      - scripts/validate-observability.sh
+  push:
+    branches:
+      - main
+    paths:
+      - .devcontainer/**
+      - .github/workflows/observability.yml
+      - Makefile
+      - contracts/**
+      - observability/**
+      - scripts/smoke-observability.sh
+      - scripts/start-observability.sh
+      - scripts/stop-observability.sh
+      - scripts/validate-observability.sh
+
+permissions:
+  contents: read
+
+jobs:
+  end-to-end:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install smoke-check tools
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Validate configs, builds and contracts
+        run: make obs-validate
+      - name: Start observability stack
+        run: make obs-up
+      - name: Prove event and metric ingestion
+        run: make obs-smoke
+      - name: Capture service logs after failure
+        if: failure()
+        run: docker compose -f observability/compose.yaml logs --no-color --tail=200
+      - name: Stop observability stack
+        if: always()
+        run: make obs-down
