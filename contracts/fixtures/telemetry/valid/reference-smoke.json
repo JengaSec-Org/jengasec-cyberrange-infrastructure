@@ -1,0 +1,26 @@
+{
+  "event_id": "97082810-647a-4de8-817f-2569082f8439",
+  "ts": "2026-10-06T12:00:00.000Z",
+  "received_ts": "2026-10-06T12:00:00.100Z",
+  "enterprise": "zawadi-bank",
+  "cell": "app-01",
+  "asset": "reference-app",
+  "source": "application",
+  "event_type": "reference_smoke",
+  "severity": "low",
+  "actor": {
+    "ip": "127.0.0.1",
+    "user": "reference-workload"
+  },
+  "target": {
+    "cell": "app-01",
+    "object": "/emit"
+  },
+  "outcome": "success",
+  "metadata": {
+    "original": {
+      "level": "info",
+      "request_id": "72d63b4e-d98f-44fc-8668-c96e70e69310"
+    }
+  }
+}
