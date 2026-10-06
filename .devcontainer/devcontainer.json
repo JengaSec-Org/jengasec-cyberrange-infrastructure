@@ -1,0 +1,45 @@
+{
+  "name": "JengaSec infrastructure",
+  "image": "mcr.microsoft.com/devcontainers/base:1-bookworm@sha256:ce2e9e611939e611b737362c045bb6d3449bb3efb84898525d724aace1737b90",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:4.1.2": {
+      "version": "29.7.2",
+      "moby": true,
+      "dockerDashComposeVersion": "v2"
+    }
+  },
+  "forwardPorts": [
+    3000,
+    8080,
+    9090,
+    9598
+  ],
+  "portsAttributes": {
+    "3000": {
+      "label": "JengaSec Grafana",
+      "onAutoForward": "openPreview",
+      "visibility": "private"
+    },
+    "8080": {
+      "label": "Reference workload",
+      "onAutoForward": "silent",
+      "visibility": "private"
+    },
+    "9090": {
+      "label": "Prometheus",
+      "onAutoForward": "silent",
+      "visibility": "private"
+    },
+    "9598": {
+      "label": "Vector metrics",
+      "onAutoForward": "silent",
+      "visibility": "private"
+    }
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  "remoteUser": "vscode"
+}
