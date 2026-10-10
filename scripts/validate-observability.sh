@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Validate observability configs, schemas, fixtures, and container builds.
 # Owner: Observability. Run: ./scripts/validate-observability.sh
-# Changes: builds local images and creates temporary local Docker resources only.
+# Changes: builds images and creates temporary Docker resources.
 set -euo pipefail
 
 # shellcheck source=scripts/_lib.sh
@@ -24,7 +24,7 @@ find "$REPO_ROOT/contracts/fixtures" -type f -name '*.json' -print0 \
 jq empty \
   "$REPO_ROOT/observability/grafana/dashboards/jengasec-observability.json"
 
-log "building reference emitter and contract test images"
+log "building test emitter and contract test images"
 "${COMPOSE[@]}" build test-emitter contract-tests catalogue-renderer
 
 log "checking test emitter Python syntax"

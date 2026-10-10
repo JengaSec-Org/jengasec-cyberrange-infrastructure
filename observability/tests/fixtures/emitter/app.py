@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reference workload for the JengaSec observability development path."""
+"""Test emitter for the JengaSec observability pipeline."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ def render_metrics() -> bytes:
     with LOCK:
         values = COUNTERS.copy()
     lines = [
-        "# HELP jengasec_test_emitter_info Static reference workload metadata.",
+        "# HELP jengasec_test_emitter_info Static test emitter metadata.",
         "# TYPE jengasec_test_emitter_info gauge",
         f'jengasec_test_emitter_info{{enterprise="{ENTERPRISE}",application="{APPLICATION}"}} 1',
         "# HELP jengasec_test_events_emitted_total Events written to stdout.",

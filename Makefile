@@ -5,14 +5,14 @@ help:
 	@echo "make cells         # update team cells (needs cluster access)"
 	@echo "make dev           # set up this machine (Debian 12)"
 	@echo "make obs-validate  # validate observability configs and contracts"
-	@echo "make obs-up        # start the Codespaces observability stack"
+	@echo "make obs-up        # start the observability stack"
 	@echo "make obs-smoke     # prove one event and metric arrived"
 	@echo "make obs-down      # stop the stack and keep data"
 
 lint:
 	shellcheck -x -P scripts scripts/*.sh tools/*.sh observability/tests/*.sh
 	yamllint -c .yamllint.yml .github ansible charts contracts observability scripts
-	jq empty .devcontainer/*.json contracts/*.schema.json \
+	jq empty contracts/*.schema.json \
 		contracts/fixtures/*/*/*.json observability/grafana/dashboards/*.json
 	helm template test charts/cell --set image.repository=nginx > /dev/null
 	$(MAKE) contracts
