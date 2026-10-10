@@ -1,0 +1,18 @@
+{
+  "schema_version": "2.0",
+  "catalogue_version": 1,
+  "stream": "telemetry",
+  "event_id": "evt_1111111111111111111111111111111111111111111111111111111111111111",
+  "integrity_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "ts": "2026-10-10T09:15:02.113Z",
+  "received_ts": "2026-10-10T09:15:02.301Z",
+  "enterprise": "ENT-A",
+  "application": "APP01",
+  "namespace": "jengasec-ent-a-app01",
+  "asset": "platform/reset",
+  "source": "platform",
+  "event_type": "platform_action",
+  "severity": "high",
+  "outcome": "success",
+  "verdict": "not_applicable"
+}

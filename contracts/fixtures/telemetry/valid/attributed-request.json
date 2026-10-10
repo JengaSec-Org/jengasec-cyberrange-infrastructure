@@ -1,0 +1,43 @@
+{
+  "schema_version": "2.0",
+  "catalogue_version": 1,
+  "stream": "telemetry",
+  "event_id": "evt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "integrity_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "ts": "2026-10-10T09:15:02.113Z",
+  "received_ts": "2026-10-10T09:15:02.301Z",
+  "enterprise": "ENT-A",
+  "application": "APP01",
+  "namespace": "jengasec-ent-a-app01",
+  "asset": "jengasec-ent-a-app01/app",
+  "source": "application",
+  "raw_event": "request_completed",
+  "event_type": "http_request",
+  "severity": "low",
+  "actor": {
+    "ip": "10.60.2.14",
+    "participant_id": "JS26-P-0004",
+    "team_id": "JS26-R-002",
+    "team_label": "red-app",
+    "user_id": "acct-1842"
+  },
+  "target": {
+    "ip": "10.108.0.11",
+    "enterprise": "ENT-A",
+    "application": "APP01",
+    "namespace": "jengasec-ent-a-app01",
+    "asset": "app"
+  },
+  "http": {
+    "method": "POST",
+    "path": "/api/v1/transfers",
+    "status": 403,
+    "action": "create_transfer"
+  },
+  "outcome": "denied",
+  "verdict": "allowed",
+  "request_id": "req-contract-001",
+  "metadata": {
+    "route": "transfers.create"
+  }
+}

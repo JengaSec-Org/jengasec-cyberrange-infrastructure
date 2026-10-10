@@ -1,0 +1,16 @@
+{
+  "schema_version": "2.0",
+  "ts": "2026-10-10T09:15:03.113Z",
+  "level": "info",
+  "enterprise": "ENT-B",
+  "application": "APP04",
+  "namespace": "jengasec-ent-b-app04",
+  "event": "transfer_created",
+  "outcome": "success",
+  "request_id": "req-contract-002",
+  "source_ip": "10.60.5.10",
+  "detail": {
+    "amount_kes": 1250,
+    "currency": "KES"
+  }
+}

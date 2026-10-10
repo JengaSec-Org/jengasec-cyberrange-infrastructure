@@ -3,18 +3,23 @@ on:
   pull_request:
   push: { branches: [main] }
 
-# Keep this small: a Free organisation has limited Actions minutes, and we would
-# rather spend them on linting than on anything clever.
+permissions:
+  contents: read
+
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Shell scripts
-        run: sudo apt-get update && sudo apt-get install -y shellcheck && shellcheck scripts/*.sh tools/*.sh
-      - name: YAML
-        run: pipx install yamllint && yamllint -d relaxed ansible charts observability
-      - name: Helm chart renders
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install validation tools
         run: |
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-          helm template test charts/cell --set cell=app-01 --set image.repository=nginx > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          python3 -m venv /tmp/jengasec-contract-venv
+          /tmp/jengasec-contract-venv/bin/pip install -r contracts/requirements.txt
+      - name: Install Helm
+        uses: Azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.22.0
+      - name: Static and contract checks
+        run: PATH="/tmp/jengasec-contract-venv/bin:$PATH" make lint

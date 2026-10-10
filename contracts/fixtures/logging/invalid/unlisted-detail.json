@@ -1,0 +1,13 @@
+{
+  "schema_version": "2.0",
+  "ts": "2026-10-10T09:15:02.113Z",
+  "level": "warn",
+  "enterprise": "ENT-A",
+  "application": "APP03",
+  "namespace": "jengasec-ent-a-app03",
+  "event": "login_failure",
+  "outcome": "failure",
+  "detail": {
+    "debug_dump": "not a catalogue field"
+  }
+}

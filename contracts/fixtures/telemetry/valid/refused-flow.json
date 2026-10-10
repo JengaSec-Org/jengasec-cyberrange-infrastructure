@@ -1,0 +1,38 @@
+{
+  "schema_version": "2.0",
+  "catalogue_version": 1,
+  "stream": "telemetry",
+  "event_id": "evt_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "integrity_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "ts": "2026-10-10T09:16:02.113Z",
+  "received_ts": "2026-10-10T09:16:02.301Z",
+  "enterprise": "ENT-A",
+  "application": "APP02",
+  "namespace": "jengasec-ent-a-app02",
+  "asset": "gateway/filterlog",
+  "source": "network",
+  "raw_event": "firewall_refused",
+  "event_type": "scope_violation",
+  "severity": "medium",
+  "actor": {
+    "ip": "10.60.2.14",
+    "participant_id": "JS26-P-0004",
+    "team_id": "JS26-R-002",
+    "team_label": "red-app"
+  },
+  "target": {
+    "ip": "10.108.0.12",
+    "enterprise": "ENT-A",
+    "application": "APP02",
+    "namespace": "jengasec-ent-a-app02",
+    "asset": "app"
+  },
+  "network": {
+    "src_port": 49152,
+    "dst_port": 443,
+    "protocol": "TCP",
+    "rule_id": "scope-refused"
+  },
+  "outcome": "denied",
+  "verdict": "refused"
+}

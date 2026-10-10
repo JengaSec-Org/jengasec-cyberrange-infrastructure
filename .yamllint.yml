@@ -1,0 +1,7 @@
+extends: relaxed
+
+ignore:
+  - charts/cell/templates
+
+rules:
+  line-length: disable
