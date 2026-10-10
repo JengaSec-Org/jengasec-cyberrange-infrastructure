@@ -31,11 +31,17 @@ There is no Automation Lead. Each area writes its own scripts into `scripts/`.
 | Thing | Pattern | Example |
 |---|---|---|
 | VM | role, lowercase | `k3s-worker-2` |
-| Namespace | `app-NN` for cells, `platform` for shared services | `app-07` |
-| Hostname | `<cell>.range.<domain>` | `app-07.range.jengasec.example` |
+| Enterprise ID | `ENT-A` or `ENT-B` | `ENT-A` |
+| Application ID | `APP01` through `APP09` | `APP07` |
+| Namespace | `jengasec-<enterprise>-<application>`, lower-case | `jengasec-ent-a-app07` |
+| Asset ID | `<namespace>/<component>` | `jengasec-ent-a-app07/app` |
+| Hostname | `<enterprise>-<application>.range.<domain>`, lower-case | `ent-a-app07.range.jengasec.example` |
 | Branch | `<area>/<thing>` | `sec/allowlist-generator` |
 | Script | verb-noun | `provision-cells.sh` |
 | Secret | `<area>-<what>` | `app-registry-token` |
+
+Display names may contain spaces, but machine interfaces use only these IDs.
+Do not use the retired Zawadi/Afya or `app-NN` identifiers in new contracts.
 
 ## 4. Versions
 

@@ -1,5 +1,5 @@
-red_team,enterprise,target_cell,wg_range,notes
-RED-01,zawadi-bank,app-01,10.60.1.0/24,
-RED-02,zawadi-bank,app-01,10.60.2.0/24,
-RED-03,zawadi-bank,app-02,10.60.3.0/24,
-RED-29,zawadi-bank,ai-01,10.60.29.0/24,AI Red: attacks the decision-maker via sensor services
+team_id,source_cidr,enterprise,application,namespace,target_ip,active,notes
+JS26-R-001,10.60.1.0/24,ENT-A,APP01,jengasec-ent-a-app01,10.108.0.11,true,App Red assignment 1 of 3
+JS26-R-002,10.60.2.0/24,ENT-A,APP01,jengasec-ent-a-app01,10.108.0.11,true,App Red assignment 2 of 3
+JS26-R-003,10.60.3.0/24,ENT-A,APP01,jengasec-ent-a-app01,10.108.0.11,true,App Red assignment 3 of 3
+JS26-AIR-001,10.64.1.0/24,ENT-B,APP01,jengasec-ent-b-app01,10.108.0.21,true,AI Red rate-limited application scope

@@ -1,119 +1,181 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jengasec.example/contracts/telemetry-event.schema.json",
-  "title": "JengaSec telemetry event",
-  "description": "The normalised event the AI API serves. Vector produces these from application and ingress logs.",
+  "title": "JengaSec normalized telemetry event",
+  "description": "An attributable observation produced by the observability normalizer. Platform audit and competition records use separate contracts.",
   "type": "object",
   "required": [
+    "schema_version",
+    "catalogue_version",
+    "stream",
     "event_id",
+    "integrity_hash",
     "ts",
+    "received_ts",
     "enterprise",
-    "cell",
+    "application",
+    "namespace",
+    "asset",
     "source",
     "event_type",
-    "severity"
+    "severity",
+    "outcome",
+    "verdict"
   ],
   "additionalProperties": false,
   "properties": {
+    "schema_version": {"const": "2.0"},
+    "catalogue_version": {"const": 1},
+    "stream": {"const": "telemetry"},
     "event_id": {
       "type": "string",
-      "description": "Stable id, used as evidence reference"
+      "pattern": "^evt_[a-f0-9]{64}$",
+      "description": "Stable content-derived identifier used by findings and evidence packs"
     },
-    "ts": {
+    "integrity_hash": {
       "type": "string",
-      "format": "date-time"
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "SHA-256 of the canonical normalized event before this field is added"
     },
-    "received_ts": {
+    "ts": {"type": "string", "format": "date-time"},
+    "received_ts": {"type": "string", "format": "date-time"},
+    "enterprise": {"enum": ["ENT-A", "ENT-B"]},
+    "application": {
+      "enum": ["APP01", "APP02", "APP03", "APP04", "APP05", "APP06", "APP07", "APP08", "APP09"]
+    },
+    "namespace": {
       "type": "string",
-      "format": "date-time",
-      "description": "When the platform saw it; late arrivals are normal"
-    },
-    "enterprise": {
-      "enum": [
-        "zawadi-bank",
-        "afya-health"
-      ]
-    },
-    "cell": {
-      "type": "string",
-      "pattern": "^(app|ai)-[0-9]{2}$"
+      "pattern": "^jengasec-ent-(a|b)-app0[1-9]$"
     },
     "asset": {
       "type": "string",
-      "description": "Which thing it happened on: app, database, ingress, node"
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
     },
     "source": {
-      "enum": [
-        "application",
-        "ingress",
-        "network",
-        "host",
-        "kubernetes",
-        "platform"
-      ]
+      "enum": ["application", "ingress", "network", "ids", "kubernetes", "host"]
+    },
+    "raw_event": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,63}$",
+      "description": "Catalogue key observed before normalization"
     },
     "event_type": {
-      "type": "string",
-      "description": "Normalised type: authentication_failure, http_request, privilege_change, data_export, container_restart"
-    },
-    "severity": {
       "enum": [
-        "low",
-        "medium",
-        "high",
-        "critical"
+        "authentication_success",
+        "authentication_failure",
+        "session_end",
+        "session_revoked",
+        "token_issued",
+        "access_denied",
+        "privilege_change",
+        "account_change",
+        "data_export",
+        "data_change",
+        "financial_transaction",
+        "input_rejected",
+        "notification_sent",
+        "http_request",
+        "network_flow",
+        "scope_violation",
+        "ids_alert",
+        "kubernetes_event",
+        "container_restart",
+        "host_alert"
       ]
     },
+    "severity": {"enum": ["low", "medium", "high", "critical"]},
     "actor": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
-        "ip": {
-          "type": "string"
+        "ip": {"$ref": "#/$defs/ipAddress"},
+        "participant_id": {"type": "string", "pattern": "^JS26-P-[0-9]{4,6}$"},
+        "team_id": {"type": "string", "pattern": "^JS26-[A-Z]+-[0-9]{3}$"},
+        "team_label": {
+          "enum": ["red-app", "blue-app", "red-ai", "blue-ai", "staff", "judge", "system", "unknown"]
         },
-        "team": {
-          "type": "string",
-          "description": "Red or Blue team code, resolved from the address range"
-        },
-        "user": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
+        "user_id": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
     },
     "target": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
-        "cell": {
-          "type": "string"
-        },
-        "endpoint": {
-          "type": "string"
-        },
-        "object": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
+        "ip": {"$ref": "#/$defs/ipAddress"},
+        "enterprise": {"enum": ["ENT-A", "ENT-B"]},
+        "application": {"type": "string", "pattern": "^APP0[1-9]$"},
+        "namespace": {"type": "string", "pattern": "^jengasec-ent-(a|b)-app0[1-9]$"},
+        "asset": {"type": "string", "maxLength": 128},
+        "target_id": {"type": "string", "maxLength": 128}
+      }
     },
-    "outcome": {
-      "enum": [
-        "success",
-        "failure",
-        "denied",
-        "error",
-        "unknown"
-      ]
+    "http": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method": {"enum": ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]},
+        "path": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "status": {"type": "integer", "minimum": 100, "maximum": 599},
+        "action": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$"}
+      }
     },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "src_port": {"type": "integer", "minimum": 0, "maximum": 65535},
+        "dst_port": {"type": "integer", "minimum": 0, "maximum": 65535},
+        "protocol": {"type": "string", "maxLength": 16},
+        "bytes": {"type": "integer", "minimum": 0},
+        "packets": {"type": "integer", "minimum": 0},
+        "rule_id": {"type": "string", "maxLength": 128}
+      }
+    },
+    "ids": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "signature_id": {"type": "string", "maxLength": 128},
+        "signature": {"type": "string", "maxLength": 512},
+        "category": {"type": "string", "maxLength": 128},
+        "action": {"type": "string", "maxLength": 64}
+      }
+    },
+    "outcome": {"enum": ["success", "failure", "denied", "error", "unknown"]},
+    "verdict": {"enum": ["allowed", "refused", "not_applicable", "unknown"]},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "trace_id": {"type": "string", "minLength": 1, "maxLength": 128},
     "attack_mapping": {
       "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "ATT&CK technique ids, when the platform can tell"
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$"}
     },
     "metadata": {
       "type": "object",
-      "description": "Everything else, including the original log fields"
+      "maxProperties": 32,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]{0,63}$"},
+      "additionalProperties": {"$ref": "#/$defs/metadataValue"},
+      "description": "Bounded normalized source fields only; never the original payload"
+    }
+  },
+  "$defs": {
+    "ipAddress": {
+      "oneOf": [
+        {"type": "string", "format": "ipv4"},
+        {"type": "string", "format": "ipv6"}
+      ]
+    },
+    "metadataScalar": {"type": ["string", "number", "integer", "boolean", "null"]},
+    "metadataValue": {
+      "oneOf": [
+        {"$ref": "#/$defs/metadataScalar"},
+        {
+          "type": "array",
+          "maxItems": 16,
+          "items": {"$ref": "#/$defs/metadataScalar"}
+        }
+      ]
     }
   }
 }

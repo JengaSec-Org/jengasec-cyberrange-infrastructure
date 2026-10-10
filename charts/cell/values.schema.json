@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["namespace", "enterprise", "application", "reservedIP"],
+  "properties": {
+    "namespace": {
+      "type": "string",
+      "pattern": "^jengasec-ent-(a|b)-app0[1-9]$"
+    },
+    "enterprise": {
+      "enum": ["ENT-A", "ENT-B"]
+    },
+    "application": {
+      "type": "string",
+      "pattern": "^APP0[1-9]$"
+    },
+    "reservedIP": {
+      "type": "string",
+      "pattern": "^10\\.108\\.0\\.(1[1-9]|2[1-9])$"
+    }
+  }
+}

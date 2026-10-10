@@ -2,6 +2,10 @@
 
 Everything that builds, runs and tears down the JengaSec range lives here. One repository, one folder per area.
 
+The competition application estate is one bank replicated as ENT-A and ENT-B,
+with APP01 through APP09 in each enterprise. APP08 and APP09 are optional but
+remain symmetric across both copies.
+
 JengaSec runs on **one machine**: Server 3, a Proxmox host. Everything else is a virtual machine on it. Nobody experiments on Server 3 — you build and test on your own Debian 12 VM, open a pull request, and the change is applied to the server from this repository.
 
 ## Start here

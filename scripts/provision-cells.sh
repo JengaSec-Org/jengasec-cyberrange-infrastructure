@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # what:   Create or update every team environment from cells.yaml
 # owner:  APP
-# usage:  ./provision-cells.sh [--dry-run] [cell…]
+# usage:  ./provision-cells.sh [--dry-run] [namespace…]
 # reads:  scripts/cells.yaml, charts/cell
 # changes: namespaces, quotas, policies, databases, ingress in the cluster
 # safe to run again: yes (helm upgrade --install)
@@ -14,15 +14,31 @@ need helm; need yq
 CELLS_FILE="${CELLS_FILE:-$(dirname "$0")/cells.yaml}"
 CHART="$(dirname "$0")/../charts/cell"
 
-cells=$(yq -r '.cells[].name' "$CELLS_FILE")
-[ $# -gt 0 ] && cells=$(printf '%s\n' "$@" | grep -v -- '--dry-run' || true)
+requested=()
+for arg in "$@"; do
+  [ "$arg" = "--dry-run" ] || requested+=("$arg")
+done
 
-for cell in $cells; do
-  enterprise=$(yq -r ".cells[] | select(.name==\"$cell\") | .enterprise" "$CELLS_FILE")
-  log "cell $cell ($enterprise)"
-  run helm upgrade --install "$cell" "$CHART" \
-      --namespace "$cell" --create-namespace \
-      --set cell="$cell" --set enterprise="$enterprise" \
+if [ "${#requested[@]}" -gt 0 ]; then
+  namespaces=$(printf '%s\n' "${requested[@]}")
+else
+  namespaces=$(yq -r '.cells[] | select(.enabled == true) | .namespace' "$CELLS_FILE")
+fi
+
+for namespace in $namespaces; do
+  row=".cells[] | select(.namespace==\"$namespace\")"
+  enterprise=$(yq -r "$row | .enterprise" "$CELLS_FILE")
+  application=$(yq -r "$row | .application" "$CELLS_FILE")
+  reserved_ip=$(yq -r "$row | .reserved_ip" "$CELLS_FILE")
+  [ "$enterprise" != "null" ] || die "unknown namespace: $namespace"
+
+  log "application $enterprise/$application ($namespace, $reserved_ip)"
+  run helm upgrade --install "$namespace" "$CHART" \
+      --namespace "$namespace" --create-namespace \
+      --set-string namespace="$namespace" \
+      --set-string enterprise="$enterprise" \
+      --set-string application="$application" \
+      --set-string reservedIP="$reserved_ip" \
       --values "$(dirname "$0")/../charts/cell/values.yaml"
 done
-log "all cells done"
+log "all enabled application instances done"

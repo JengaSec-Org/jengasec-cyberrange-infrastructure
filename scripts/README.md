@@ -4,7 +4,7 @@ Every area writes its own scripts here. Copy `_template.sh`, keep the header, an
 
 | Script | Owner | Does |
 |---|---|---|
-| `provision-cells.sh` | Application Platform | Creates or updates all 14 team environments from `cells.yaml` |
+| `provision-cells.sh` | Application Platform | Creates or updates enabled ENT-A/ENT-B application instances from `cells.yaml` |
 | `create-accounts.py` | Application Platform | Creates Gitea users, organisations and repositories from the allocation export |
 | `make-wg-configs.py` | Network & Access | One WireGuard key and config per person, plus the gateway peer file |
 | `make-allowlists.py` | Security & Identity | Turns `contracts/scope-assignments.csv` into per-cell allow lists |
