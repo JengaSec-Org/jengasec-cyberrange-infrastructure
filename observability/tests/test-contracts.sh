@@ -8,6 +8,7 @@ set -euo pipefail
 . "$(dirname "$0")/../../scripts/_lib.sh"
 
 need check-jsonschema
+need python
 
 assert_valid() {
   local schema="$1"
@@ -29,15 +30,32 @@ assert_invalid() {
 
 assert_valid \
   contracts/logging-contract.schema.json \
-  contracts/fixtures/logging/valid/reference-smoke.json
+  contracts/fixtures/logging/valid/observability-smoke.json
 assert_invalid \
   contracts/logging-contract.schema.json \
   contracts/fixtures/logging/invalid/missing-outcome.json
 assert_valid \
   contracts/telemetry-event.schema.json \
-  contracts/fixtures/telemetry/valid/reference-smoke.json
+  contracts/fixtures/telemetry/valid/observability-smoke.json
 assert_invalid \
   contracts/telemetry-event.schema.json \
   contracts/fixtures/telemetry/invalid/extra-top-level-field.json
+
+python scripts/validate-contracts.py
+
+rendered="$(mktemp -d)"
+cleanup() {
+  rm -r -- "$rendered"
+}
+trap cleanup EXIT
+python scripts/render-vector-catalogue.py \
+  --catalogue contracts/telemetry-event-catalogue.yaml \
+  --template observability/vector/vector.yaml \
+  --output-dir "$rendered"
+grep -q '^APP01,request_completed,http_request,low,route,' \
+  "$rendered/event-catalogue.csv"
+if grep -q '__SENSITIVE_KEY_PATTERN__' "$rendered/vector.yaml"; then
+  die "rendered Vector config retained its placeholder"
+fi
 
 log "contract fixture tests passed"

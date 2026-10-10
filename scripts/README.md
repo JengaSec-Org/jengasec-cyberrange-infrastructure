@@ -10,7 +10,7 @@ Every area writes its own scripts here. Copy `_template.sh`, keep the header, an
 | `make-allowlists.py` | Security & Identity | Turns `contracts/scope-assignments.csv` into per-cell allow lists |
 | `snapshot-cell.sh` / `reset-cell.sh` | Application Platform | Freeze snapshot, and rollback on attack day |
 | `freeze.sh` / `unfreeze.sh` | Application Platform | Pause and resume every team pipeline |
-| `start-observability.sh` | Observability | Build and start the Codespaces observability stack |
+| `start-observability.sh` | Observability | Build and start the observability stack |
 | `validate-observability.sh` | Observability | Validate configs, builds, schemas and fixtures |
 | `smoke-observability.sh` | Observability | Prove an event reaches Loki and a metric reaches Prometheus |
-| `stop-observability.sh` | Observability | Stop the local stack without deleting its data |
+| `stop-observability.sh` | Observability | Stop the stack without deleting its data |

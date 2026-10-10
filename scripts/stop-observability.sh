@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Stop the local JengaSec observability stack while preserving its data volumes.
+# Stop the JengaSec observability stack while preserving its data volumes.
 # Owner: Observability. Run: ./scripts/stop-observability.sh
-# Changes: removes local stack containers and network; named data volumes remain.
+# Changes: removes stack containers and network; named data volumes remain.
 set -euo pipefail
 
 # shellcheck source=scripts/_lib.sh

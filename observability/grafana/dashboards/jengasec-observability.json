@@ -58,13 +58,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "jengasec_reference_events_emitted_total",
+          "expr": "jengasec_test_events_emitted_total",
           "legendFormat": "events",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Reference events emitted",
+      "title": "Test events emitted",
       "type": "stat"
     },
     {
@@ -144,13 +144,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(jengasec_reference_http_requests_total[1m])",
+          "expr": "rate(jengasec_test_http_requests_total[1m])",
           "legendFormat": "{{route}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Reference workload request rate",
+      "title": "Test emitter request rate",
       "type": "timeseries"
     },
     {
@@ -181,7 +181,7 @@
         {
           "direction": "backward",
           "editorMode": "code",
-          "expr": "{cell=\"app-01\", source=\"application\"} | json",
+          "expr": "{enterprise=\"ENT-A\", application=\"APP01\", source=\"application\"} | json",
           "queryType": "range",
           "refId": "A"
         }
@@ -194,7 +194,6 @@
   "schemaVersion": 41,
   "tags": [
     "jengasec",
-    "codespaces",
     "observability"
   ],
   "templating": {
@@ -205,7 +204,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "JengaSec Codespaces Observability",
-  "uid": "jengasec-codespaces",
+  "title": "JengaSec Observability",
+  "uid": "jengasec-observability",
   "version": 1
 }

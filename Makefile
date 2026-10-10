@@ -7,7 +7,7 @@ help:
 	@echo "make obs-validate  # validate observability configs and contracts"
 	@echo "make obs-up        # start the Codespaces observability stack"
 	@echo "make obs-smoke     # prove one event and metric arrived"
-	@echo "make obs-down      # stop the stack and keep local data"
+	@echo "make obs-down      # stop the stack and keep data"
 
 lint:
 	shellcheck -x -P scripts scripts/*.sh tools/*.sh observability/tests/*.sh

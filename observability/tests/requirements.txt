@@ -11,5 +11,6 @@ regress==2026.9.1
 requests==2.34.2
 rpds-py==2026.9.1
 ruamel.yaml==0.19.1
+PyYAML==6.0.3
 typing-extensions==4.16.0
 urllib3==2.8.0

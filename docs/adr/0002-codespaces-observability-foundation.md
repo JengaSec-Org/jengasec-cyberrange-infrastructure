@@ -8,12 +8,13 @@ telemetry contracts also require a concrete normalization boundary, while the
 AI API contract does not yet define how producers deliver events.
 
 **Decision.** Run the first milestone as a pinned Docker Compose stack in
-Codespaces: a reference application writes contract-valid JSON and exposes
-Prometheus metrics, Vector converts each accepted log into the strict telemetry
-shape and sends it to Loki, Prometheus scrapes the workload and Vector, and
-Grafana provisions both data sources and a dashboard. Keep normalization in a
-source-independent Vector transform. Do not configure an AI sink until its
-ingestion contract is agreed.
+Codespaces. A reference emitter writes contract-valid JSON and exposes
+Prometheus metrics. Vector renders its event mapping and sensitive-key policy
+from the shared catalogue, quarantines rejected input without retaining raw
+payloads, converts accepted logs to the strict telemetry shape, and sends them
+to Loki. Prometheus scrapes the emitter and Vector; Grafana provisions both
+data sources and a dashboard. Do not configure an AI sink until its ingestion
+contract is agreed.
 
 **Consequences.** Contributors can validate the complete event and metric paths
 without Server 3 access. The later k3s work can replace Docker discovery with

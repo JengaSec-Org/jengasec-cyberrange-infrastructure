@@ -15,9 +15,8 @@ JengaSec runs on **one machine**: Server 3, a Proxmox host. Everything else is a
 3. Add yourself to `docs/people.md` in your first pull request.
 4. Find your task IDs in the Ops Board and the "Who Does What" plan.
 
-For the local observability milestone, open the repository in a Codespace and
-follow `runbooks/observability-codespaces.md`. It runs entirely inside the
-Codespace and does not contact Server 3.
+For the isolated observability proof, create a Codespace and follow
+`runbooks/observability-codespaces.md`. It does not contact Server 3.
 
 ## Layout
 

@@ -21,7 +21,7 @@
       "visibility": "private"
     },
     "8080": {
-      "label": "Reference workload",
+      "label": "Reference emitter",
       "onAutoForward": "silent",
       "visibility": "private"
     },

@@ -34,14 +34,15 @@ commands do not deploy to Server 3 or to k3s.
    ```
 
 The smoke check emits a unique synthetic event, validates the raw log against
-the logging contract, finds the normalised event in Loki, validates that event
-against the telemetry contract, queries the `/emit` request metric from
-Prometheus, and confirms Grafana provisioned both data sources and the
-dashboard.
+the logging contract, finds the catalogue-normalized event in Loki, validates
+that event against the telemetry contract, and queries the `/emit` request
+metric from Prometheus. It also proves malformed and sensitive-field events
+reach the sanitized quarantine without retaining their payloads, then confirms
+Grafana provisioned both data sources and the dashboard.
 
 Open port 3000 from the Codespaces Ports tab. The home dashboard is
-`JengaSec Codespaces Observability`. Prometheus is on port 9090, Loki on 3100,
-the reference workload on 8080, and Vector metrics on 9598. Loki is not
+`JengaSec Observability`. Prometheus is on port 9090, Loki on 3100, the
+reference emitter on 8080, and Vector metrics on 9598. Loki is not
 auto-forwarded because it is only queried by the smoke script and Grafana.
 
 ## Inspect and recover
@@ -72,8 +73,8 @@ make obs-down
 ```
 
 Shutdown removes the local containers and network but preserves the named
-Loki, Prometheus and Grafana volumes. No reset or Server 3 action is part of
-this milestone.
+Loki, Prometheus, Grafana, catalogue and sanitized-quarantine volumes. It is
+safe to run twice. No reset or Server 3 action is part of this milestone.
 
 ## Remaining integration dependency
 

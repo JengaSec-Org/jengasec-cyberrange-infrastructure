@@ -1,16 +1,18 @@
 name: jengasec-observability
 
 services:
-  reference-app:
+  test-emitter:
     build:
-      context: ./reference-app
+      context: ./tests/fixtures/emitter
     environment:
-      JENGASEC_CELL: app-01
+      JENGASEC_APPLICATION: ${JENGASEC_APPLICATION:-APP01}
+      JENGASEC_ENTERPRISE: ${JENGASEC_ENTERPRISE:-ENT-A}
+      JENGASEC_NAMESPACE: ${JENGASEC_NAMESPACE:-jengasec-ent-a-app01}
     init: true
     labels:
       jengasec.observability.collect: "true"
     ports:
-      - "${JENGASEC_REFERENCE_BIND:-127.0.0.1}:${JENGASEC_REFERENCE_PORT:-8080}:8080"
+      - "${JENGASEC_TEST_EMITTER_BIND:-127.0.0.1}:${JENGASEC_TEST_EMITTER_PORT:-8080}:8080"
     read_only: true
     security_opt:
       - no-new-privileges:true
@@ -49,31 +51,50 @@ services:
       retries: 12
       start_period: 5s
 
+  catalogue-renderer:
+    build:
+      context: ..
+      dockerfile: observability/tests/Dockerfile
+    entrypoint:
+      - python
+      - scripts/render-vector-catalogue.py
+    command:
+      - --catalogue
+      - contracts/telemetry-event-catalogue.yaml
+      - --template
+      - observability/vector/vector.yaml
+      - --output-dir
+      - /generated
+    volumes:
+      - ..:/workspace:ro
+      - vector-catalogue:/generated
+
   vector:
     image: >-
       timberio/vector:0.58.0-debian@sha256:1c1ea358c617ea0b23003d5af87f7a678b30f8f7096437e680380c47fc13d2d9
     command:
       - --config
-      - /etc/vector/vector.yaml
+      - /etc/vector/generated/vector.yaml
     depends_on:
+      catalogue-renderer:
+        condition: service_completed_successfully
       loki:
         condition: service_healthy
-      reference-app:
+      test-emitter:
         condition: service_healthy
-    environment:
-      JENGASEC_ENTERPRISE: zawadi-bank
     ports:
       - "${JENGASEC_VECTOR_BIND:-127.0.0.1}:${JENGASEC_VECTOR_PORT:-9598}:9598"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./vector/vector.yaml:/etc/vector/vector.yaml:ro
+      - vector-catalogue:/etc/vector/generated:ro
+      - vector-quarantine:/var/lib/vector/quarantine
     healthcheck:
       test:
         - CMD
         - vector
         - validate
         - --skip-healthchecks
-        - /etc/vector/vector.yaml
+        - /etc/vector/generated/vector.yaml
       interval: 10s
       timeout: 5s
       retries: 6
@@ -87,7 +108,7 @@ services:
       - --storage.tsdb.retention.time=24h
       - --web.enable-lifecycle
     depends_on:
-      reference-app:
+      test-emitter:
         condition: service_healthy
       vector:
         condition: service_healthy
@@ -123,7 +144,7 @@ services:
       GF_AUTH_BASIC_ENABLED: "false"
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: >-
-        /var/lib/grafana/dashboards/jengasec-codespaces.json
+        /var/lib/grafana/dashboards/jengasec-observability.json
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
@@ -159,3 +180,5 @@ volumes:
   grafana-data:
   loki-data:
   prometheus-data:
+  vector-catalogue:
+  vector-quarantine:

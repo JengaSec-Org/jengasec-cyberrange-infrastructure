@@ -22,23 +22,26 @@ log "validating JSON fixtures and dashboard syntax"
 find "$REPO_ROOT/contracts/fixtures" -type f -name '*.json' -print0 \
   | xargs -0 -r -n1 jq empty
 jq empty \
-  "$REPO_ROOT/observability/grafana/dashboards/jengasec-codespaces.json"
+  "$REPO_ROOT/observability/grafana/dashboards/jengasec-observability.json"
 
-log "building reference workload and contract test images"
-"${COMPOSE[@]}" build reference-app contract-tests
+log "building reference emitter and contract test images"
+"${COMPOSE[@]}" build test-emitter contract-tests catalogue-renderer
 
-log "checking reference workload Python syntax"
+log "checking test emitter Python syntax"
 "${COMPOSE[@]}" run --rm --no-deps \
   --entrypoint python \
-  reference-app \
+  test-emitter \
   -c 'compile(open("/app/app.py", encoding="utf-8").read(), "/app/app.py", "exec")'
 
 log "running JSON Schema fixture tests"
 "${COMPOSE[@]}" run --rm --no-deps contract-tests
 
+log "rendering Vector lookups from the event catalogue"
+"${COMPOSE[@]}" run --rm --no-deps catalogue-renderer
+
 log "validating Vector configuration and VRL program"
 "${COMPOSE[@]}" run --rm --no-deps vector \
-  validate --skip-healthchecks /etc/vector/vector.yaml
+  validate --skip-healthchecks /etc/vector/generated/vector.yaml
 
 log "validating Prometheus configuration"
 "${COMPOSE[@]}" run --rm --no-deps \

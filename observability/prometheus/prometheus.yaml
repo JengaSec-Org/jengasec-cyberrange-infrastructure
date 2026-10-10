@@ -9,14 +9,16 @@ scrape_configs:
       - targets:
           - localhost:9090
 
-  - job_name: reference-app
+  - job_name: test-emitter
     metrics_path: /metrics
     static_configs:
       - targets:
-          - reference-app:8080
+          - test-emitter:8080
         labels:
-          cell: app-01
-          enterprise: zawadi-bank
+          application: APP01
+          enterprise: ENT-A
+          namespace: jengasec-ent-a-app01
+          source: test
 
   - job_name: vector
     static_configs:
