@@ -10,7 +10,7 @@ services:
       JENGASEC_NAMESPACE: ${JENGASEC_NAMESPACE:-jengasec-ent-a-app01}
     init: true
     labels:
-      jengasec.observability.collect: "true"
+      jengasec.observability.source: application
     ports:
       - "${JENGASEC_TEST_EMITTER_BIND:-127.0.0.1}:${JENGASEC_TEST_EMITTER_PORT:-8080}:8080"
     read_only: true
@@ -29,6 +29,63 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
+
+  source-fixture:
+    build:
+      context: ./tests/fixtures/sources
+    depends_on:
+      goflow2:
+        condition: service_started
+    environment:
+      JENGASEC_NETFLOW_HOST: goflow2
+      JENGASEC_NETFLOW_PORT: 2055
+      JENGASEC_OTLP_FIXTURE_FILE: /telemetry/kubernetes.jsonl
+      JENGASEC_SYSLOG_HOST: vector
+      JENGASEC_SYSLOG_TCP_PORT: 514
+      JENGASEC_SYSLOG_UDP_PORT: 514
+    init: true
+    ports:
+      - "${JENGASEC_SOURCE_FIXTURE_BIND:-127.0.0.1}:${JENGASEC_SOURCE_FIXTURE_PORT:-8081}:8081"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    volumes:
+      - otlp-fixture:/telemetry
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  goflow2:
+    image: netsampler/goflow2:v2.2.7
+    command:
+      - -listen
+      - netflow://:2055
+      - -format
+      - json
+      - -transport
+      - file
+      - -loglevel
+      - warn
+      - -addr
+      - :8080
+    labels:
+      jengasec.observability.source: netflow
+    ports:
+      - "${JENGASEC_NETFLOW_BIND:-127.0.0.1}:${JENGASEC_NETFLOW_PORT:-2055}:2055/udp"
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - goflow-templates:/templates
 
   loki:
     image: grafana/loki:3.7.8
@@ -60,6 +117,8 @@ services:
     command:
       - --catalogue
       - contracts/telemetry-event-catalogue.yaml
+      - --cells
+      - scripts/cells.yaml
       - --template
       - observability/vector/vector.yaml
       - --output-dir
@@ -78,10 +137,15 @@ services:
         condition: service_completed_successfully
       loki:
         condition: service_healthy
+      source-fixture:
+        condition: service_healthy
       test-emitter:
         condition: service_healthy
     ports:
       - "${JENGASEC_VECTOR_BIND:-127.0.0.1}:${JENGASEC_VECTOR_PORT:-9598}:9598"
+      - "${JENGASEC_OTLP_BIND:-127.0.0.1}:${JENGASEC_OTLP_PORT:-4317}:4317"
+      - "${JENGASEC_SYSLOG_BIND:-127.0.0.1}:${JENGASEC_SYSLOG_PORT:-1514}:514/tcp"
+      - "${JENGASEC_SYSLOG_BIND:-127.0.0.1}:${JENGASEC_SYSLOG_PORT:-1514}:514/udp"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - vector-catalogue:/etc/vector/generated:ro
@@ -97,6 +161,19 @@ services:
       timeout: 5s
       retries: 6
 
+  otel-collector:
+    build:
+      context: ./otel
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    depends_on:
+      vector:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - otlp-fixture:/telemetry:ro
+
   prometheus:
     image: prom/prometheus:v3.15.0
     command:
@@ -104,7 +181,10 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=24h
       - --web.enable-lifecycle
+      - --web.enable-remote-write-receiver
     depends_on:
+      source-fixture:
+        condition: service_healthy
       test-emitter:
         condition: service_healthy
       vector:
@@ -174,8 +254,10 @@ services:
       - ..:/workspace:ro
 
 volumes:
+  goflow-templates:
   grafana-data:
   loki-data:
+  otlp-fixture:
   prometheus-data:
   vector-catalogue:
   vector-quarantine:

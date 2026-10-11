@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: observability-agent-config
+  namespace: {{ .Values.namespace }}
+data:
+  logs.yaml: |
+{{ .Files.Get "files/logs.yaml" | indent 4 }}
+  cluster.yaml: |
+{{ .Files.Get "files/cluster.yaml" | indent 4 }}

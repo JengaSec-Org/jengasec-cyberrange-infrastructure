@@ -24,14 +24,42 @@ find "$REPO_ROOT/contracts/fixtures" -type f -name '*.json' -print0 \
 jq empty \
   "$REPO_ROOT/observability/grafana/dashboards/jengasec-observability.json"
 
-log "building test emitter and contract test images"
-"${COMPOSE[@]}" build test-emitter contract-tests catalogue-renderer
+log "building test fixtures and contract test images"
+"${COMPOSE[@]}" build \
+  test-emitter \
+  source-fixture \
+  otel-collector \
+  contract-tests \
+  catalogue-renderer
 
 log "checking test emitter Python syntax"
 "${COMPOSE[@]}" run --rm --no-deps \
   --entrypoint python \
   test-emitter \
   -c 'compile(open("/app/app.py", encoding="utf-8").read(), "/app/app.py", "exec")'
+
+log "checking source fixture Python syntax"
+"${COMPOSE[@]}" run --rm --no-deps \
+  --entrypoint python \
+  source-fixture \
+  -c 'compile(open("/app/app.py", encoding="utf-8").read(), "/app/app.py", "exec")'
+
+log "validating OpenTelemetry Collector configuration"
+"${COMPOSE[@]}" run --rm --no-deps \
+  otel-collector \
+  validate --config=/etc/otelcol-contrib/config.yaml
+
+log "validating k3s OpenTelemetry Collector configurations"
+for collector_config in logs.yaml cluster.yaml; do
+  "${COMPOSE[@]}" run --rm --no-deps --user 0 \
+    --env K8S_NODE_NAME=rehearsal-node \
+    --env OBS_OTLP_ENDPOINT=obs.example.invalid:4317 \
+    --env OBS_OTLP_INSECURE=true \
+    --env OBS_PROMETHEUS_REMOTE_WRITE_URL=http://obs.example.invalid:9090/api/v1/write \
+    --volume "$REPO_ROOT/charts/observability-agent/files:/validation:ro" \
+    otel-collector \
+    validate --config="/validation/$collector_config"
+done
 
 log "running JSON Schema fixture tests"
 "${COMPOSE[@]}" run --rm --no-deps contract-tests

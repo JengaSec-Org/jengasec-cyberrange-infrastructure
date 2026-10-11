@@ -12,5 +12,5 @@ Every area writes its own scripts here. Copy `_template.sh`, keep the header, an
 | `freeze.sh` / `unfreeze.sh` | Application Platform | Pause and resume every team pipeline |
 | `start-observability.sh` | Observability | Build and start the observability stack |
 | `validate-observability.sh` | Observability | Validate configs, builds, schemas and fixtures |
-| `smoke-observability.sh` | Observability | Prove an event reaches Loki and a metric reaches Prometheus |
+| `smoke-observability.sh` | Observability | Prove every development input reaches Loki or Prometheus |
 | `stop-observability.sh` | Observability | Stop the stack without deleting its data |

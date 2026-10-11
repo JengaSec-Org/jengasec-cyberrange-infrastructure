@@ -13,6 +13,8 @@ Everyone runs these. Change by pull request so the whole team moves together.
 | PostgreSQL | 16.15-bookworm | Platform, cells and future OBS event store |
 | Test Python image | 3.11.14-slim-bookworm | Test emitter and contract checks |
 | Vector | 0.58.0-debian | Telemetry collector |
+| GoFlow2 | 2.2.7 | NetFlow/IPFIX decoder |
+| OpenTelemetry Collector Contrib | 0.137.0 | Cluster log and event transport |
 | Prometheus | 3.15.0 | Metrics store |
 | Loki | 3.7.8 | Log store |
 | Grafana | 13.2.3 | Dashboards |

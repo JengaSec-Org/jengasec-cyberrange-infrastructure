@@ -1,0 +1,48 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  filelog:
+    include:
+      - /telemetry/*.jsonl
+    start_at: end
+    include_file_name: false
+    include_file_path: false
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: source-fixture
+          scrape_interval: 5s
+          static_configs:
+            - targets:
+                - source-fixture:8081
+              labels:
+                source: kubernetes
+
+exporters:
+  otlp/vector:
+    endpoint: vector:4317
+    tls:
+      insecure: true
+    retry_on_failure:
+      enabled: true
+  prometheusremotewrite/prometheus:
+    endpoint: http://prometheus:9090/api/v1/write
+    retry_on_failure:
+      enabled: true
+
+service:
+  extensions:
+    - health_check
+  pipelines:
+    logs:
+      receivers:
+        - filelog
+      exporters:
+        - otlp/vector
+    metrics:
+      receivers:
+        - prometheus
+      exporters:
+        - prometheusremotewrite/prometheus

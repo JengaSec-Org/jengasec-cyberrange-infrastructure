@@ -50,10 +50,15 @@ cleanup() {
 trap cleanup EXIT
 python scripts/render-vector-catalogue.py \
   --catalogue contracts/telemetry-event-catalogue.yaml \
+  --cells scripts/cells.yaml \
   --template observability/vector/vector.yaml \
   --output-dir "$rendered"
-grep -q '^APP01,request_completed,http_request,low,route,' \
+grep -q '^application,APP01,request_completed,http_request,low,route,' \
   "$rendered/event-catalogue.csv"
+grep -q '^network,,netflow_record,network_flow,low,,' \
+  "$rendered/event-catalogue.csv"
+grep -q '^10.108.0.11,ENT-A,APP01,jengasec-ent-a-app01,jengasec-ent-a-app01/app' \
+  "$rendered/applications.csv"
 if grep -q '__SENSITIVE_KEY_PATTERN__' "$rendered/vector.yaml"; then
   die "rendered Vector config retained its placeholder"
 fi
