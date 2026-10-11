@@ -19,3 +19,4 @@ Every area writes its own scripts here. Copy `_template.sh`, keep the header, an
 | `render-grafana-dashboards.py` | Observability | Render one scoped dashboard per application |
 | `prepare-observability-runtime.py` | Observability | Create untracked development-only Grafana credentials |
 | `provision-grafana-access.py` | Observability | Converge read-only Grafana organisations and application access |
+| `export-observability-evidence.py` | Observability | Export one finding's sanitized, integrity-checked evidence pack |

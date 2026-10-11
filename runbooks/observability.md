@@ -127,6 +127,37 @@ Prometheus exposes the OBS alert rules at `/api/v1/rules`. Alert notification
 routing remains a deployment setting; this repository stores no receiver
 credentials.
 
+## Export finding evidence
+
+Obtain one JSON row from `obs_findings_v1` through the read-only platform
+interface. Keep the snapshot outside the repository and validate the planned
+export before writing it:
+
+```bash
+./scripts/export-observability-evidence.py \
+  --finding /run/jengasec-observability/finding.json \
+  --loki-url http://127.0.0.1:3100 \
+  --output-root /var/lib/jengasec-observability/evidence \
+  --dry-run
+```
+
+Remove `--dry-run` to create the pack. The exporter fails if any cited event or
+correlation ID is missing, preserves empty platform-audit and competition
+files, and leaves an identical existing pack unchanged. Supply those two
+families as prefiltered NDJSON only when needed, together with their owning
+contract versions.
+
+Verify a completed pack before release to a named judge or staff identity:
+
+```bash
+cd /var/lib/jengasec-observability/evidence/FINDING_ID
+sha256sum --check SHA256SUMS
+```
+
+Keep the source finding snapshot and pack through the appeal window. Do not
+copy packs into the repository or expose the evidence directory through
+Grafana.
+
 ## Outbound integrations
 
 The development stack posts sanitized events to its mock `/api/feed` receiver.

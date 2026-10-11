@@ -54,6 +54,12 @@ or unavailable source data leaves the last valid snapshot unchanged.
 Prometheus alerts on contract rejection, unknown attribution and unavailable
 pipeline targets. Loki and Prometheus share configurable retention.
 
+`scripts/export-observability-evidence.py` reads one versioned finding row and
+selects its cited and correlated events from the staff Loki tenant. It keeps
+telemetry, platform audit and competition records in separate files, verifies
+that every cited identifier resolved, and writes an owner-only pack with
+SHA-256 checksums.
+
 ## k3s inputs
 
 `charts/observability-agent` supplies the production-side collectors. A
