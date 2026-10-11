@@ -21,7 +21,7 @@ make obs-smoke
 
 The stack binds to loopback by default. Grafana uses port 3000, Prometheus 9090,
 the scoped metrics proxy 9091, Loki 3100, the application fixture 8080, the
-source fixture 8081, Vector
+source fixture 8081, the website feed mock 8082, Vector
 metrics 9598, OTLP 4317, syslog 1514 TCP/UDP and NetFlow 2055 UDP. The syslog
 host port maps to the contracted container port 514. Override a binding with
 its `JENGASEC_*_BIND` or `JENGASEC_*_PORT` variable.
@@ -126,3 +126,15 @@ staff/judge accounts receive the all-application view.
 Prometheus exposes the OBS alert rules at `/api/v1/rules`. Alert notification
 routing remains a deployment setting; this repository stores no receiver
 credentials.
+
+## Outbound integrations
+
+The development stack posts sanitized events to its mock `/api/feed` receiver.
+Set `JENGASEC_WEBSITE_FEED_URL` only after the website owner provides the live
+HTTPS receiver and authentication method. `make obs-smoke` proves a live event
+arrived without sensitive or attribution fields.
+
+Vector also writes normalized events to the `vector-ai-handoff` volume. A live
+deployment mounts that volume at `/var/lib/vector/ai-handoff/` with OBS-only
+write access. Do not add a network destination or credentials until the AI
+owner publishes that interface.

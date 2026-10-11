@@ -11,6 +11,8 @@ application stdout + Kubernetes events -> OTLP ---> Vector -> Loki
 application + Kubernetes metrics -> remote write ----------> Prometheus
 Loki + Prometheus ------------------------------------------> Grafana
 rejected events -> sanitised Vector quarantine
+sanitised public updates -> website POST /api/feed
+contract-valid events -> local AI handoff spool
 ```
 
 The emitters are executable fixtures, not application services. The network
@@ -67,5 +69,17 @@ The development syslog fixture defines only the tested OBS adapter shape. The
 gateway owner must confirm the live firewall and IDS formats before deployment.
 No AI ingestion endpoint is defined here; the AI-owned interface remains an
 external dependency.
+
+## Outbound integrations
+
+The website publisher sends only schema version, event ID, timestamp,
+enterprise, application, event type, severity, outcome and verdict. It omits
+attribution, addresses, paths, raw bodies and metadata. Development posts to a
+mock; deployment must set `JENGASEC_WEBSITE_FEED_URL` after the website owner
+confirms its receiver and authentication.
+
+The AI boundary is a mode-locked NDJSON spool of normalized telemetry at
+`/var/lib/vector/ai-handoff/`. It deliberately defines no AI endpoint,
+transport or authentication. Those remain AI-owned integration dependencies.
 
 See `runbooks/observability.md` for operation and recovery.
