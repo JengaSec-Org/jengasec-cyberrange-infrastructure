@@ -14,3 +14,5 @@ Every area writes its own scripts here. Copy `_template.sh`, keep the header, an
 | `validate-observability.sh` | Observability | Validate configs, builds, schemas and fixtures |
 | `smoke-observability.sh` | Observability | Prove every development input reaches Loki or Prometheus |
 | `stop-observability.sh` | Observability | Stop the stack without deleting its data |
+| `render-observability-lookups.py` | Observability | Validate platform exports and render bounded Vector lookups |
+| `sync-observability-lookups.sh` | Observability | Refresh attribution lookups through the read-only TLS database interface |

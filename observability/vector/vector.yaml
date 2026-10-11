@@ -17,6 +17,20 @@ enrichment_tables:
       encoding:
         type: csv
 
+  ip_allocations:
+    type: file
+    file:
+      path: /etc/vector/generated/ip-allocations.csv
+      encoding:
+        type: csv
+
+  scope_assignments:
+    type: file
+    file:
+      path: /etc/vector/generated/scope-assignments.csv
+      encoding:
+        type: csv
+
 sources:
   application_logs:
     type: docker_logs
@@ -202,7 +216,47 @@ transforms:
       }
 
       actor = {}
-      if exists(original.source_ip) { actor.ip = string!(original.source_ip) }
+      metadata = detail
+      metadata.level = level
+      verdict = "not_applicable"
+      if exists(original.source_ip) {
+        actor_ip = string!(original.source_ip)
+        actor.ip = actor_ip
+        allocation, allocation_error = get_enrichment_table_record(
+          "ip_allocations",
+          {"ip_address": actor_ip}
+        )
+        if allocation_error == null {
+          actor.participant_id = string!(allocation.participant_id)
+          actor.team_id = string!(allocation.team_id)
+          actor.team_label = string!(allocation.team_label)
+          metadata.attribution_status = "known"
+          scope, scope_error = get_enrichment_table_record(
+            "scope_assignments",
+            {
+              "source_ip": actor_ip,
+              "enterprise": enterprise,
+              "application": application,
+              "active": "true"
+            }
+          )
+          if scope_error == null && string!(scope.target_ip) == string!(application_record.ip_address) {
+            verdict = "allowed"
+            metadata.scope_status = "allowed"
+          } else {
+            verdict = "unknown"
+            metadata.scope_status = "unknown"
+          }
+        } else {
+          actor.team_label = "unknown"
+          metadata.attribution_status = "unknown"
+          metadata.scope_status = "unknown"
+          verdict = "unknown"
+        }
+      } else {
+        metadata.attribution_status = "not_applicable"
+        metadata.scope_status = "not_applicable"
+      }
       if exists(original.user_id) { actor.user_id = string!(original.user_id) }
 
       target = {
@@ -220,9 +274,6 @@ transforms:
       if exists(original.status) { http.status = int!(original.status) }
       if exists(original.action) { http.action = string!(original.action) }
 
-      metadata = detail
-      metadata.level = level
-
       normalized = {
         "schema_version": "2.0",
         "catalogue_version": 1,
@@ -239,7 +290,7 @@ transforms:
         "severity": severity,
         "target": target,
         "outcome": outcome,
-        "verdict": "not_applicable",
+        "verdict": verdict,
         "metadata": metadata
       }
 
@@ -353,7 +404,57 @@ transforms:
       if exists(original.namespace) { assert_eq!(string!(original.namespace), namespace) }
 
       actor = {}
-      if exists(original.source_ip) { actor.ip = string!(original.source_ip) }
+      metadata = {"transport": source_hint}
+      if exists(original.source_ip) {
+        actor_ip = string!(original.source_ip)
+        actor.ip = actor_ip
+        allocation, allocation_error = get_enrichment_table_record(
+          "ip_allocations",
+          {"ip_address": actor_ip}
+        )
+        if allocation_error == null {
+          actor.participant_id = string!(allocation.participant_id)
+          actor.team_id = string!(allocation.team_id)
+          actor.team_label = string!(allocation.team_label)
+          metadata.attribution_status = "known"
+          if includes(["ingress", "network", "ids"], source) {
+            scope, scope_error = get_enrichment_table_record(
+              "scope_assignments",
+              {
+                "source_ip": actor_ip,
+                "enterprise": enterprise,
+                "application": application,
+                "active": "true"
+              }
+            )
+            if scope_error == null && string!(scope.target_ip) == destination_ip {
+              assert!(verdict != "refused", "gateway verdict contradicts active scope")
+              verdict = "allowed"
+              metadata.scope_status = "allowed"
+            } else if includes(["firewall_refused", "ingress_scope_refused"], raw_event) && verdict == "refused" {
+              metadata.scope_status = "refused"
+            } else {
+              verdict = "unknown"
+              metadata.scope_status = "unknown"
+            }
+          } else {
+            metadata.scope_status = "not_applicable"
+          }
+        } else {
+          actor.team_label = "unknown"
+          metadata.attribution_status = "unknown"
+          if includes(["ingress", "network", "ids"], source) {
+            verdict = "unknown"
+            metadata.scope_status = "unknown"
+          } else {
+            metadata.scope_status = "not_applicable"
+          }
+        }
+      } else {
+        metadata.attribution_status = "unknown"
+        metadata.scope_status = "unknown"
+        if includes(["ingress", "network", "ids"], source) { verdict = "unknown" }
+      }
 
       target = {
         "ip": destination_ip,
@@ -383,7 +484,6 @@ transforms:
       if exists(original.category) { ids.category = string!(original.category) }
       if exists(original.ids_action) { ids.action = string!(original.ids_action) }
 
-      metadata = {"transport": source_hint}
       if exists(original.reason) { metadata.reason = string!(original.reason) }
       if exists(original.kind) { metadata.kind = string!(original.kind) }
       if exists(original.restart_count) { metadata.restart_count = int!(original.restart_count) }
@@ -429,6 +529,29 @@ transforms:
         variant: "SHA-256"
       )
       . = normalized
+
+  attribution_metrics:
+    type: log_to_metric
+    inputs:
+      - normalized_application
+      - normalized_sources
+    metrics:
+      - type: counter
+        field: metadata.attribution_status
+        name: jengasec_attribution_events_total
+        increment_by_value: false
+        kind: incremental
+        tags:
+          source: "{{ source }}"
+          status: "{{ metadata.attribution_status }}"
+      - type: counter
+        field: metadata.scope_status
+        name: jengasec_scope_events_total
+        increment_by_value: false
+        kind: incremental
+        tags:
+          source: "{{ source }}"
+          status: "{{ metadata.scope_status }}"
 
   quarantine_sensitive:
     type: remap
@@ -494,4 +617,5 @@ sinks:
     type: prometheus_exporter
     inputs:
       - vector_metrics
+      - attribution_metrics
     address: 0.0.0.0:9598

@@ -70,7 +70,7 @@ def send_netflow(marker: str) -> int:
     )
     record = struct.pack(
         "!IIIHHIIIIHHBBBBHHBBH",
-        0x0A69000A,
+        0x0A3C010A,
         0x0A6C000B,
         0,
         1,
@@ -106,7 +106,7 @@ def base_event(source: str, event: str, marker: str) -> dict:
         "outcome": "success",
         "verdict": "not_applicable",
         "request_id": marker,
-        "source_ip": "10.105.0.10",
+        "source_ip": "10.60.1.10",
         "destination_ip": "10.108.0.11",
     }
 
@@ -140,6 +140,7 @@ def emit(marker: str) -> dict:
             "dst_port": 443,
             "protocol": "TCP",
             "rule_id": "scope-default-deny",
+            "destination_ip": "10.108.0.12",
         }
     )
     send_syslog(firewall, "tcp")
@@ -170,6 +171,7 @@ def emit(marker: str) -> dict:
             "enterprise": "ENT-A",
             "application": "APP01",
             "namespace": "jengasec-ent-a-app01",
+            "source_ip": "10.109.0.50",
             "outcome": "failure",
             "reason": "synthetic_disk_pressure",
         }
@@ -187,7 +189,7 @@ def emit(marker: str) -> dict:
         "event": "request_completed",
         "outcome": "success",
         "request_id": application_marker,
-        "source_ip": "10.105.0.10",
+        "source_ip": "10.60.1.10",
         "method": "GET",
         "path": "/healthz",
         "status": 200,

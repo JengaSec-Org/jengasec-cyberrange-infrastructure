@@ -120,7 +120,7 @@ source_events_ready=false
 for _attempt in {1..60}; do
   end_ns="$(date +%s)999999999"
   curl --fail --silent --show-error --get \
-    --data-urlencode 'query={enterprise="ENT-A",application="APP01"}' \
+    --data-urlencode 'query={enterprise="ENT-A",application=~"APP0[12]"}' \
     --data-urlencode "start=$start_ns" \
     --data-urlencode "end=$end_ns" \
     --data-urlencode 'direction=backward' \
@@ -132,32 +132,47 @@ for _attempt in {1..60}; do
       [.data.result[].values[]?[1] | fromjson?] as $events |
       ($emitted[0].markers) as $markers |
       ($emitted[0].netflow_src_port) as $netflow_port |
+      def participant_actor:
+        .ip == "10.60.1.10" and
+        .participant_id == "JS26-P-0001" and
+        .team_id == "JS26-R-001" and
+        .team_label == "red-app";
       any($events[];
         .request_id == $markers.ingress and
         .source == "ingress" and .raw_event == "ingress_request" and
-        .event_type == "http_request" and .verdict == "allowed") and
+        .event_type == "http_request" and .verdict == "allowed" and
+        (.actor | participant_actor)) and
       any($events[];
         .request_id == $markers.firewall and
         .source == "network" and .raw_event == "firewall_refused" and
         .event_type == "scope_violation" and .outcome == "denied" and
-        .verdict == "refused") and
+        .verdict == "refused" and .application == "APP02" and
+        .target.ip == "10.108.0.12" and
+        (.actor | participant_actor)) and
       any($events[];
         .request_id == $markers.ids and
         .source == "ids" and .raw_event == "suricata_alert" and
-        .event_type == "ids_alert") and
+        .event_type == "ids_alert" and .verdict == "allowed" and
+        (.actor | participant_actor)) and
       any($events[];
         .request_id == $markers.host and
-        .source == "host" and .raw_event == "host_alert") and
+        .source == "host" and .raw_event == "host_alert" and
+        .actor.team_label == "unknown" and
+        .metadata.attribution_status == "unknown") and
       any($events[];
         .request_id == $markers.application and
         .source == "application" and .raw_event == "request_completed" and
-        .event_type == "http_request") and
+        .event_type == "http_request" and .verdict == "allowed" and
+        (.actor | participant_actor)) and
       any($events[];
         .request_id == $markers.kubernetes and
-        .source == "kubernetes" and .raw_event == "kubernetes_event") and
+        .source == "kubernetes" and .raw_event == "kubernetes_event" and
+        .actor.team_label == "unknown" and
+        .metadata.attribution_status == "unknown") and
       any($events[];
         .source == "network" and .raw_event == "netflow_record" and
-        .network.src_port == $netflow_port) and
+        .network.src_port == $netflow_port and .verdict == "allowed" and
+        (.actor | participant_actor)) and
       all(
         $events[] |
         select(
@@ -173,9 +188,15 @@ for _attempt in {1..60}; do
            .network.src_port == $netflow_port)
         );
         .enterprise == "ENT-A" and
-        .application == "APP01" and
-        .namespace == "jengasec-ent-a-app01" and
-        .target.ip == "10.108.0.11"
+        if .request_id == $markers.firewall then
+          .application == "APP02" and
+          .namespace == "jengasec-ent-a-app02" and
+          .target.ip == "10.108.0.12"
+        else
+          .application == "APP01" and
+          .namespace == "jengasec-ent-a-app01" and
+          .target.ip == "10.108.0.11"
+        end
       )
     ' "$TEMP_DIR/source-loki-response.json" >/dev/null; then
     source_events_ready=true
@@ -185,6 +206,14 @@ for _attempt in {1..60}; do
 done
 [[ "$source_events_ready" == true ]] \
   || die "Loki did not return every synthetic production-source event"
+jq --exit-status '
+  all(
+    .data.result[];
+    (.stream | keys | sort) ==
+      ["application", "detected_level", "enterprise", "event_type", "namespace", "service_name", "severity", "source"]
+  )
+' "$TEMP_DIR/source-loki-response.json" >/dev/null \
+  || die "Loki stream labels contain an unapproved field"
 
 jq --compact-output \
   --slurpfile emitted "$TEMP_DIR/source-emission.json" '
@@ -303,6 +332,27 @@ done
 [[ "$kubernetes_health" == "1" ]] \
   || die "Prometheus did not scrape the synthetic Kubernetes health metric"
 log "Prometheus stored the remote-written Kubernetes health metric"
+
+attribution_metric=""
+for _attempt in {1..60}; do
+  curl --fail --silent --show-error --get \
+    --data-urlencode \
+    'query=sum(jengasec_attribution_events_total{job="vector",status="known"})' \
+    "$PROMETHEUS_URL/api/v1/query" \
+    --output "$TEMP_DIR/attribution-metric-response.json"
+  attribution_metric="$(
+    jq --raw-output '
+      [.data.result[]?.value[1] | tonumber | select(. > 0)][0] // empty
+    ' "$TEMP_DIR/attribution-metric-response.json"
+  )"
+  if [[ -n "$attribution_metric" ]]; then
+    break
+  fi
+  sleep 1
+done
+[[ -n "$attribution_metric" ]] \
+  || die "Prometheus did not scrape the attribution health metric"
+log "Prometheus stored the attribution health metric"
 
 curl --fail --silent --show-error \
   "$GRAFANA_URL/api/datasources/uid/prometheus/health" \

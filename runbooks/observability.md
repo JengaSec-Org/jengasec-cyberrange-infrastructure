@@ -41,6 +41,10 @@ Kubernetes events. It checks the stored records against the telemetry schema.
 It also proves application and Kubernetes metrics reached Prometheus through
 scrape and remote-write paths.
 
+The source fixture uses participant `JS26-P-0001` from team `JS26-R-001`.
+APP01 traffic resolves as allowed. The same sender's APP02 request resolves as
+refused. Participant and team IDs remain in event bodies, not Loki labels.
+
 If a port is in use, set another host port for startup and checks:
 
 ```bash
@@ -87,3 +91,19 @@ Rollback uses the previous Helm revision:
 helm history observability-agent -n jengasec-observability
 helm rollback observability-agent REVISION -n jengasec-observability --wait
 ```
+
+## Refresh attribution
+
+Store a PostgreSQL service named `obs_attribution` outside the repository. It
+must use the read-only platform role and TLS. Keep the service file unreadable
+to other users. Refresh the lookup directory with:
+
+```bash
+./scripts/sync-observability-lookups.sh \
+  --service-file /run/secrets/obs-postgresql-service \
+  --output-dir /var/lib/jengasec-observability/lookups
+```
+
+Configure the deployment timer to run this once per minute and reload Vector
+only after a successful refresh. A failure keeps the last valid snapshot.
+Alert when `attribution-snapshot.json` has not been refreshed for two minutes.
