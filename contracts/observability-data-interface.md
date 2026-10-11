@@ -56,10 +56,20 @@ last valid snapshot remains active during a transient database failure.
 and the enterprise/application/namespace each identity may read. It is used to
 provision individual dashboard identities; shared accounts are forbidden.
 
-`obs_findings_v1` supplies a finding ID, target enterprise/application,
-start/end timestamps and explicitly cited telemetry event IDs. It excludes
-finding prose, attachments and participant identity data. Evidence generation
-uses this view but never writes back through the OBS database role.
+`obs_findings_v1` supplies exactly these columns:
+
+| Column | Meaning |
+|---|---|
+| `finding_id` | Stable opaque finding identifier |
+| `enterprise`, `application`, `namespace` | Canonical target identifiers |
+| `start_ts`, `end_ts` | Inclusive UTC evidence window |
+| `telemetry_event_ids` | Distinct array of explicitly cited stable event IDs |
+| `correlation_ids` | Distinct array of opaque request or trace IDs |
+
+The JSON export adds the common `contract_version` and `updated_at` fields and
+must validate against `observability-finding.schema.json`. It excludes finding
+prose, attachments and participant identity data. Evidence generation uses
+this view but never writes back through the OBS database role.
 
 ## Consumer behavior
 

@@ -92,6 +92,12 @@ log "running Grafana dashboard and access fixture tests"
   contract-tests \
   observability/tests/test-grafana-access.sh
 
+log "running evidence export fixture tests"
+"${COMPOSE[@]}" run --rm --no-deps \
+  --entrypoint bash \
+  contract-tests \
+  observability/tests/test-evidence-export.sh
+
 log "rendering Vector lookups from the event catalogue"
 "${COMPOSE[@]}" run --rm --no-deps catalogue-renderer
 

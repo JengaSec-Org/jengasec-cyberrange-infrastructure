@@ -312,6 +312,85 @@ while IFS= read -r source_event; do
 done <"$TEMP_DIR/source-telemetry-events.jsonl"
 log "Loki stored seven contract-valid application, gateway, network, host, and cluster events"
 
+correlated_request_id="$(
+  jq --raw-output '.markers.application' "$TEMP_DIR/source-emission.json"
+)"
+cited_event_ids="$(
+  jq --slurp --compact-output \
+    --arg initial_event_id "$event_id" \
+    --arg correlated_request_id "$correlated_request_id" '
+      [$initial_event_id] + [
+        .[] |
+        select(
+          .application == "APP01" and
+          .request_id != $correlated_request_id
+        ) |
+        .event_id
+      ] |
+      unique
+    ' "$TEMP_DIR/source-telemetry-events.jsonl"
+)"
+finding_end="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
+finding_start="$(date --utc --date="@${start_ns%000000000}" +%Y-%m-%dT%H:%M:%SZ)"
+finding_id="finding-$marker"
+jq --null-input \
+  --arg finding_id "$finding_id" \
+  --arg start_ts "$finding_start" \
+  --arg end_ts "$finding_end" \
+  --arg correlated_request_id "$correlated_request_id" \
+  --argjson event_ids "$cited_event_ids" '
+    {
+      contract_version: 1,
+      updated_at: $end_ts,
+      finding_id: $finding_id,
+      enterprise: "ENT-A",
+      application: "APP01",
+      namespace: "jengasec-ent-a-app01",
+      start_ts: $start_ts,
+      end_ts: $end_ts,
+      telemetry_event_ids: $event_ids,
+      correlation_ids: [$correlated_request_id]
+    }
+  ' >"$TEMP_DIR/finding.json"
+validate_evidence \
+  contracts/observability-finding.schema.json \
+  finding.json
+
+"${COMPOSE[@]}" run --rm --no-deps --no-TTY --interactive=false \
+  --user "$(id -u):$(id -g)" \
+  --volume "$TEMP_DIR:/evidence" \
+  --entrypoint python \
+  contract-tests \
+  scripts/export-observability-evidence.py \
+  --finding /evidence/finding.json \
+  --loki-url http://loki:3100 \
+  --output-root /evidence/packs \
+  --exported-at "$finding_end"
+evidence_pack="$TEMP_DIR/packs/$finding_id"
+validate_evidence \
+  contracts/evidence-pack.schema.json \
+  "packs/$finding_id/manifest.json"
+(
+  cd "$evidence_pack"
+  sha256sum --check --status SHA256SUMS
+) || die "test finding evidence checksums did not verify"
+jq --exit-status '
+  .files["telemetry.ndjson"].rows == 7 and
+  .files["platform-audit.ndjson"].rows == 0 and
+  .files["competition-events.ndjson"].rows == 0
+' "$evidence_pack/manifest.json" >/dev/null \
+  || die "test finding evidence manifest has unexpected row counts"
+jq --slurp --exit-status '
+  length == 7 and
+  any(.[].actor;
+    .participant_id == "JS26-P-0001" and
+    .team_id == "JS26-R-001" and
+    .team_label == "red-app") and
+  all(.[].integrity_hash; test("^sha256:[a-f0-9]{64}$"))
+' "$evidence_pack/telemetry.ndjson" >/dev/null \
+  || die "test finding evidence omitted attribution or integrity hashes"
+log "Judge evidence export captured all seven events behind the test finding"
+
 curl --fail --silent --show-error --get \
   --header 'X-Scope-OrgID: application-jengasec-ent-a-app01' \
   --data-urlencode 'query={application=~"APP0[12]"}' \
