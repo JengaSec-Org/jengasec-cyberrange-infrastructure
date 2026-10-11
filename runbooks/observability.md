@@ -6,6 +6,12 @@ Run commands from the repository root. Docker Compose must be available. Keep
 service ports private. Grafana anonymous access is only for isolated
 validation.
 
+## Codespaces
+
+Use a Linux Codespace with at least 4 CPUs and 8 GB of memory. Confirm Docker
+and Docker Compose are available, then use the same start and stop commands
+below. Keep forwarded service ports private.
+
 ## Start
 
 ```bash
