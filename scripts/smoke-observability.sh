@@ -13,6 +13,7 @@ COMPOSE=(docker compose --file "$COMPOSE_FILE")
 HOST="${JENGASEC_OBSERVABILITY_HOST:-127.0.0.1}"
 TEST_EMITTER_URL="http://${HOST}:${JENGASEC_TEST_EMITTER_PORT:-8080}"
 SOURCE_FIXTURE_URL="http://${HOST}:${JENGASEC_SOURCE_FIXTURE_PORT:-8081}"
+WEBSITE_FEED_URL="http://${HOST}:${JENGASEC_WEBSITE_FEED_PORT:-8082}"
 LOKI_URL="http://${HOST}:${JENGASEC_LOKI_PORT:-3100}"
 PROMETHEUS_URL="http://${HOST}:${JENGASEC_PROMETHEUS_PORT:-9090}"
 PROMETHEUS_SCOPE_URL="http://${HOST}:${JENGASEC_PROMETHEUS_SCOPE_PROXY_PORT:-9091}"
@@ -71,6 +72,7 @@ validate_evidence() {
 
 wait_for_http "test emitter" "$TEST_EMITTER_URL/healthz"
 wait_for_http "source fixture" "$SOURCE_FIXTURE_URL/healthz"
+wait_for_http "website feed mock" "$WEBSITE_FEED_URL/healthz"
 wait_for_http "Loki" "$LOKI_URL/ready"
 wait_for_http "Prometheus" "$PROMETHEUS_URL/-/ready"
 wait_for_http "Grafana" "$GRAFANA_URL/api/health"
@@ -127,6 +129,48 @@ validate_evidence \
 event_id="$(jq --raw-output '.event_id' "$TEMP_DIR/telemetry-event.json")"
 integrity_hash="$(jq --raw-output '.integrity_hash' "$TEMP_DIR/telemetry-event.json")"
 log "Loki stored contract-valid telemetry event $event_id ($integrity_hash)"
+
+website_event_ready=false
+for _attempt in {1..60}; do
+  curl --fail --silent --show-error --get \
+    --data-urlencode "event_id=$event_id" \
+    "$WEBSITE_FEED_URL/events" \
+    --output "$TEMP_DIR/website-feed-response.json"
+  if jq --exit-status --arg event_id "$event_id" '
+    .events | length == 1 and
+    .[0].event_id == $event_id and
+    (.[0] | keys | sort) == [
+      "application", "enterprise", "event_id", "event_type", "outcome",
+      "schema_version", "severity", "ts", "verdict"
+    ]
+  ' "$TEMP_DIR/website-feed-response.json" >/dev/null; then
+    website_event_ready=true
+    break
+  fi
+  sleep 1
+done
+[[ "$website_event_ready" == true ]] \
+  || die "website mock did not receive the sanitized live update"
+log "Website mock received the sanitized live update"
+
+ai_event=""
+for _attempt in {1..60}; do
+  ai_event="$(
+    "${COMPOSE[@]}" exec -T vector sh -c \
+      "grep -h -F \"\$1\" /var/lib/vector/ai-handoff/telemetry-*.ndjson | tail -n 1" \
+      sh "$event_id" || true
+  )"
+  if [[ -n "$ai_event" ]]; then
+    break
+  fi
+  sleep 1
+done
+[[ -n "$ai_event" ]] || die "AI telemetry handoff did not receive the event"
+printf '%s\n' "$ai_event" >"$TEMP_DIR/ai-telemetry-event.json"
+validate_evidence \
+  contracts/telemetry-event.schema.json \
+  ai-telemetry-event.json
+log "AI file handoff received the contract-valid telemetry event"
 
 curl --fail --silent --show-error \
   "$SOURCE_FIXTURE_URL/emit?marker=sources-$marker" \

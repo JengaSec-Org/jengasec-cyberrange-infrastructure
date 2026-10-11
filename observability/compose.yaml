@@ -65,6 +65,29 @@ services:
       timeout: 3s
       retries: 12
 
+  website-feed-mock:
+    build:
+      context: ./tests/fixtures/website-feed
+    init: true
+    ports:
+      - "${JENGASEC_WEBSITE_FEED_BIND:-127.0.0.1}:${JENGASEC_WEBSITE_FEED_PORT:-8082}:8080"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - website-feed-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   goflow2:
     image: netsampler/goflow2:v2.2.7
     command:
@@ -127,6 +150,8 @@ services:
       - observability/vector/vector.yaml
       - --output-dir
       - /generated
+      - --website-feed-url
+      - ${JENGASEC_WEBSITE_FEED_URL:-http://website-feed-mock:8080/api/feed}
     volumes:
       - ..:/workspace:ro
       - vector-catalogue:/generated
@@ -188,6 +213,8 @@ services:
         condition: service_healthy
       test-emitter:
         condition: service_healthy
+      website-feed-mock:
+        condition: service_healthy
     ports:
       - "${JENGASEC_VECTOR_BIND:-127.0.0.1}:${JENGASEC_VECTOR_PORT:-9598}:9598"
       - "${JENGASEC_OTLP_BIND:-127.0.0.1}:${JENGASEC_OTLP_PORT:-4317}:4317"
@@ -197,6 +224,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - vector-catalogue:/etc/vector/generated:ro
       - vector-quarantine:/var/lib/vector/quarantine
+      - vector-ai-handoff:/var/lib/vector/ai-handoff
     healthcheck:
       test:
         - CMD
@@ -389,6 +417,8 @@ volumes:
   prometheus-data:
   vector-catalogue:
   vector-quarantine:
+  vector-ai-handoff:
+  website-feed-data:
 
 secrets:
   grafana_admin_password:

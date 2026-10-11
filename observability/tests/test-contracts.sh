@@ -52,7 +52,8 @@ python scripts/render-vector-catalogue.py \
   --catalogue contracts/telemetry-event-catalogue.yaml \
   --cells scripts/cells.yaml \
   --template observability/vector/vector.yaml \
-  --output-dir "$rendered"
+  --output-dir "$rendered" \
+  --website-feed-url http://website-feed-mock:8080/api/feed
 grep -q '^application,APP01,request_completed,http_request,low,route,' \
   "$rendered/event-catalogue.csv"
 grep -q '^network,,netflow_record,network_flow,low,,' \
@@ -61,6 +62,9 @@ grep -q '^10.108.0.11,ENT-A,APP01,jengasec-ent-a-app01,jengasec-ent-a-app01/app'
   "$rendered/applications.csv"
 if grep -q '__SENSITIVE_KEY_PATTERN__' "$rendered/vector.yaml"; then
   die "rendered Vector config retained its placeholder"
+fi
+if grep -q '__WEBSITE_FEED_URL__' "$rendered/vector.yaml"; then
+  die "rendered Vector config retained its website-feed placeholder"
 fi
 
 log "contract fixture tests passed"

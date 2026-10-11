@@ -568,6 +568,24 @@ transforms:
           reason: "{{ reason }}"
           source: "{{ source }}"
 
+  sanitized_website_feed:
+    type: remap
+    inputs:
+      - normalized_application
+      - normalized_sources
+    source: |
+      . = {
+        "schema_version": "1.0",
+        "event_id": .event_id,
+        "ts": .ts,
+        "enterprise": .enterprise,
+        "application": .application,
+        "event_type": .event_type,
+        "severity": .severity,
+        "outcome": .outcome,
+        "verdict": .verdict
+      }
+
   quarantine_sensitive:
     type: remap
     inputs:
@@ -657,3 +675,34 @@ sinks:
       - attribution_metrics
       - quarantine_metrics
     address: 0.0.0.0:9598
+
+  website_feed_publisher:
+    type: http
+    inputs:
+      - sanitized_website_feed
+    uri: __WEBSITE_FEED_URL__
+    method: post
+    healthcheck:
+      enabled: false
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    batch:
+      max_events: 1
+      timeout_secs: 1
+    buffer:
+      type: memory
+      max_events: 500
+      when_full: drop_newest
+
+  ai_telemetry_handoff:
+    type: file
+    inputs:
+      - normalized_application
+      - normalized_sources
+    path: /var/lib/vector/ai-handoff/telemetry-%Y-%m-%d.ndjson
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
