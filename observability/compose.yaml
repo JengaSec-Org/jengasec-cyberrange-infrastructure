@@ -104,6 +104,7 @@ services:
         - CMD
         - /usr/bin/loki
         - -config.file=/etc/loki/local-config.yaml
+        - -config.expand-env=true
         - -verify-config=true
       interval: 5s
       timeout: 5s
