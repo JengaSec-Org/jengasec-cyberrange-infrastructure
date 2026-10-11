@@ -40,15 +40,26 @@ while IFS= read -r event; do
 done <"$pack/telemetry.ndjson"
 [[ "$line_number" -eq 2 ]] || fail "expected two associated telemetry rows"
 
-jq --slurp --exit-status '
-  length == 2 and
-  all(.[].actor;
-    .participant_id == "JS26-P-0004" and
-    .team_id == "JS26-R-002" and
-    .team_label == "red-app") and
-  all(.[].integrity_hash; test("^sha256:[a-f0-9]{64}$"))
-' "$pack/telemetry.ndjson" >/dev/null \
+python - "$pack/telemetry.ndjson" <<'PY' \
   || fail "export omitted attribution or integrity hashes"
+import json
+import pathlib
+import re
+import sys
+
+events = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+assert len(events) == 2
+assert all(
+    event["actor"]["participant_id"] == "JS26-P-0004"
+    and event["actor"]["team_id"] == "JS26-R-002"
+    and event["actor"]["team_label"] == "red-app"
+    for event in events
+)
+assert all(
+    re.fullmatch(r"sha256:[a-f0-9]{64}", event["integrity_hash"])
+    for event in events
+)
+PY
 
 [[ ! -s "$pack/platform-audit.ndjson" ]] \
   || fail "platform audit boundary was not empty"
@@ -75,8 +86,18 @@ python scripts/export-observability-evidence.py \
 after="$(find "$pack" -maxdepth 1 -type f -printf '%f:%i:%T@\n' | sort)"
 [[ "$before" == "$after" ]] || fail "identical export rewrote the evidence pack"
 
-jq '.telemetry_event_ids = ["evt_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"] | .correlation_ids = []' \
-  "$finding" >"$workspace/missing-finding.json"
+python - "$finding" "$workspace/missing-finding.json" <<'PY'
+import json
+import pathlib
+import sys
+
+finding = json.loads(pathlib.Path(sys.argv[1]).read_text())
+finding["telemetry_event_ids"] = [
+    "evt_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+]
+finding["correlation_ids"] = []
+pathlib.Path(sys.argv[2]).write_text(json.dumps(finding) + "\n")
+PY
 if python scripts/export-observability-evidence.py \
   --finding "$workspace/missing-finding.json" \
   --telemetry-file "$telemetry" \
@@ -84,9 +105,16 @@ if python scripts/export-observability-evidence.py \
   fail "missing cited telemetry was accepted"
 fi
 
-jq --compact-output '.actor.user_id = "person@example.invalid"' \
-  contracts/fixtures/telemetry/valid/attributed-request.json \
-  >"$workspace/sensitive.ndjson"
+python - "$workspace/sensitive.ndjson" <<'PY'
+import json
+import pathlib
+import sys
+
+source = pathlib.Path("contracts/fixtures/telemetry/valid/attributed-request.json")
+event = json.loads(source.read_text())
+event["actor"]["user_id"] = "person@example.invalid"
+pathlib.Path(sys.argv[1]).write_text(json.dumps(event) + "\n")
+PY
 if python scripts/export-observability-evidence.py \
   --finding "$finding" \
   --telemetry-file "$workspace/sensitive.ndjson" \
