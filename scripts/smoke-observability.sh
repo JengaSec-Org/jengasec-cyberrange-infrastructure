@@ -440,8 +440,12 @@ curl --fail --silent --show-error \
   | jq --exit-status '.dashboard.uid == "jengasec-observability"' >/dev/null
 curl --fail --silent --show-error \
   --user "$blue_login:$blue_password" \
-  "$GRAFANA_URL/api/user" \
-  | jq --exit-status '.orgRole == "Viewer"' >/dev/null
+  "$GRAFANA_URL/api/user/orgs" \
+  | jq --exit-status '
+      length == 1 and
+      .[0].name == "JengaSec ENT-A APP01" and
+      .[0].role == "Viewer"
+    ' >/dev/null
 curl --fail --silent --show-error \
   --user "$blue_login:$blue_password" \
   "$GRAFANA_URL/api/dashboards/uid/jengasec-ent-a-app01" \
