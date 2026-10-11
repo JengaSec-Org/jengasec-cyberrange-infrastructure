@@ -35,6 +35,7 @@ log "building test fixtures and contract test images"
 "${COMPOSE[@]}" build \
   test-emitter \
   source-fixture \
+  website-feed-mock \
   otel-collector \
   contract-tests \
   catalogue-renderer \
@@ -51,6 +52,12 @@ log "checking source fixture Python syntax"
 "${COMPOSE[@]}" run --rm --no-deps \
   --entrypoint python \
   source-fixture \
+  -c 'compile(open("/app/app.py", encoding="utf-8").read(), "/app/app.py", "exec")'
+
+log "checking website feed mock Python syntax"
+"${COMPOSE[@]}" run --rm --no-deps \
+  --entrypoint python \
+  website-feed-mock \
   -c 'compile(open("/app/app.py", encoding="utf-8").read(), "/app/app.py", "exec")'
 
 log "validating OpenTelemetry Collector configuration"
