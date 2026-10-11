@@ -262,6 +262,25 @@ def validate_fixtures(catalogue):
         if valid:
             raise ContractError(f"invalid telemetry fixture passed: {path.name}")
 
+    evidence_schemas = {
+        "finding.json": CONTRACTS / "observability-finding.schema.json",
+        "manifest.json": CONTRACTS / "evidence-pack.schema.json",
+        "path-traversal-finding.json": (
+            CONTRACTS / "observability-finding.schema.json"
+        ),
+        "missing-file-manifest.json": CONTRACTS / "evidence-pack.schema.json",
+    }
+    for path in sorted((FIXTURES / "evidence" / "valid").glob("*.json")):
+        valid, output = schema_check(evidence_schemas[path.name], path)
+        if not valid:
+            raise ContractError(
+                f"valid evidence fixture failed: {path.name}: {output}"
+            )
+    for path in sorted((FIXTURES / "evidence" / "invalid").glob("*.json")):
+        valid, _ = schema_check(evidence_schemas[path.name], path)
+        if valid:
+            raise ContractError(f"invalid evidence fixture passed: {path.name}")
+
 
 def main():
     catalogue_path = CONTRACTS / "telemetry-event-catalogue.yaml"

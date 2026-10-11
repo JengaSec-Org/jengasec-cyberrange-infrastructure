@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jengasec.example/contracts/observability-finding.schema.json",
+  "title": "JengaSec observability finding export row",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "updated_at",
+    "finding_id",
+    "enterprise",
+    "application",
+    "namespace",
+    "start_ts",
+    "end_ts",
+    "telemetry_event_ids",
+    "correlation_ids"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finding_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "enterprise": {
+      "enum": ["ENT-A", "ENT-B"]
+    },
+    "application": {
+      "type": "string",
+      "pattern": "^APP0[1-9]$"
+    },
+    "namespace": {
+      "type": "string",
+      "pattern": "^jengasec-ent-(a|b)-app0[1-9]$"
+    },
+    "start_ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "end_ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "telemetry_event_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^evt_[a-f0-9]{64}$"
+      }
+    },
+    "correlation_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+      }
+    }
+  },
+  "anyOf": [
+    {
+      "properties": {
+        "telemetry_event_ids": {
+          "minItems": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "correlation_ids": {
+          "minItems": 1
+        }
+      }
+    }
+  ]
+}

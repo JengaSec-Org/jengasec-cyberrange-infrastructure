@@ -1,0 +1,14 @@
+{
+  "contract_version": 1,
+  "updated_at": "2026-10-10T09:20:00Z",
+  "finding_id": "../outside",
+  "enterprise": "ENT-A",
+  "application": "APP01",
+  "namespace": "jengasec-ent-a-app01",
+  "start_ts": "2026-10-10T09:15:00Z",
+  "end_ts": "2026-10-10T09:16:00Z",
+  "telemetry_event_ids": [
+    "evt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "correlation_ids": []
+}
