@@ -20,3 +20,7 @@ Every area writes its own scripts here. Copy `_template.sh`, keep the header, an
 | `prepare-observability-runtime.py` | Observability | Create untracked development-only Grafana credentials |
 | `provision-grafana-access.py` | Observability | Converge read-only Grafana organisations and application access |
 | `export-observability-evidence.py` | Observability | Export one finding's sanitized, integrity-checked evidence pack |
+| `refresh-observability-state.sh` | Observability | Refresh live attribution, dashboards and scoped Grafana access |
+| `wait-observability-stack.sh` | Observability | Wait for the production OBS containers to become ready |
+| `validate-observability-vm.sh` | Observability | Rehearse the OBS VM role twice in an isolated local directory |
+| `fingerprint-observability-release.py` | Observability | Prevent reuse of an immutable OBS VM release ID with different source |

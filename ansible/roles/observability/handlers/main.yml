@@ -1,0 +1,16 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: obs_manage_systemd
+  listen: Reload observability systemd
+
+- name: Restart observability
+  ansible.builtin.systemd:
+    name: jengasec-observability.service
+    state: restarted
+    enabled: true
+  when:
+    - obs_manage_systemd
+    - obs_start
+  listen: Restart observability stack

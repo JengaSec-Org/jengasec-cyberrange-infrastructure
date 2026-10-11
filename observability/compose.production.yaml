@@ -1,0 +1,227 @@
+services:
+  website-feed-mock:
+    profiles:
+      - rehearsal
+    build:
+      context: ./tests/fixtures/website-feed
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /data:mode=1777
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  goflow2:
+    image: netsampler/goflow2:v2.2.7
+    command:
+      - -listen
+      - netflow://:2055
+      - -format
+      - json
+      - -transport
+      - file
+      - -loglevel
+      - warn
+      - -addr
+      - :8080
+    labels:
+      jengasec.observability.source: netflow
+    ports:
+      - "${JENGASEC_FUNCTION_BIND:?set JENGASEC_FUNCTION_BIND}:2055:2055/udp"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ${JENGASEC_DATA_DIR:?set JENGASEC_DATA_DIR}/goflow:/templates
+
+  loki:
+    image: grafana/loki:3.7.8
+    user: ${JENGASEC_LOKI_USER:-10001}
+    command:
+      - -config.file=/etc/loki/local-config.yaml
+      - -config.expand-env=true
+    environment:
+      JENGASEC_RETENTION_HOURS: ${JENGASEC_RETENTION_HOURS:?set retention}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/local-config.yaml:ro
+      - ${JENGASEC_DATA_DIR:?set JENGASEC_DATA_DIR}/loki:/loki
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/loki
+        - -config.file=/etc/loki/local-config.yaml
+        - -config.expand-env=true
+        - -verify-config=true
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  vector:
+    image: timberio/vector:0.58.0-debian
+    command:
+      - --config
+      - /etc/vector/generated/vector.yaml
+    depends_on:
+      loki:
+        condition: service_healthy
+    ports:
+      - "${JENGASEC_FUNCTION_BIND:?set JENGASEC_FUNCTION_BIND}:4317:4317/tcp"
+      - "${JENGASEC_FUNCTION_BIND:?set JENGASEC_FUNCTION_BIND}:514:514/tcp"
+      - "${JENGASEC_FUNCTION_BIND:?set JENGASEC_FUNCTION_BIND}:514:514/udp"
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${JENGASEC_LOOKUP_DIR:?set JENGASEC_LOOKUP_DIR}:/etc/vector/generated:ro
+      - ${JENGASEC_DATA_DIR:?set JENGASEC_DATA_DIR}/vector:/var/lib/vector
+    healthcheck:
+      test:
+        - CMD
+        - vector
+        - validate
+        - --skip-healthchecks
+        - /etc/vector/generated/vector.yaml
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    user: ${JENGASEC_PROMETHEUS_USER:-65534}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${JENGASEC_RETENTION_HOURS:?set retention}h
+      - --web.enable-lifecycle
+      - --web.enable-remote-write-receiver
+    depends_on:
+      vector:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./prometheus/prometheus.production.yaml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - ${JENGASEC_DATA_DIR:?set JENGASEC_DATA_DIR}/prometheus:/prometheus
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --spider
+        - --quiet
+        - http://127.0.0.1:9090/-/ready
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  prometheus-write-proxy:
+    image: nginx:1.28.0-alpine3.21
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    ports:
+      - "${JENGASEC_FUNCTION_BIND:?set JENGASEC_FUNCTION_BIND}:9090:9090/tcp"
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    volumes:
+      - ./prometheus/remote-write-nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --spider
+        - --quiet
+        - http://127.0.0.1:9090/healthz
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  prometheus-scope-proxy:
+    image: quay.io/prometheuscommunity/prom-label-proxy:v0.12.0
+    command:
+      - -insecure-listen-address=0.0.0.0:8080
+      - -upstream=http://prometheus:9090
+      - -label=namespace
+      - -header-name=X-JengaSec-Namespace
+      - -error-on-replace
+      - -enable-label-apis
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    user: ${JENGASEC_GRAFANA_USER:-472}
+    depends_on:
+      loki:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+      prometheus-scope-proxy:
+        condition: service_started
+    environment:
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_BASIC_ENABLED: "true"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: >-
+        /var/lib/grafana/dashboards/jengasec-observability.json
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_VIEWERS_CAN_EDIT: "false"
+    ports:
+      - "${JENGASEC_GRAFANA_BIND:-127.0.0.1}:${JENGASEC_GRAFANA_PORT:-3000}:3000"
+    restart: unless-stopped
+    secrets:
+      - grafana_admin_password
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ${JENGASEC_DATA_DIR:?set JENGASEC_DATA_DIR}/grafana:/var/lib/grafana
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - http://127.0.0.1:3000/api/health
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
+secrets:
+  grafana_admin_password:
+    file: ${JENGASEC_SECRET_DIR:?set JENGASEC_SECRET_DIR}/grafana_admin_password

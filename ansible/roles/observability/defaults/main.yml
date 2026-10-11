@@ -1,0 +1,33 @@
+---
+obs_release_id: rehearsal
+obs_activate_existing_release: false
+obs_install_root: /opt/jengasec-observability
+obs_state_root: /var/lib/jengasec-observability
+obs_config_root: /etc/jengasec-observability
+obs_systemd_root: /etc/systemd/system
+
+obs_rehearsal_mode: false
+obs_manage_packages: true
+obs_manage_systemd: true
+obs_manage_storage_ownership: true
+obs_validate_runtime: true
+obs_validate_network: false
+obs_start: false
+obs_live_operation_approved: false
+obs_website_feed_interface_approved: false
+
+obs_function_interface: ""
+obs_function_bind: ""
+obs_grafana_bind: 127.0.0.1
+obs_grafana_port: 3000
+obs_website_feed_url: ""
+
+obs_retention_hours: 168
+obs_event_window_hours: 72
+obs_appeal_window_hours: 96
+obs_refresh_seconds: 60
+obs_compose_minimum_version: 2.24.0
+obs_python_command: /usr/bin/python3
+
+obs_grafana_admin_password: ""
+obs_postgresql_service_content: ""

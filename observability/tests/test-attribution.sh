@@ -25,6 +25,8 @@ python scripts/render-observability-lookups.py \
 
 [[ "$(wc -l <"$rendered/applications.csv")" -eq 19 ]] \
   || fail "expected all 18 application instances"
+grep -q '^1,2026-10-10T12:00:00Z,ENT-A/APP01,10.108.0.11,ENT-A,APP01,jengasec-ent-a-app01,Internet Banking Portal,jengasec-ent-a-app01/app' \
+  "$rendered/applications.csv"
 grep -q '^10.60.1.10,JS26-P-0001,JS26-R-001,red-app,active$' \
   "$rendered/ip-allocations.csv"
 grep -q '^10.60.1.10,ENT-A,APP01,jengasec-ent-a-app01,10.108.0.11,true$' \

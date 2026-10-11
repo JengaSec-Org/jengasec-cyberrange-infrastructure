@@ -1,0 +1,460 @@
+---
+- name: Validate observability deployment inputs
+  ansible.builtin.assert:
+    that:
+      - obs_release_id is match('^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
+      - obs_install_root is match('^/[A-Za-z0-9_./-]+$')
+      - obs_state_root is match('^/[A-Za-z0-9_./-]+$')
+      - obs_config_root is match('^/[A-Za-z0-9_./-]+$')
+      - obs_function_bind | length > 0
+      - obs_retention_hours | int > 0
+      - obs_event_window_hours | int > 0
+      - obs_appeal_window_hours | int > 0
+      - >-
+        obs_retention_hours | int >=
+        (obs_event_window_hours | int + obs_appeal_window_hours | int)
+      - obs_refresh_seconds | int >= 30
+    fail_msg: Observability deployment variables are missing or inconsistent
+    quiet: true
+
+- name: Select the approved website feed interface
+  ansible.builtin.set_fact:
+    obs_effective_website_feed_url: >-
+      {{ 'http://website-feed-mock:8080/api/feed'
+         if obs_rehearsal_mode else obs_website_feed_url }}
+
+- name: Validate observability secrets
+  ansible.builtin.assert:
+    that:
+      - obs_grafana_admin_password | length >= 24
+      - obs_grafana_admin_password != 'CHANGE_ME'
+      - >-
+        obs_rehearsal_mode or
+        (obs_postgresql_service_content | length > 0 and
+         obs_postgresql_service_content != 'CHANGE_ME')
+      - obs_effective_website_feed_url is match('^https?://[^@]+/api/feed$')
+    fail_msg: Required observability secrets or integration settings are missing
+    quiet: true
+  no_log: true
+
+- name: Enforce the live-operation gate
+  ansible.builtin.assert:
+    that:
+      - obs_live_operation_approved
+      - obs_website_feed_interface_approved
+      - obs_validate_network
+    fail_msg: >-
+      Live startup needs separate approval, an approved website interface,
+      and network validation
+    quiet: true
+  when:
+    - obs_start
+    - not obs_rehearsal_mode
+
+- name: Require Debian 12 for managed packages
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Debian'
+      - ansible_facts.distribution_major_version == '12'
+    fail_msg: Managed OBS VM packages require Debian 12
+    quiet: true
+  when: obs_manage_packages
+
+- name: Install observability host packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - jq
+      - postgresql-client
+      - python3
+      - python3-requests
+      - python3-yaml
+      - rsync
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: obs_manage_packages
+
+- name: Read Docker Compose version
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - compose
+      - version
+      - --short
+  register: obs_compose_version_result
+  changed_when: false
+  when: obs_validate_runtime
+
+- name: Validate Docker Compose version
+  ansible.builtin.assert:
+    that:
+      - >-
+        (obs_compose_version_result.stdout | regex_replace('^v', ''))
+        is version(obs_compose_minimum_version, '>=')
+    fail_msg: >-
+      Docker Compose {{ obs_compose_minimum_version }} or newer is required
+    quiet: true
+  when: obs_validate_runtime
+
+- name: Inspect the OBS function interface
+  ansible.builtin.command:
+    argv:
+      - ip
+      - -json
+      - address
+      - show
+      - dev
+      - "{{ obs_function_interface }}"
+  register: obs_function_interface_result
+  changed_when: false
+  when: obs_validate_network
+
+- name: Validate the OBS function address
+  ansible.builtin.assert:
+    that:
+      - obs_function_interface | length > 0
+      - obs_function_bind in obs_function_interface_result.stdout
+    fail_msg: The configured OBS function address is not present on its interface
+    quiet: true
+  when: obs_validate_network
+
+- name: Create observability deployment directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ obs_install_root }}", mode: "0755"}
+    - {path: "{{ obs_install_root }}/releases", mode: "0755"}
+    - {path: "{{ obs_config_root }}", mode: "0750"}
+    - {path: "{{ obs_config_root }}/secrets", mode: "0700"}
+    - {path: "{{ obs_config_root }}/units", mode: "0750"}
+    - {path: "{{ obs_state_root }}", mode: "0750"}
+    - {path: "{{ obs_state_root }}/data", mode: "0750"}
+    - {path: "{{ obs_state_root }}/lookups", mode: "0750"}
+    - {path: "{{ obs_state_root }}/dashboards", mode: "0750"}
+    - {path: "{{ obs_state_root }}/evidence", mode: "0700"}
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Inspect the requested observability release
+  ansible.builtin.stat:
+    path: "{{ obs_install_root }}/releases/{{ obs_release_id }}"
+  register: obs_requested_release
+
+- name: Validate an existing rollback release
+  ansible.builtin.assert:
+    that:
+      - obs_requested_release.stat.isdir | default(false)
+      - >-
+        obs_requested_release.stat.exists and
+        not obs_requested_release.stat.islnk
+    fail_msg: The requested rollback release does not exist as a directory
+    quiet: true
+  when: obs_activate_existing_release
+
+- name: Calculate the observability release fingerprint
+  ansible.builtin.command:
+    argv:
+      - "{{ obs_python_command }}"
+      - "{{ playbook_dir }}/../scripts/fingerprint-observability-release.py"
+  delegate_to: localhost
+  become: false
+  register: obs_release_fingerprint
+  changed_when: false
+  when: not obs_activate_existing_release
+
+- name: Read an existing release fingerprint
+  ansible.builtin.slurp:
+    src: >-
+      {{ obs_install_root }}/releases/{{ obs_release_id }}/.source-sha256
+  register: obs_existing_fingerprint
+  when:
+    - not obs_activate_existing_release
+    - obs_requested_release.stat.exists
+
+- name: Protect an immutable observability release
+  ansible.builtin.assert:
+    that:
+      - >-
+        (obs_existing_fingerprint.content | b64decode | trim) ==
+        (obs_release_fingerprint.stdout | trim)
+    fail_msg: >-
+      This release ID already contains different source; choose a new ID
+    quiet: true
+  when:
+    - not obs_activate_existing_release
+    - obs_requested_release.stat.exists
+
+- name: Create the requested observability release directory
+  ansible.builtin.file:
+    path: "{{ obs_install_root }}/releases/{{ obs_release_id }}"
+    state: directory
+    mode: "0755"
+  when: not obs_activate_existing_release
+
+- name: Create observability storage directories
+  ansible.builtin.file:
+    path: "{{ obs_state_root }}/data/{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner if obs_manage_storage_ownership else omit }}"
+    group: "{{ item.group if obs_manage_storage_ownership else omit }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: goflow, owner: root, group: root, mode: "0750"}
+    - {path: loki, owner: "10001", group: "10001", mode: "0750"}
+    - {path: prometheus, owner: "65534", group: "65534", mode: "0750"}
+    - {path: grafana, owner: "472", group: "472", mode: "0750"}
+    - {path: vector, owner: root, group: root, mode: "0750"}
+    - {path: vector/quarantine, owner: root, group: root, mode: "0750"}
+    - {path: vector/ai-handoff, owner: root, group: root, mode: "0750"}
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Create release directory structure
+  ansible.builtin.file:
+    path: >-
+      {{ obs_install_root }}/releases/{{ obs_release_id }}/{{ item }}
+    state: directory
+    mode: "0755"
+  loop:
+    - contracts
+    - observability
+    - observability/tests/fixtures
+    - scripts
+  when: not obs_activate_existing_release
+
+- name: Copy observability release directories
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../{{ item.source }}/"
+    dest: >-
+      {{ obs_install_root }}/releases/{{ obs_release_id }}/{{ item.destination }}/
+    mode: preserve
+    directory_mode: "0755"
+  loop:
+    - source: contracts
+      destination: contracts
+    - source: observability/vector
+      destination: observability/vector
+    - source: observability/loki
+      destination: observability/loki
+    - source: observability/prometheus
+      destination: observability/prometheus
+    - source: observability/grafana
+      destination: observability/grafana
+    - source: observability/tests/fixtures/website-feed
+      destination: observability/tests/fixtures/website-feed
+  loop_control:
+    label: "{{ item.destination }}"
+  when: not obs_activate_existing_release
+
+- name: Copy observability release files
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../{{ item }}"
+    dest: >-
+      {{ obs_install_root }}/releases/{{ obs_release_id }}/{{ item }}
+    mode: preserve
+  loop:
+    - observability/compose.production.yaml
+    - scripts/_lib.sh
+    - scripts/cells.yaml
+    - scripts/export-observability-evidence.py
+    - scripts/provision-grafana-access.py
+    - scripts/refresh-observability-state.sh
+    - scripts/render-grafana-dashboards.py
+    - scripts/render-observability-lookups.py
+    - scripts/render-vector-catalogue.py
+    - scripts/sync-observability-lookups.sh
+    - scripts/wait-observability-stack.sh
+  when: not obs_activate_existing_release
+
+- name: Copy rehearsal attribution fixtures
+  ansible.builtin.copy:
+    src: >-
+      {{ playbook_dir }}/../observability/tests/fixtures/{{ item.source }}
+    dest: >-
+      {{ obs_install_root }}/releases/{{ obs_release_id }}/{{ item.destination }}
+    mode: "0644"
+  loop:
+    - source: attribution/ip-allocations.csv
+      destination: observability/tests/fixtures/ip-allocations.csv
+    - source: attribution/applications.csv
+      destination: observability/tests/fixtures/applications.csv
+    - source: attribution/scope-assignments.csv
+      destination: observability/tests/fixtures/scope-assignments.csv
+    - source: access/access-principals.csv
+      destination: observability/tests/fixtures/access-principals.csv
+  when:
+    - obs_rehearsal_mode
+    - not obs_activate_existing_release
+
+- name: Record the immutable release fingerprint
+  ansible.builtin.copy:
+    content: "{{ obs_release_fingerprint.stdout | trim }}\n"
+    dest: >-
+      {{ obs_install_root }}/releases/{{ obs_release_id }}/.source-sha256
+    mode: "0444"
+  when: not obs_activate_existing_release
+
+- name: Write the Grafana admin secret
+  ansible.builtin.copy:
+    content: "{{ obs_grafana_admin_password }}\n"
+    dest: "{{ obs_config_root }}/secrets/grafana_admin_password"
+    mode: "0600"
+  no_log: true
+
+- name: Write the read-only PostgreSQL service secret
+  ansible.builtin.copy:
+    content: "{{ obs_postgresql_service_content }}\n"
+    dest: "{{ obs_config_root }}/secrets/postgresql-service.conf"
+    mode: "0600"
+  no_log: true
+  when: not obs_rehearsal_mode
+
+- name: Write the production environment file
+  ansible.builtin.template:
+    src: observability.env.j2
+    dest: "{{ obs_config_root }}/observability.env"
+    mode: "0600"
+
+- name: Render the catalogue-driven Vector configuration
+  ansible.builtin.command:
+    argv:
+      - "{{ obs_python_command }}"
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/scripts/render-vector-catalogue.py
+      - --catalogue
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/contracts/telemetry-event-catalogue.yaml
+      - --cells
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/scripts/cells.yaml
+      - --template
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/observability/vector/vector.yaml
+      - --output-dir
+      - "{{ obs_state_root }}/lookups"
+      - --website-feed-url
+      - "{{ obs_effective_website_feed_url }}"
+  changed_when: false
+
+- name: Render rehearsal attribution lookups
+  ansible.builtin.command:
+    argv:
+      - "{{ obs_python_command }}"
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/scripts/render-observability-lookups.py
+      - --ip-allocations
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/observability/tests/fixtures/ip-allocations.csv
+      - --applications
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/observability/tests/fixtures/applications.csv
+      - --scope-assignments
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/observability/tests/fixtures/scope-assignments.csv
+      - --access-principals
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/observability/tests/fixtures/access-principals.csv
+      - --output-dir
+      - "{{ obs_state_root }}/lookups"
+      - --now
+      - "2026-10-10T12:00:30Z"
+  changed_when: false
+  when: obs_rehearsal_mode
+
+- name: Refresh live attribution lookups
+  ansible.builtin.command:
+    argv:
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/scripts/sync-observability-lookups.sh
+      - --service-file
+      - "{{ obs_config_root }}/secrets/postgresql-service.conf"
+      - --output-dir
+      - "{{ obs_state_root }}/lookups"
+  changed_when: false
+  when: not obs_rehearsal_mode
+
+- name: Render application dashboards
+  ansible.builtin.command:
+    argv:
+      - "{{ obs_python_command }}"
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/scripts/render-grafana-dashboards.py
+      - --applications
+      - "{{ obs_state_root }}/lookups/applications.csv"
+      - --output-dir
+      - "{{ obs_state_root }}/dashboards"
+  changed_when: false
+
+- name: Validate the production Docker Compose model
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - compose
+      - --project-name
+      - jengasec-observability
+      - --env-file
+      - "{{ obs_config_root }}/observability.env"
+      - --file
+      - >-
+        {{ obs_install_root }}/releases/{{ obs_release_id }}/observability/compose.production.yaml
+      - config
+      - --quiet
+  changed_when: false
+  when: obs_validate_runtime
+
+- name: Activate the validated observability release
+  ansible.builtin.file:
+    src: "{{ obs_install_root }}/releases/{{ obs_release_id }}"
+    dest: "{{ obs_install_root }}/current"
+    state: link
+    force: true
+  notify: Restart observability stack
+
+- name: Render observability systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ obs_config_root }}/units/{{ item }}"
+    mode: "0644"
+  loop:
+    - jengasec-observability.service
+    - jengasec-observability-refresh.service
+    - jengasec-observability-refresh.timer
+
+- name: Install observability systemd units
+  ansible.builtin.copy:
+    src: "{{ obs_config_root }}/units/{{ item }}"
+    dest: "{{ obs_systemd_root }}/{{ item }}"
+    remote_src: true
+    mode: "0644"
+  loop:
+    - jengasec-observability.service
+    - jengasec-observability-refresh.service
+    - jengasec-observability-refresh.timer
+  notify: Reload observability systemd
+  when: obs_manage_systemd
+
+- name: Apply pending observability handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Start the approved observability service
+  ansible.builtin.systemd:
+    name: jengasec-observability.service
+    state: started
+    enabled: true
+  when:
+    - obs_manage_systemd
+    - obs_start
+
+- name: Enable live attribution refresh
+  ansible.builtin.systemd:
+    name: jengasec-observability-refresh.timer
+    state: started
+    enabled: true
+  when:
+    - obs_manage_systemd
+    - obs_start
+    - not obs_rehearsal_mode
