@@ -11,7 +11,15 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REHEARSAL_ROOT="$(mktemp -d /tmp/jengasec-obs-vm.XXXXXX)"
 
 cleanup() {
+  exit_status=$?
   if declare -p compose >/dev/null 2>&1; then
+    if (( exit_status != 0 )); then
+      vector_container="$("${compose[@]}" ps --quiet vector 2>/dev/null || true)"
+      if [[ -n "$vector_container" ]]; then
+        docker inspect --format '{{json .State.Health}}' "$vector_container" >&2 || true
+      fi
+      "${compose[@]}" logs --no-color --tail=100 >&2 || true
+    fi
     "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
   fi
   if [[ -n "${REHEARSAL_ROOT:-}" && -d "$REHEARSAL_ROOT" ]]; then

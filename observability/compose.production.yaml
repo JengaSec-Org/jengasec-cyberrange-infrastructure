@@ -91,8 +91,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ${JENGASEC_LOOKUP_DIR:?set JENGASEC_LOOKUP_DIR}:/etc/vector/generated:ro
-      - ${JENGASEC_DATA_DIR:?set JENGASEC_DATA_DIR}/vector/quarantine:/var/lib/vector/quarantine
-      - ${JENGASEC_DATA_DIR:?set JENGASEC_DATA_DIR}/vector/ai-handoff:/var/lib/vector/ai-handoff
+      - ${JENGASEC_DATA_DIR:?set JENGASEC_DATA_DIR}/vector:/var/lib/vector
     healthcheck:
       test:
         - CMD

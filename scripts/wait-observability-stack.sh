@@ -80,7 +80,7 @@ while (( SECONDS < deadline )); do
     fi
     state="$(
       docker inspect \
-        --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' \
+        --format '{{.State.Status}}{{if .State.Health}} {{.State.Health.Status}}{{end}}' \
         "$container_id"
     )"
     case "$state" in
