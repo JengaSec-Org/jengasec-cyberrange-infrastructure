@@ -206,16 +206,17 @@ class Grafana:
 
     def converge_members(self, org_id, desired, user_ids):
         existing = self.request("GET", f"/api/orgs/{org_id}/users")
-        existing_by_login = {row["login"]: row for row in existing}
-        for login in sorted(desired):
-            if login not in existing_by_login:
+        existing_by_login = {row["login"].casefold(): row for row in existing}
+        desired_by_login = {login.casefold(): login for login in desired}
+        for key, login in sorted(desired_by_login.items()):
+            if key not in existing_by_login:
                 self.request(
                     "POST",
                     f"/api/orgs/{org_id}/users",
                     expected=(200,),
                     json={"loginOrEmail": login, "role": "Viewer"},
                 )
-            elif existing_by_login[login]["role"] != "Viewer":
+            elif existing_by_login[key]["role"] != "Viewer":
                 self.request(
                     "PATCH",
                     f"/api/orgs/{org_id}/users/{user_ids[login]}",
@@ -223,7 +224,7 @@ class Grafana:
                     json={"role": "Viewer"},
                 )
         for login, row in existing_by_login.items():
-            if login != "admin" and login not in desired:
+            if login != "admin" and login not in desired_by_login:
                 self.request(
                     "DELETE",
                     f"/api/orgs/{org_id}/users/{row['userId']}",

@@ -9,6 +9,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMPOSE_FILE="$REPO_ROOT/observability/compose.yaml"
+COMPOSE=(docker compose --file "$COMPOSE_FILE")
 DISPLAY_HOST="${JENGASEC_OBSERVABILITY_HOST:-127.0.0.1}"
 RUNTIME_DIR="$REPO_ROOT/observability/.runtime"
 ACCESS_FIXTURE="$REPO_ROOT/observability/tests/fixtures/access/access-principals.csv"
@@ -35,7 +36,12 @@ python3 "$REPO_ROOT/scripts/prepare-observability-runtime.py" \
   --runtime-dir "$RUNTIME_DIR" \
   --access-principals "$ACCESS_FIXTURE"
 
-run docker compose --file "$COMPOSE_FILE" up \
+if ! "${COMPOSE[@]}" ps --status running --services | grep -qx grafana; then
+  log "setting the Grafana admin credential while Grafana is stopped"
+  "${COMPOSE[@]}" --profile tools run --rm grafana-admin-reset
+fi
+
+run "${COMPOSE[@]}" up \
   --build \
   --detach \
   --remove-orphans \

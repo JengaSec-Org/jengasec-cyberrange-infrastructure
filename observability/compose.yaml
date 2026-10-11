@@ -273,6 +273,8 @@ services:
 
   grafana-admin-reset:
     image: grafana/grafana:13.2.3
+    profiles:
+      - tools
     entrypoint:
       - /bin/sh
       - -ec
@@ -294,8 +296,6 @@ services:
     image: grafana/grafana:13.2.3
     depends_on:
       dashboard-renderer:
-        condition: service_completed_successfully
-      grafana-admin-reset:
         condition: service_completed_successfully
       loki:
         condition: service_healthy
