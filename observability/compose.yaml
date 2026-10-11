@@ -91,7 +91,9 @@ services:
     image: grafana/loki:3.7.8
     command:
       - -config.file=/etc/loki/local-config.yaml
-      - -limits.retention-period=${JENGASEC_RETENTION_HOURS:-168}h
+      - -config.expand-env=true
+    environment:
+      JENGASEC_RETENTION_HOURS: ${JENGASEC_RETENTION_HOURS:-168}
     ports:
       - "${JENGASEC_LOKI_BIND:-127.0.0.1}:${JENGASEC_LOKI_PORT:-3100}:3100"
     volumes:
@@ -277,11 +279,13 @@ services:
       - >-
         grafana cli --homepath /usr/share/grafana
         --config /etc/grafana/grafana.ini admin reset-admin-password
-        --password-from-stdin < /run/secrets/grafana_admin_password
+        --password-from-stdin < /run/secrets/grafana_admin_password &&
+        chown -R 472:0 /var/lib/grafana
     environment:
       GF_LOG_LEVEL: error
     secrets:
       - grafana_admin_password
+    user: "0"
     volumes:
       - grafana-data:/var/lib/grafana
 

@@ -104,6 +104,7 @@ log "validating Prometheus configuration"
 log "validating Loki configuration"
 "${COMPOSE[@]}" run --rm --no-deps loki \
   -config.file=/etc/loki/local-config.yaml \
+  -config.expand-env=true \
   -verify-config=true
 
 log "observability validation passed"
