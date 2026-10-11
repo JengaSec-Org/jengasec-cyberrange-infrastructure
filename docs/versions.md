@@ -7,11 +7,15 @@ Everyone runs these. Change by pull request so the whole team moves together.
 | Guest OS | Debian 12 (bookworm) | Dev VMs and all platform VMs |
 | Hypervisor | Proxmox VE 9.1 | Server 3 (as found) |
 | Kubernetes | k3s (pin the exact channel/version here once installed) | k3s VMs |
-| Helm | 3.x (record exact) | Dev VMs, deploy pipeline |
+| Helm | 3.22.0 | Dev VMs, deploy pipeline |
 | Ansible | core 2.x (record exact) | Dev VMs |
 | Python | 3.11 (Debian 12 default) | Scripts |
 | PostgreSQL | 16.15-bookworm | Platform, cells and future OBS event store |
-| Vector | record exact | Cluster |
-| Prometheus / Loki / Grafana | record exact | obs VM |
+| Test Python image | 3.11.14-slim-bookworm | Test emitter and contract checks |
+| Vector | 0.58.0-debian | Telemetry collector |
+| Prometheus | 3.15.0 | Metrics store |
+| Loki | 3.7.8 | Log store |
+| Grafana | 13.2.3 | Dashboards |
+| check-jsonschema | 0.38.2 | Contract test image |
 
 Fill the blanks the first time each is installed — in the same pull request as the install.

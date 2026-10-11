@@ -1,0 +1,210 @@
+api:
+  enabled: true
+  address: 0.0.0.0:8686
+
+enrichment_tables:
+  event_catalogue:
+    type: file
+    file:
+      path: /etc/vector/generated/event-catalogue.csv
+      encoding:
+        type: csv
+
+sources:
+  application_logs:
+    type: docker_logs
+    include_labels:
+      - jengasec.observability.collect=true
+
+  vector_metrics:
+    type: internal_metrics
+
+transforms:
+  reject_sensitive:
+    type: remap
+    inputs:
+      - application_logs
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      raw_message = string!(.message)
+      assert!(
+        !match(raw_message, r'(?i)"(?:__SENSITIVE_KEY_PATTERN__)"\s*:'),
+        "catalogue sensitive key"
+      )
+
+  normalized_telemetry:
+    type: remap
+    inputs:
+      - reject_sensitive
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      original = object!(parse_json!(string!(.message)))
+
+      allowed_fields = [
+        "schema_version", "ts", "level", "enterprise", "application",
+        "namespace", "event", "outcome", "request_id", "trace_id",
+        "source_ip", "user_id", "target_id", "method", "path", "status",
+        "action", "severity", "detail"
+      ]
+      for_each(keys(original)) -> |_index, key| {
+        assert!(includes(allowed_fields, key), "unrecognized logging field")
+      }
+
+      assert_eq!(string!(original.schema_version), "2.0")
+      level = string!(original.level)
+      enterprise = string!(original.enterprise)
+      application = string!(original.application)
+      namespace = string!(original.namespace)
+      raw_event = string!(original.event)
+      outcome = string!(original.outcome)
+      ts = parse_timestamp!(string!(original.ts), format: "%+")
+
+      assert!(includes(["debug", "info", "warn", "error"], level))
+      assert!(includes(["ENT-A", "ENT-B"], enterprise))
+      assert!(match(application, r'^APP0[1-9]$'))
+      assert_eq!(namespace, "jengasec-" + downcase(enterprise) + "-" + downcase(application))
+      assert!(includes(["success", "failure", "denied", "error", "unknown"], outcome))
+
+      mapping = get_enrichment_table_record!(
+        "event_catalogue",
+        {"application": application, "event": raw_event}
+      )
+      event_type = string!(mapping.event_type)
+      severity = if exists(original.severity) {
+        string!(original.severity)
+      } else {
+        string!(mapping.severity)
+      }
+      assert!(includes(["low", "medium", "high", "critical"], severity))
+
+      allowed_detail_keys = if string!(mapping.detail_keys) == "" {
+        []
+      } else {
+        split(string!(mapping.detail_keys), "|")
+      }
+      detail = if exists(original.detail) { object!(original.detail) } else { {} }
+      for_each(keys(detail)) -> |_index, key| {
+        assert!(includes(allowed_detail_keys, key), "detail key is not catalogued")
+      }
+
+      actor = {}
+      if exists(original.source_ip) { actor.ip = string!(original.source_ip) }
+      if exists(original.user_id) { actor.user_id = string!(original.user_id) }
+
+      target = {
+        "enterprise": enterprise,
+        "application": application,
+        "namespace": namespace,
+        "asset": "test-emitter"
+      }
+      if exists(original.target_id) { target.target_id = string!(original.target_id) }
+
+      http = {}
+      if exists(original.method) { http.method = string!(original.method) }
+      if exists(original.path) { http.path = string!(original.path) }
+      if exists(original.status) { http.status = int!(original.status) }
+      if exists(original.action) { http.action = string!(original.action) }
+
+      metadata = detail
+      metadata.level = level
+
+      normalized = {
+        "schema_version": "2.0",
+        "catalogue_version": 1,
+        "stream": "telemetry",
+        "ts": ts,
+        "received_ts": now(),
+        "enterprise": enterprise,
+        "application": application,
+        "namespace": namespace,
+        "asset": "test-emitter",
+        "source": "application",
+        "raw_event": raw_event,
+        "event_type": event_type,
+        "severity": severity,
+        "target": target,
+        "outcome": outcome,
+        "verdict": "not_applicable",
+        "metadata": metadata
+      }
+
+      if length(keys(actor)) > 0 { normalized.actor = actor }
+      if length(keys(http)) > 0 { normalized.http = http }
+      if exists(original.request_id) { normalized.request_id = string!(original.request_id) }
+      if exists(original.trace_id) { normalized.trace_id = string!(original.trace_id) }
+      if string!(mapping.attack_mapping) != "" {
+        normalized.attack_mapping = split(string!(mapping.attack_mapping), "|")
+      }
+
+      identity_hash = sha2(encode_json(original), variant: "SHA-256")
+      normalized.event_id = "evt_" + identity_hash
+      normalized.integrity_hash = "sha256:" + sha2(
+        encode_json(normalized),
+        variant: "SHA-256"
+      )
+      . = normalized
+
+  quarantine_sensitive:
+    type: remap
+    inputs:
+      - reject_sensitive.dropped
+    source: |
+      raw_message = to_string(.message) ?? ""
+      . = {
+        "ts": now(),
+        "source": "application",
+        "reason": "sensitive_field",
+        "payload_hash": "sha256:" + sha2(raw_message, variant: "SHA-256")
+      }
+
+  quarantine_invalid:
+    type: remap
+    inputs:
+      - normalized_telemetry.dropped
+    source: |
+      raw_message = to_string(.message) ?? ""
+      . = {
+        "ts": now(),
+        "source": "application",
+        "reason": "contract_or_catalogue_rejected",
+        "payload_hash": "sha256:" + sha2(raw_message, variant: "SHA-256")
+      }
+
+sinks:
+  loki:
+    type: loki
+    inputs:
+      - normalized_telemetry
+    endpoint: http://loki:3100
+    healthcheck:
+      enabled: false
+    labels:
+      enterprise: "{{ enterprise }}"
+      application: "{{ application }}"
+      namespace: "{{ namespace }}"
+      source: "{{ source }}"
+      event_type: "{{ event_type }}"
+      severity: "{{ severity }}"
+    encoding:
+      codec: json
+    batch:
+      timeout_secs: 1
+
+  quarantine:
+    type: file
+    inputs:
+      - quarantine_sensitive
+      - quarantine_invalid
+    path: /var/lib/vector/quarantine/events.jsonl
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+
+  prometheus_exporter:
+    type: prometheus_exporter
+    inputs:
+      - vector_metrics
+    address: 0.0.0.0:9598

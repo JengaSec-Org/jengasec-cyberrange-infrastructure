@@ -1,0 +1,20 @@
+{
+  "schema_version": "2.0",
+  "catalogue_version": 1,
+  "stream": "telemetry",
+  "event_id": "evt_1111111111111111111111111111111111111111111111111111111111111111",
+  "integrity_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "ts": "2026-10-10T12:00:00.000Z",
+  "received_ts": "2026-10-10T12:00:00.100Z",
+  "enterprise": "ENT-A",
+  "application": "APP01",
+  "namespace": "jengasec-ent-a-app01",
+  "asset": "test-emitter",
+  "source": "application",
+  "raw_event": "request_completed",
+  "event_type": "http_request",
+  "severity": "low",
+  "outcome": "success",
+  "verdict": "not_applicable",
+  "raw_message": "this field is forbidden"
+}

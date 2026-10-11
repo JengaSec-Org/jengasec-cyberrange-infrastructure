@@ -1,0 +1,41 @@
+{
+  "schema_version": "2.0",
+  "catalogue_version": 1,
+  "stream": "telemetry",
+  "event_id": "evt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "integrity_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "ts": "2026-10-10T12:00:00.000Z",
+  "received_ts": "2026-10-10T12:00:00.100Z",
+  "enterprise": "ENT-A",
+  "application": "APP01",
+  "namespace": "jengasec-ent-a-app01",
+  "asset": "test-emitter",
+  "source": "application",
+  "raw_event": "request_completed",
+  "event_type": "http_request",
+  "severity": "low",
+  "actor": {
+    "ip": "127.0.0.1",
+    "user_id": "reference-user-1"
+  },
+  "target": {
+    "enterprise": "ENT-A",
+    "application": "APP01",
+    "namespace": "jengasec-ent-a-app01",
+    "asset": "test-emitter",
+    "target_id": "reference-request"
+  },
+  "http": {
+    "method": "GET",
+    "path": "/emit",
+    "status": 200,
+    "action": "emit_reference_event"
+  },
+  "outcome": "success",
+  "verdict": "not_applicable",
+  "request_id": "smoke-fixture-001",
+  "metadata": {
+    "level": "info",
+    "route": "/emit"
+  }
+}
