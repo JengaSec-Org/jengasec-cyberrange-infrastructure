@@ -6,7 +6,7 @@ help:
 	@echo "make dev           # set up this machine (Debian 12)"
 	@echo "make obs-validate  # validate observability configs and contracts"
 	@echo "make obs-up        # start the observability stack"
-	@echo "make obs-smoke     # prove one event and metric arrived"
+	@echo "make obs-smoke     # prove telemetry inputs and metrics arrived"
 	@echo "make obs-down      # stop the stack and keep data"
 
 lint:
@@ -15,6 +15,10 @@ lint:
 	jq empty contracts/*.schema.json \
 		contracts/fixtures/*/*/*.json observability/grafana/dashboards/*.json
 	helm template test charts/cell --set image.repository=nginx > /dev/null
+	helm template test charts/observability-agent \
+		--set obs.otlpEndpoint=obs.example.invalid:4317 \
+		--set obs.prometheusRemoteWriteUrl=http://obs.example.invalid:9090/api/v1/write \
+		--set obs.tls.insecure=true > /dev/null
 	$(MAKE) contracts
 
 contracts:

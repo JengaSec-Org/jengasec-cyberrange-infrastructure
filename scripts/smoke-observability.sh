@@ -12,6 +12,7 @@ COMPOSE_FILE="$REPO_ROOT/observability/compose.yaml"
 COMPOSE=(docker compose --file "$COMPOSE_FILE")
 HOST="${JENGASEC_OBSERVABILITY_HOST:-127.0.0.1}"
 TEST_EMITTER_URL="http://${HOST}:${JENGASEC_TEST_EMITTER_PORT:-8080}"
+SOURCE_FIXTURE_URL="http://${HOST}:${JENGASEC_SOURCE_FIXTURE_PORT:-8081}"
 LOKI_URL="http://${HOST}:${JENGASEC_LOKI_PORT:-3100}"
 PROMETHEUS_URL="http://${HOST}:${JENGASEC_PROMETHEUS_PORT:-9090}"
 GRAFANA_URL="http://${HOST}:${JENGASEC_GRAFANA_PORT:-3000}"
@@ -48,7 +49,7 @@ validate_evidence() {
   local schema="$1"
   local evidence_file="$2"
 
-  "${COMPOSE[@]}" run --rm --no-deps \
+  "${COMPOSE[@]}" run --rm --no-deps --no-TTY --interactive=false \
     --volume "$TEMP_DIR:/evidence:ro" \
     --entrypoint check-jsonschema \
     contract-tests \
@@ -56,6 +57,7 @@ validate_evidence() {
 }
 
 wait_for_http "test emitter" "$TEST_EMITTER_URL/healthz"
+wait_for_http "source fixture" "$SOURCE_FIXTURE_URL/healthz"
 wait_for_http "Loki" "$LOKI_URL/ready"
 wait_for_http "Prometheus" "$PROMETHEUS_URL/-/ready"
 wait_for_http "Grafana" "$GRAFANA_URL/api/health"
@@ -105,6 +107,116 @@ validate_evidence \
 event_id="$(jq --raw-output '.event_id' "$TEMP_DIR/telemetry-event.json")"
 integrity_hash="$(jq --raw-output '.integrity_hash' "$TEMP_DIR/telemetry-event.json")"
 log "Loki stored contract-valid telemetry event $event_id ($integrity_hash)"
+
+curl --fail --silent --show-error \
+  "$SOURCE_FIXTURE_URL/emit?marker=sources-$marker" \
+  --output "$TEMP_DIR/source-emission.json"
+jq --exit-status '
+  (.markers | keys | sort) == ["application", "firewall", "host", "ids", "ingress", "kubernetes"] and
+  (.netflow_src_port | type == "number")
+' "$TEMP_DIR/source-emission.json" >/dev/null
+
+source_events_ready=false
+for _attempt in {1..60}; do
+  end_ns="$(date +%s)999999999"
+  curl --fail --silent --show-error --get \
+    --data-urlencode 'query={enterprise="ENT-A",application="APP01"}' \
+    --data-urlencode "start=$start_ns" \
+    --data-urlencode "end=$end_ns" \
+    --data-urlencode 'direction=backward' \
+    --data-urlencode 'limit=100' \
+    "$LOKI_URL/loki/api/v1/query_range" \
+    --output "$TEMP_DIR/source-loki-response.json"
+  if jq --exit-status \
+    --slurpfile emitted "$TEMP_DIR/source-emission.json" '
+      [.data.result[].values[]?[1] | fromjson?] as $events |
+      ($emitted[0].markers) as $markers |
+      ($emitted[0].netflow_src_port) as $netflow_port |
+      any($events[];
+        .request_id == $markers.ingress and
+        .source == "ingress" and .raw_event == "ingress_request" and
+        .event_type == "http_request" and .verdict == "allowed") and
+      any($events[];
+        .request_id == $markers.firewall and
+        .source == "network" and .raw_event == "firewall_refused" and
+        .event_type == "scope_violation" and .outcome == "denied" and
+        .verdict == "refused") and
+      any($events[];
+        .request_id == $markers.ids and
+        .source == "ids" and .raw_event == "suricata_alert" and
+        .event_type == "ids_alert") and
+      any($events[];
+        .request_id == $markers.host and
+        .source == "host" and .raw_event == "host_alert") and
+      any($events[];
+        .request_id == $markers.application and
+        .source == "application" and .raw_event == "request_completed" and
+        .event_type == "http_request") and
+      any($events[];
+        .request_id == $markers.kubernetes and
+        .source == "kubernetes" and .raw_event == "kubernetes_event") and
+      any($events[];
+        .source == "network" and .raw_event == "netflow_record" and
+        .network.src_port == $netflow_port) and
+      all(
+        $events[] |
+        select(
+          (.request_id | IN(
+            $markers.ingress,
+            $markers.firewall,
+            $markers.ids,
+            $markers.host,
+            $markers.application,
+            $markers.kubernetes
+          )) or
+          (.source == "network" and .raw_event == "netflow_record" and
+           .network.src_port == $netflow_port)
+        );
+        .enterprise == "ENT-A" and
+        .application == "APP01" and
+        .namespace == "jengasec-ent-a-app01" and
+        .target.ip == "10.108.0.11"
+      )
+    ' "$TEMP_DIR/source-loki-response.json" >/dev/null; then
+    source_events_ready=true
+    break
+  fi
+  sleep 1
+done
+[[ "$source_events_ready" == true ]] \
+  || die "Loki did not return every synthetic production-source event"
+
+jq --compact-output \
+  --slurpfile emitted "$TEMP_DIR/source-emission.json" '
+    [.data.result[].values[]?[1] | fromjson?] as $events |
+    ($emitted[0].markers) as $markers |
+    ($emitted[0].netflow_src_port) as $netflow_port |
+    $events[] |
+    select(
+      (.request_id | IN(
+        $markers.ingress,
+        $markers.firewall,
+        $markers.ids,
+        $markers.host,
+        $markers.application,
+        $markers.kubernetes
+      )) or
+      (.source == "network" and .raw_event == "netflow_record" and
+       .network.src_port == $netflow_port)
+    )
+  ' "$TEMP_DIR/source-loki-response.json" \
+  >"$TEMP_DIR/source-telemetry-events.jsonl"
+
+source_event_count="$(wc -l <"$TEMP_DIR/source-telemetry-events.jsonl")"
+[[ "$source_event_count" -eq 7 ]] \
+  || die "expected seven synthetic production-source events, found $source_event_count"
+while IFS= read -r source_event; do
+  printf '%s\n' "$source_event" >"$TEMP_DIR/source-telemetry-event.json"
+  validate_evidence \
+    contracts/telemetry-event.schema.json \
+    source-telemetry-event.json
+done <"$TEMP_DIR/source-telemetry-events.jsonl"
+log "Loki stored seven contract-valid application, gateway, network, host, and cluster events"
 
 quarantine_count() {
   "${COMPOSE[@]}" exec -T vector sh -c \
@@ -166,6 +278,31 @@ for _attempt in {1..60}; do
 done
 [[ -n "$metric_value" ]] || die "Prometheus did not scrape the emitted-request metric"
 log "Prometheus stored test emitter requests=$metric_value"
+
+kubernetes_health=""
+for _attempt in {1..60}; do
+  curl --fail --silent --show-error --get \
+    --data-urlencode \
+    'query=jengasec_test_kubernetes_health{job="source-fixture",enterprise="ENT-A",application="APP01"}' \
+    "$PROMETHEUS_URL/api/v1/query" \
+    --output "$TEMP_DIR/kubernetes-health-response.json"
+  kubernetes_health="$(
+    jq --raw-output '
+      [
+        .data.result[]?.value[1]
+        | tonumber
+        | select(. == 1)
+      ][0] // empty
+    ' "$TEMP_DIR/kubernetes-health-response.json"
+  )"
+  if [[ -n "$kubernetes_health" ]]; then
+    break
+  fi
+  sleep 1
+done
+[[ "$kubernetes_health" == "1" ]] \
+  || die "Prometheus did not scrape the synthetic Kubernetes health metric"
+log "Prometheus stored the remote-written Kubernetes health metric"
 
 curl --fail --silent --show-error \
   "$GRAFANA_URL/api/datasources/uid/prometheus/health" \

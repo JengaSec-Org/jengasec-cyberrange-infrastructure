@@ -6,6 +6,7 @@ on:
       - .github/workflows/observability.yml
       - Makefile
       - contracts/**
+      - charts/observability-agent/**
       - observability/**
       - scripts/smoke-observability.sh
       - scripts/start-observability.sh
@@ -18,6 +19,7 @@ on:
       - .github/workflows/observability.yml
       - Makefile
       - contracts/**
+      - charts/observability-agent/**
       - observability/**
       - scripts/smoke-observability.sh
       - scripts/start-observability.sh
