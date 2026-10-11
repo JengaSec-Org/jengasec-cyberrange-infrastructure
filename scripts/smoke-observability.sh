@@ -74,7 +74,11 @@ wait_for_http "source fixture" "$SOURCE_FIXTURE_URL/healthz"
 wait_for_http "Loki" "$LOKI_URL/ready"
 wait_for_http "Prometheus" "$PROMETHEUS_URL/-/ready"
 wait_for_http "Grafana" "$GRAFANA_URL/api/health"
-"${COMPOSE[@]}" wait grafana-access-provisioner >/dev/null \
+provisioner_id="$("${COMPOSE[@]}" ps --all --quiet grafana-access-provisioner)"
+[[ -n "$provisioner_id" ]] || die "Grafana access provisioner was not created"
+provisioner_status="$(docker inspect --format '{{.State.Status}}' "$provisioner_id")"
+provisioner_exit="$(docker inspect --format '{{.State.ExitCode}}' "$provisioner_id")"
+[[ "$provisioner_status" == "exited" && "$provisioner_exit" == "0" ]] \
   || die "Grafana access provisioning failed"
 
 "${COMPOSE[@]}" build --quiet contract-tests
