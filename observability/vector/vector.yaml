@@ -680,7 +680,7 @@ sinks:
     type: http
     inputs:
       - sanitized_website_feed
-    uri: "${JENGASEC_WEBSITE_FEED_URL}"
+    uri: __WEBSITE_FEED_URL__
     method: post
     healthcheck:
       enabled: false

@@ -3,10 +3,12 @@
 
 import argparse
 import csv
+import json
 import os
 import pathlib
 import re
 import tempfile
+import urllib.parse
 
 import yaml
 
@@ -64,7 +66,20 @@ def main():
     parser.add_argument("--cells", type=pathlib.Path, required=True)
     parser.add_argument("--template", type=pathlib.Path, required=True)
     parser.add_argument("--output-dir", type=pathlib.Path, required=True)
+    parser.add_argument("--website-feed-url", required=True)
     args = parser.parse_args()
+
+    website_feed_url = urllib.parse.urlsplit(args.website_feed_url)
+    if (
+        website_feed_url.scheme not in {"http", "https"}
+        or not website_feed_url.hostname
+        or website_feed_url.username
+        or website_feed_url.password
+        or website_feed_url.query
+        or website_feed_url.fragment
+        or website_feed_url.path != "/api/feed"
+    ):
+        raise SystemExit("website feed URL must be an HTTP(S) /api/feed URL without credentials")
 
     with args.catalogue.open(encoding="utf-8") as handle:
         catalogue = yaml.safe_load(handle)
@@ -126,9 +141,14 @@ def main():
     rendered = template.replace("__SENSITIVE_KEY_PATTERN__", sensitive_pattern)
     if rendered == template:
         raise SystemExit("Vector template has no sensitive-key placeholder")
+    rendered_with_feed = rendered.replace(
+        "__WEBSITE_FEED_URL__", json.dumps(args.website_feed_url)
+    )
+    if rendered_with_feed == rendered:
+        raise SystemExit("Vector template has no website-feed placeholder")
 
     config_path = args.output_dir / "vector.yaml"
-    write_atomic(config_path, lambda handle: handle.write(rendered))
+    write_atomic(config_path, lambda handle: handle.write(rendered_with_feed))
     print(
         f"rendered {len(rows)} event mappings, {len(applications)} applications "
         f"and {len(sensitive_keys)} sensitive keys"

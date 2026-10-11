@@ -150,6 +150,8 @@ services:
       - observability/vector/vector.yaml
       - --output-dir
       - /generated
+      - --website-feed-url
+      - ${JENGASEC_WEBSITE_FEED_URL:-http://website-feed-mock:8080/api/feed}
     volumes:
       - ..:/workspace:ro
       - vector-catalogue:/generated
@@ -213,9 +215,6 @@ services:
         condition: service_healthy
       website-feed-mock:
         condition: service_healthy
-    environment:
-      JENGASEC_WEBSITE_FEED_URL: >-
-        ${JENGASEC_WEBSITE_FEED_URL:-http://website-feed-mock:8080/api/feed}
     ports:
       - "${JENGASEC_VECTOR_BIND:-127.0.0.1}:${JENGASEC_VECTOR_PORT:-9598}:9598"
       - "${JENGASEC_OTLP_BIND:-127.0.0.1}:${JENGASEC_OTLP_PORT:-4317}:4317"
