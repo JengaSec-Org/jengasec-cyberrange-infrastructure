@@ -58,6 +58,16 @@ SCOPE_FIELDS = {
     "valid_from",
     "valid_until",
 }
+ACCESS_FIELDS = {
+    "contract_version",
+    "updated_at",
+    "participant_id",
+    "role",
+    "team_id",
+    "enterprise",
+    "application",
+    "namespace",
+}
 
 
 def fail(message):
@@ -142,6 +152,7 @@ def main():
     parser.add_argument("--ip-allocations", type=pathlib.Path, required=True)
     parser.add_argument("--applications", type=pathlib.Path, required=True)
     parser.add_argument("--scope-assignments", type=pathlib.Path, required=True)
+    parser.add_argument("--access-principals", type=pathlib.Path, required=True)
     parser.add_argument("--output-dir", type=pathlib.Path, required=True)
     parser.add_argument("--now")
     parser.add_argument("--file-mode", default="0640")
@@ -160,7 +171,8 @@ def main():
     allocation_rows = read_rows(args.ip_allocations, IP_ALLOCATION_FIELDS)
     application_rows = read_rows(args.applications, APPLICATION_FIELDS)
     scope_rows = read_rows(args.scope_assignments, SCOPE_FIELDS)
-    all_rows = [*allocation_rows, *application_rows, *scope_rows]
+    access_rows = read_rows(args.access_principals, ACCESS_FIELDS)
+    all_rows = [*allocation_rows, *application_rows, *scope_rows, *access_rows]
     updated_times = [
         parse_time(row["updated_at"], "updated_at") for row in all_rows
     ]
@@ -196,6 +208,41 @@ def main():
         application_ips.add(ip_address)
     if len(applications) != 18:
         fail("application export must contain all 18 application instances")
+
+    access_principals = []
+    access_keys = set()
+    for row in access_rows:
+        participant_id = row["participant_id"]
+        role = row["role"]
+        if not PARTICIPANT_ID.fullmatch(participant_id):
+            fail("access export contains an invalid participant identifier")
+        if role not in {"blue_team", "red_team", "judge", "staff"}:
+            fail("access export contains an invalid role")
+        if role in {"judge", "staff"}:
+            if any(row[field] for field in ("team_id", "enterprise", "application", "namespace")):
+                fail("global access row contains application scope")
+        else:
+            if not TEAM_ID.fullmatch(row["team_id"]):
+                fail("application access row contains an invalid team identifier")
+            app_record = application_index.get((row["enterprise"], row["application"]))
+            if app_record is None or row["namespace"] != app_record["namespace"]:
+                fail("access export references an unknown application")
+        key = (participant_id, role, row["namespace"])
+        if key in access_keys:
+            fail("access export contains a duplicate principal scope")
+        access_keys.add(key)
+        access_principals.append(
+            {
+                "contract_version": "1",
+                "updated_at": row["updated_at"],
+                "participant_id": participant_id,
+                "role": role,
+                "team_id": row["team_id"],
+                "enterprise": row["enterprise"],
+                "application": row["application"],
+                "namespace": row["namespace"],
+            }
+        )
 
     allocations = []
     allocation_ips = set()
@@ -269,6 +316,9 @@ def main():
     applications.sort(key=lambda row: ipaddress.ip_address(row["ip_address"]))
     allocations.sort(key=lambda row: ipaddress.ip_address(row["ip_address"]))
     scopes.sort(key=lambda row: (row["source_ip"], row["enterprise"], row["application"]))
+    access_principals.sort(
+        key=lambda row: (row["participant_id"], row["namespace"], row["role"])
+    )
     write_atomic(
         args.output_dir / "applications.csv",
         applications,
@@ -287,6 +337,21 @@ def main():
         ("source_ip", "enterprise", "application", "namespace", "target_ip", "active"),
         mode,
     )
+    write_atomic(
+        args.output_dir / "access-principals.csv",
+        access_principals,
+        (
+            "contract_version",
+            "updated_at",
+            "participant_id",
+            "role",
+            "team_id",
+            "enterprise",
+            "application",
+            "namespace",
+        ),
+        mode,
+    )
     write_json_atomic(
         args.output_dir / "attribution-snapshot.json",
         {
@@ -296,12 +361,14 @@ def main():
             "applications": len(applications),
             "allocations": len(allocations),
             "scopes": len(scopes),
+            "access_principals": len(access_principals),
         },
         mode,
     )
     print(
         f"rendered {len(applications)} applications, {len(allocations)} active "
-        f"participant allocations and {len(scopes)} effective scopes"
+        f"participant allocations, {len(scopes)} effective scopes and "
+        f"{len(access_principals)} access principals"
     )
 
 

@@ -9,6 +9,9 @@ on:
       - charts/observability-agent/**
       - observability/**
       - scripts/render-observability-lookups.py
+      - scripts/render-grafana-dashboards.py
+      - scripts/prepare-observability-runtime.py
+      - scripts/provision-grafana-access.py
       - scripts/smoke-observability.sh
       - scripts/start-observability.sh
       - scripts/stop-observability.sh
@@ -24,6 +27,9 @@ on:
       - charts/observability-agent/**
       - observability/**
       - scripts/render-observability-lookups.py
+      - scripts/render-grafana-dashboards.py
+      - scripts/prepare-observability-runtime.py
+      - scripts/provision-grafana-access.py
       - scripts/smoke-observability.sh
       - scripts/start-observability.sh
       - scripts/stop-observability.sh
