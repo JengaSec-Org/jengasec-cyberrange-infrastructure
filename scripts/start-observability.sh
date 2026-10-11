@@ -44,8 +44,15 @@ fi
 run "${COMPOSE[@]}" up \
   --build \
   --detach \
-  --remove-orphans \
-  --wait
+  --remove-orphans
+
+provisioner_id="$("${COMPOSE[@]}" ps --all --quiet grafana-access-provisioner)"
+[[ -n "$provisioner_id" ]] || die "Grafana access provisioner was not created"
+provisioner_exit="$(docker wait "$provisioner_id")"
+if [[ "$provisioner_exit" != "0" ]]; then
+  "${COMPOSE[@]}" logs --no-color grafana-access-provisioner >&2 || true
+  die "Grafana access provisioning failed"
+fi
 
 log "Grafana:   http://${DISPLAY_HOST}:${JENGASEC_GRAFANA_PORT:-3000}"
 log "Prometheus: http://${DISPLAY_HOST}:${JENGASEC_PROMETHEUS_PORT:-9090}"
