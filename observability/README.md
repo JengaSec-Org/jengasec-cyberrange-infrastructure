@@ -23,6 +23,8 @@ interfaces.
 A renderer builds the Vector event lookup, application lookup and
 sensitive-key policy from the shared catalogue and `scripts/cells.yaml`.
 Vector rejects unknown events, uncatalogued detail fields and sensitive keys.
+The development stack also renders a synthetic snapshot of the three
+attribution views in `contracts/observability-data-interface.md`.
 
 | Telemetry field | Source |
 |---|---|
@@ -37,6 +39,11 @@ Vector rejects unknown events, uncatalogued detail fields and sensitive keys.
 Loki indexes bounded deployment and event fields. IDs and attribution remain
 in the JSON body. The quarantine stores the time, source, rejection reason and
 payload hash. It never stores rejected payloads or sensitive values.
+
+`scripts/sync-observability-lookups.sh` is the live snapshot consumer. It uses
+a TLS PostgreSQL service, reads only the three versioned views, validates their
+identifiers and relationships, and replaces lookup files atomically. Invalid
+or unavailable source data leaves the last valid snapshot unchanged.
 
 ## k3s inputs
 
