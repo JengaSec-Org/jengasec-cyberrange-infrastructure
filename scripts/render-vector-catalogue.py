@@ -25,6 +25,7 @@ def catalogue_rows(catalogue):
     for application, brief in sorted(catalogue["briefs"].items()):
         for mapping in [*catalogue["common"], *brief["events"]]:
             yield {
+                "source": "application",
                 "application": application,
                 "event": mapping["event"],
                 "event_type": mapping["event_type"],
@@ -33,20 +34,51 @@ def catalogue_rows(catalogue):
                 "attack_mapping": "|".join(mapping.get("attack", [])),
             }
 
+    for source, mappings in sorted(catalogue["source_events"].items()):
+        for mapping in mappings:
+            yield {
+                "source": source,
+                "application": "",
+                "event": mapping["event"],
+                "event_type": mapping["event_type"],
+                "severity": mapping["severity"],
+                "detail_keys": "|".join(mapping.get("detail", [])),
+                "attack_mapping": "|".join(mapping.get("attack", [])),
+            }
+
+
+def application_rows(cells):
+    for cell in sorted(cells["cells"], key=lambda item: item["reserved_ip"]):
+        yield {
+            "ip_address": cell["reserved_ip"],
+            "enterprise": cell["enterprise"],
+            "application": cell["application"],
+            "namespace": cell["namespace"],
+            "asset": f'{cell["namespace"]}/app',
+        }
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--catalogue", type=pathlib.Path, required=True)
+    parser.add_argument("--cells", type=pathlib.Path, required=True)
     parser.add_argument("--template", type=pathlib.Path, required=True)
     parser.add_argument("--output-dir", type=pathlib.Path, required=True)
     args = parser.parse_args()
 
     with args.catalogue.open(encoding="utf-8") as handle:
         catalogue = yaml.safe_load(handle)
+    with args.cells.open(encoding="utf-8") as handle:
+        cells = yaml.safe_load(handle)
 
     rows = list(catalogue_rows(catalogue))
     if not rows:
         raise SystemExit("event catalogue produced no Vector mappings")
+    applications = list(application_rows(cells))
+    if len(applications) != 18:
+        raise SystemExit("cell inventory must contain 18 application instances")
+    if len({row["ip_address"] for row in applications}) != len(applications):
+        raise SystemExit("cell inventory contains duplicate application addresses")
 
     lookup_path = args.output_dir / "event-catalogue.csv"
 
@@ -54,6 +86,7 @@ def main():
         writer = csv.DictWriter(
             handle,
             fieldnames=(
+                "source",
                 "application",
                 "event",
                 "event_type",
@@ -67,6 +100,24 @@ def main():
 
     write_atomic(lookup_path, write_lookup)
 
+    applications_path = args.output_dir / "applications.csv"
+
+    def write_applications(handle):
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=(
+                "ip_address",
+                "enterprise",
+                "application",
+                "namespace",
+                "asset",
+            ),
+        )
+        writer.writeheader()
+        writer.writerows(applications)
+
+    write_atomic(applications_path, write_applications)
+
     sensitive_keys = catalogue["never_log_keys"]
     if not sensitive_keys:
         raise SystemExit("event catalogue has no never-log keys")
@@ -78,7 +129,10 @@ def main():
 
     config_path = args.output_dir / "vector.yaml"
     write_atomic(config_path, lambda handle: handle.write(rendered))
-    print(f"rendered {len(rows)} event mappings and {len(sensitive_keys)} sensitive keys")
+    print(
+        f"rendered {len(rows)} event mappings, {len(applications)} applications "
+        f"and {len(sensitive_keys)} sensitive keys"
+    )
 
 
 if __name__ == "__main__":

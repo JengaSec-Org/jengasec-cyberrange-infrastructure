@@ -1,0 +1,111 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  k8sobjects/events:
+    auth_type: serviceAccount
+    objects:
+      - name: events
+        mode: watch
+        group: events.k8s.io
+  k8s_cluster:
+    auth_type: serviceAccount
+    collection_interval: 30s
+    node_conditions_to_report:
+      - Ready
+      - MemoryPressure
+      - DiskPressure
+      - PIDPressure
+    allocatable_types_to_report:
+      - cpu
+      - memory
+  prometheus/applications:
+    config:
+      scrape_configs:
+        - job_name: jengasec-applications
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            - action: keep
+              source_labels: [__meta_kubernetes_namespace]
+              regex: jengasec-ent-(a|b)-app0[1-9]
+            - action: keep
+              source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              regex: "true"
+            - action: replace
+              source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+              target_label: __metrics_path__
+              regex: (.+)
+            - action: replace
+              source_labels:
+                - __address__
+                - __meta_kubernetes_pod_annotation_prometheus_io_port
+              target_label: __address__
+              regex: ([^:]+)(?::\d+)?;(\d+)
+              replacement: $1:$2
+            - action: replace
+              source_labels: [__meta_kubernetes_namespace]
+              target_label: namespace
+            - action: replace
+              source_labels: [__meta_kubernetes_pod_label_jengasec_io_enterprise]
+              target_label: enterprise
+            - action: replace
+              source_labels: [__meta_kubernetes_pod_label_jengasec_io_application]
+              target_label: application
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 800
+    spike_limit_mib: 200
+  transform/kubernetes_events:
+    error_mode: propagate
+    log_statements:
+      - context: log
+        statements:
+          - set(attributes["jengasec.namespace"], body["metadata"]["namespace"])
+          - set(attributes["jengasec.asset"], Concat([body["metadata"]["namespace"], "/", body["regarding"]["kind"]], ""))
+          - set(attributes["jengasec.ts"], body["metadata"]["creationTimestamp"])
+          - set(attributes["jengasec.request_id"], body["metadata"]["uid"])
+          - set(attributes["jengasec.kind"], body["regarding"]["kind"])
+          - set(body["schema_version"], "2.0")
+          - set(body["ts"], attributes["jengasec.ts"])
+          - set(body["source"], "kubernetes")
+          - set(body["event"], "kubernetes_event")
+          - set(body["asset"], attributes["jengasec.asset"])
+          - set(body["namespace"], attributes["jengasec.namespace"])
+          - set(body["request_id"], attributes["jengasec.request_id"])
+          - set(body["kind"], attributes["jengasec.kind"])
+          - set(body["outcome"], "success")
+          - set(body["outcome"], "failure") where body["type"] == "Warning"
+          - set(body["verdict"], "not_applicable")
+          - keep_keys(body, ["schema_version", "ts", "source", "event", "asset", "namespace", "request_id", "kind", "reason", "outcome", "verdict"])
+  batch:
+    timeout: 1s
+
+exporters:
+  otlp/obs:
+    endpoint: ${env:OBS_OTLP_ENDPOINT}
+    tls:
+      insecure: ${env:OBS_OTLP_INSECURE}
+    retry_on_failure:
+      enabled: true
+  prometheusremotewrite/obs:
+    endpoint: ${env:OBS_PROMETHEUS_REMOTE_WRITE_URL}
+    resource_to_telemetry_conversion:
+      enabled: true
+    retry_on_failure:
+      enabled: true
+
+service:
+  extensions: [health_check]
+  pipelines:
+    logs:
+      receivers: [k8sobjects/events]
+      processors: [memory_limiter, transform/kubernetes_events, batch]
+      exporters: [otlp/obs]
+    metrics:
+      receivers: [k8s_cluster, prometheus/applications]
+      processors: [memory_limiter, batch]
+      exporters: [prometheusremotewrite/obs]

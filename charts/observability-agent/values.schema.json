@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["namespace", "image", "obs"],
+  "properties": {
+    "namespace": {
+      "const": "jengasec-observability"
+    },
+    "image": {
+      "type": "object",
+      "required": ["repository", "tag"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"const": "0.137.0"}
+      }
+    },
+    "obs": {
+      "type": "object",
+      "required": ["otlpEndpoint", "prometheusRemoteWriteUrl", "tls"],
+      "properties": {
+        "otlpEndpoint": {"type": "string", "minLength": 1},
+        "prometheusRemoteWriteUrl": {
+          "type": "string",
+          "pattern": "^https?://.+/api/v1/write$"
+        },
+        "tls": {
+          "type": "object",
+          "required": ["insecure"],
+          "properties": {
+            "insecure": {"type": "boolean"}
+          }
+        }
+      }
+    }
+  }
+}
