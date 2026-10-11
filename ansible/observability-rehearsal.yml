@@ -1,0 +1,37 @@
+---
+- name: Rehearse the observability VM release locally
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+  vars:
+    obs_rehearsal_root: >-
+      {{ lookup('ansible.builtin.env', 'JENGASEC_OBS_REHEARSAL_ROOT') }}
+    obs_release_id: codespace-rehearsal
+    obs_install_root: "{{ obs_rehearsal_root }}/opt"
+    obs_state_root: "{{ obs_rehearsal_root }}/state"
+    obs_config_root: "{{ obs_rehearsal_root }}/etc"
+    obs_systemd_root: "{{ obs_rehearsal_root }}/systemd"
+    obs_rehearsal_mode: true
+    obs_manage_packages: false
+    obs_manage_systemd: false
+    obs_manage_storage_ownership: false
+    obs_validate_runtime: true
+    obs_validate_network: false
+    obs_start: false
+    obs_function_bind: 127.0.0.1
+    obs_python_command: >-
+      {{ lookup('ansible.builtin.env', 'JENGASEC_OBS_PYTHON') |
+         default('/usr/bin/python3', true) }}
+    obs_grafana_admin_password: >-
+      {{ lookup('ansible.builtin.password',
+         obs_rehearsal_root + '/controller-grafana-secret length=32') }}
+  pre_tasks:
+    - name: Require an isolated rehearsal root
+      ansible.builtin.assert:
+        that:
+          - obs_rehearsal_root is match('^/tmp/[A-Za-z0-9._/-]+$')
+        fail_msg: JENGASEC_OBS_REHEARSAL_ROOT must be an isolated /tmp path
+        quiet: true
+  roles:
+    - observability

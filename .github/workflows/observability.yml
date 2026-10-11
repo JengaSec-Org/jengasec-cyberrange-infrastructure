@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - .github/workflows/observability.yml
+      - ansible/observability-rehearsal.yml
+      - ansible/requirements.txt
+      - ansible/roles/observability/**
+      - ansible/site.yml
       - Makefile
       - contracts/**
       - charts/observability-agent/**
@@ -17,11 +21,20 @@ on:
       - scripts/stop-observability.sh
       - scripts/sync-observability-lookups.sh
       - scripts/validate-observability.sh
+      - scripts/validate-observability-vm.sh
+      - scripts/fingerprint-observability-release.py
+      - scripts/export-observability-evidence.py
+      - scripts/refresh-observability-state.sh
+      - scripts/wait-observability-stack.sh
   push:
     branches:
       - main
     paths:
       - .github/workflows/observability.yml
+      - ansible/observability-rehearsal.yml
+      - ansible/requirements.txt
+      - ansible/roles/observability/**
+      - ansible/site.yml
       - Makefile
       - contracts/**
       - charts/observability-agent/**
@@ -35,6 +48,11 @@ on:
       - scripts/stop-observability.sh
       - scripts/sync-observability-lookups.sh
       - scripts/validate-observability.sh
+      - scripts/validate-observability-vm.sh
+      - scripts/fingerprint-observability-release.py
+      - scripts/export-observability-evidence.py
+      - scripts/refresh-observability-state.sh
+      - scripts/wait-observability-stack.sh
 
 permissions:
   contents: read
@@ -46,7 +64,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - name: Install smoke-check tools
-        run: sudo apt-get update && sudo apt-get install -y jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          python3 -m venv /tmp/jengasec-ansible-venv
+          /tmp/jengasec-ansible-venv/bin/pip install -r ansible/requirements.txt
+      - name: Rehearse OBS VM deployment
+        run: PATH="/tmp/jengasec-ansible-venv/bin:$PATH" make obs-vm-validate
       - name: Validate configs, builds and contracts
         run: make obs-validate
       - name: Start observability stack

@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh JengaSec observability attribution and access
+After=jengasec-observability.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory={{ obs_install_root }}/current
+ExecStart={{ obs_install_root }}/current/scripts/refresh-observability-state.sh --service-file {{ obs_config_root }}/secrets/postgresql-service.conf --lookup-dir {{ obs_state_root }}/lookups --dashboard-dir {{ obs_state_root }}/dashboards --compose-file {{ obs_install_root }}/current/observability/compose.production.yaml --env-file {{ obs_config_root }}/observability.env --grafana-url http://127.0.0.1:{{ obs_grafana_port }} --grafana-admin-password-file {{ obs_config_root }}/secrets/grafana_admin_password

@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh JengaSec observability state each minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec={{ obs_refresh_seconds }}s
+AccuracySec=5s
+Persistent=true
+Unit=jengasec-observability-refresh.service
+
+[Install]
+WantedBy=timers.target

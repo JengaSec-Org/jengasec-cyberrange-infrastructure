@@ -1,4 +1,4 @@
-.PHONY: help lint contracts cells dev obs-validate obs-up obs-smoke obs-down
+.PHONY: help lint contracts cells dev obs-validate obs-up obs-smoke obs-down obs-vm-validate
 help:
 	@echo "make lint          # the same checks CI runs"
 	@echo "make contracts     # validate shared contracts and fixtures"
@@ -8,6 +8,7 @@ help:
 	@echo "make obs-up        # start the observability stack"
 	@echo "make obs-smoke     # prove telemetry inputs and metrics arrived"
 	@echo "make obs-down      # stop the stack and keep data"
+	@echo "make obs-vm-validate # rehearse OBS VM deployment without live changes"
 
 lint:
 	shellcheck -x -P scripts scripts/*.sh tools/*.sh observability/tests/*.sh
@@ -41,3 +42,6 @@ obs-smoke:
 
 obs-down:
 	./scripts/stop-observability.sh
+
+obs-vm-validate:
+	./scripts/validate-observability-vm.sh

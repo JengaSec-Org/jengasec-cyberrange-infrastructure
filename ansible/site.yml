@@ -19,3 +19,9 @@
   become: true
   roles:
     - k3s_agent
+
+- name: Observability VM
+  hosts: observability
+  become: true
+  roles:
+    - observability

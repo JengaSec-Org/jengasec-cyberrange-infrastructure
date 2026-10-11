@@ -4,3 +4,5 @@
 postgres_admin_password: "CHANGE_ME"
 registry_token: "CHANGE_ME"
 cloudflare_dns_api_token: "CHANGE_ME"
+obs_grafana_admin_password: "CHANGE_ME"
+obs_postgresql_service_content: "CHANGE_ME"
