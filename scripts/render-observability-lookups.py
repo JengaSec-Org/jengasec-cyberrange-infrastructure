@@ -197,11 +197,19 @@ def main():
         if key in application_index or ip_address in application_ips:
             fail("application export contains a duplicate identifier or address")
         rendered = {
+            "contract_version": row["contract_version"],
+            "updated_at": row["updated_at"],
+            "application_instance_id": row["application_instance_id"],
             "ip_address": ip_address,
             "enterprise": enterprise,
             "application": application,
             "namespace": namespace,
+            "service_name": row["service_name"],
             "asset": f"{namespace}/app",
+            "status": row["status"],
+            "optional": row["optional"],
+            "enabled": row["enabled"],
+            "image_digest": row["image_digest"],
         }
         applications.append(rendered)
         application_index[key] = rendered
@@ -322,7 +330,21 @@ def main():
     write_atomic(
         args.output_dir / "applications.csv",
         applications,
-        ("ip_address", "enterprise", "application", "namespace", "asset"),
+        (
+            "contract_version",
+            "updated_at",
+            "application_instance_id",
+            "ip_address",
+            "enterprise",
+            "application",
+            "namespace",
+            "service_name",
+            "asset",
+            "status",
+            "optional",
+            "enabled",
+            "image_digest",
+        ),
         mode,
     )
     write_atomic(
