@@ -64,8 +64,17 @@ done
 log "running JSON Schema fixture tests"
 "${COMPOSE[@]}" run --rm --no-deps contract-tests
 
+log "running attribution snapshot fixture tests"
+"${COMPOSE[@]}" run --rm --no-deps \
+  --entrypoint bash \
+  contract-tests \
+  observability/tests/test-attribution.sh
+
 log "rendering Vector lookups from the event catalogue"
 "${COMPOSE[@]}" run --rm --no-deps catalogue-renderer
+
+log "rendering Vector lookups from the platform attribution fixtures"
+"${COMPOSE[@]}" run --rm --no-deps attribution-renderer
 
 log "validating Vector configuration and VRL program"
 "${COMPOSE[@]}" run --rm --no-deps vector \

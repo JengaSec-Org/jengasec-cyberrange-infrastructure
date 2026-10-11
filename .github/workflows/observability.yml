@@ -8,9 +8,11 @@ on:
       - contracts/**
       - charts/observability-agent/**
       - observability/**
+      - scripts/render-observability-lookups.py
       - scripts/smoke-observability.sh
       - scripts/start-observability.sh
       - scripts/stop-observability.sh
+      - scripts/sync-observability-lookups.sh
       - scripts/validate-observability.sh
   push:
     branches:
@@ -21,9 +23,11 @@ on:
       - contracts/**
       - charts/observability-agent/**
       - observability/**
+      - scripts/render-observability-lookups.py
       - scripts/smoke-observability.sh
       - scripts/start-observability.sh
       - scripts/stop-observability.sh
+      - scripts/sync-observability-lookups.sh
       - scripts/validate-observability.sh
 
 permissions:

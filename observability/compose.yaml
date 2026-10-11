@@ -127,12 +127,37 @@ services:
       - ..:/workspace:ro
       - vector-catalogue:/generated
 
+  attribution-renderer:
+    build:
+      context: ..
+      dockerfile: observability/tests/Dockerfile
+    entrypoint:
+      - python
+      - scripts/render-observability-lookups.py
+    command:
+      - --ip-allocations
+      - observability/tests/fixtures/attribution/ip-allocations.csv
+      - --applications
+      - observability/tests/fixtures/attribution/applications.csv
+      - --scope-assignments
+      - observability/tests/fixtures/attribution/scope-assignments.csv
+      - --output-dir
+      - /generated
+    depends_on:
+      catalogue-renderer:
+        condition: service_completed_successfully
+    volumes:
+      - ..:/workspace:ro
+      - vector-catalogue:/generated
+
   vector:
     image: timberio/vector:0.58.0-debian
     command:
       - --config
       - /etc/vector/generated/vector.yaml
     depends_on:
+      attribution-renderer:
+        condition: service_completed_successfully
       catalogue-renderer:
         condition: service_completed_successfully
       loki:
