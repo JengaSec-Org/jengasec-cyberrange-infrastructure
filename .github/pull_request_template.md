@@ -1,7 +1,7 @@
 ## What this changes
 
-## Which task
-Task ID from the plan / Ops Board:
+## Tracking
+Issue or task, if one exists:
 
 ## Checklist
 - [ ] Ran it on my dev VM — what I ran:
@@ -9,4 +9,4 @@ Task ID from the plan / Ops Board:
 - [ ] No secrets, keys, tokens or participant data
 - [ ] Addresses and names come from variables or `contracts/`, not typed in
 - [ ] Runbook added or updated
-- [ ] If a contract changed: labelled `contract` and announced at stand-up
+- [ ] If a contract changed: labelled `contract`
