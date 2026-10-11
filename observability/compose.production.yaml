@@ -47,6 +47,7 @@ services:
 
   loki:
     image: grafana/loki:3.7.8
+    user: ${JENGASEC_LOKI_USER:-10001}
     command:
       - -config.file=/etc/loki/local-config.yaml
       - -config.expand-env=true
@@ -105,6 +106,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.15.0
+    user: ${JENGASEC_PROMETHEUS_USER:-65534}
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -177,6 +179,7 @@ services:
 
   grafana:
     image: grafana/grafana:13.2.3
+    user: ${JENGASEC_GRAFANA_USER:-472}
     depends_on:
       loki:
         condition: service_healthy

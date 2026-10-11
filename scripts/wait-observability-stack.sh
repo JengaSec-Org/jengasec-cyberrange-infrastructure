@@ -10,9 +10,10 @@ set -euo pipefail
 COMPOSE_FILE=""
 ENV_FILE=""
 TIMEOUT_SECONDS=180
+PROJECT_NAME=jengasec-observability
 
 usage() {
-  echo "usage: $0 --compose-file PATH --env-file PATH [--timeout-seconds N]"
+  echo "usage: $0 --compose-file PATH --env-file PATH [--project-name NAME] [--timeout-seconds N]"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -27,6 +28,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --timeout-seconds)
       TIMEOUT_SECONDS="${2:-}"
+      shift 2
+      ;;
+    --project-name)
+      PROJECT_NAME="${2:-}"
       shift 2
       ;;
     --help)
@@ -44,11 +49,13 @@ done
 [[ -f "$ENV_FILE" ]] || die "--env-file must name a readable file"
 [[ "$TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] \
   || die "--timeout-seconds must be a positive integer"
+[[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]{0,62}$ ]] \
+  || die "--project-name is invalid"
 need docker
 
 compose=(
   docker compose
-  --project-name jengasec-observability
+  --project-name "$PROJECT_NAME"
   --env-file "$ENV_FILE"
   --file "$COMPOSE_FILE"
 )

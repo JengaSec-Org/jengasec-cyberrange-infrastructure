@@ -11,6 +11,9 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REHEARSAL_ROOT="$(mktemp -d /tmp/jengasec-obs-vm.XXXXXX)"
 
 cleanup() {
+  if declare -p compose >/dev/null 2>&1; then
+    "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  fi
   if [[ -n "${REHEARSAL_ROOT:-}" && -d "$REHEARSAL_ROOT" ]]; then
     rm -r -- "$REHEARSAL_ROOT"
   fi
@@ -18,6 +21,7 @@ cleanup() {
 trap cleanup EXIT
 
 need ansible-playbook
+need curl
 need docker
 need python3
 docker info >/dev/null 2>&1 || die "Docker is not running"
@@ -56,4 +60,24 @@ docker compose \
   --env-file "$REHEARSAL_ROOT/etc/observability.env" \
   --file "$current/observability/compose.production.yaml" \
   config --quiet
-log "OBS VM deployment rehearsal passed twice without live changes"
+
+compose=(
+  docker compose
+  --project-name jengasec-observability-rehearsal
+  --profile rehearsal
+  --env-file "$REHEARSAL_ROOT/etc/observability.env"
+  --file "$current/observability/compose.production.yaml"
+)
+"${compose[@]}" up --build --detach --remove-orphans --wait
+"${compose[@]}" up --build --detach --remove-orphans --wait
+"$current/scripts/wait-observability-stack.sh" \
+  --compose-file "$current/observability/compose.production.yaml" \
+  --env-file "$REHEARSAL_ROOT/etc/observability.env" \
+  --project-name jengasec-observability-rehearsal
+curl --fail --silent --output /dev/null http://127.0.0.1:3000/api/health
+[[ "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  http://127.0.0.1:9090/)" == "404" ]] \
+  || die "Prometheus write proxy exposed an unexpected path"
+"${compose[@]}" down --remove-orphans
+"${compose[@]}" down --remove-orphans
+log "OBS VM deployment and production-stack rehearsal passed twice"
