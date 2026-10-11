@@ -265,7 +265,7 @@ done <"$TEMP_DIR/source-telemetry-events.jsonl"
 log "Loki stored seven contract-valid application, gateway, network, host, and cluster events"
 
 curl --fail --silent --show-error --get \
-  --header 'X-Scope-OrgID: jengasec-ent-a-app01' \
+  --header 'X-Scope-OrgID: application-jengasec-ent-a-app01' \
   --data-urlencode 'query={application=~"APP0[12]"}' \
   --data-urlencode "start=$start_ns" \
   --data-urlencode "end=$(date +%s)999999999" \

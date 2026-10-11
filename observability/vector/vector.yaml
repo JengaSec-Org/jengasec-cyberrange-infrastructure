@@ -603,7 +603,7 @@ sinks:
       - normalized_application
       - normalized_sources
     endpoint: http://loki:3100
-    tenant_id: "{{ namespace }}"
+    tenant_id: "application-{{ namespace }}"
     healthcheck:
       enabled: false
     labels:

@@ -265,6 +265,7 @@ class Grafana:
 
 
 def loki_datasource(tenant):
+    tenant_id = tenant if tenant == "staff" else f"application-{tenant}"
     return {
         "name": "Loki",
         "uid": "loki",
@@ -274,7 +275,7 @@ def loki_datasource(tenant):
         "isDefault": False,
         "editable": False,
         "jsonData": {"httpHeaderName1": "X-Scope-OrgID", "maxLines": 1000},
-        "secureJsonData": {"httpHeaderValue1": tenant},
+        "secureJsonData": {"httpHeaderValue1": tenant_id},
     }
 
 
