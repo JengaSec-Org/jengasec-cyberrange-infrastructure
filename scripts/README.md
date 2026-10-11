@@ -16,3 +16,6 @@ Every area writes its own scripts here. Copy `_template.sh`, keep the header, an
 | `stop-observability.sh` | Observability | Stop the stack without deleting its data |
 | `render-observability-lookups.py` | Observability | Validate platform exports and render bounded Vector lookups |
 | `sync-observability-lookups.sh` | Observability | Refresh attribution lookups through the read-only TLS database interface |
+| `render-grafana-dashboards.py` | Observability | Render one scoped dashboard per application |
+| `prepare-observability-runtime.py` | Observability | Create untracked development-only Grafana credentials |
+| `provision-grafana-access.py` | Observability | Converge read-only Grafana organisations and application access |
