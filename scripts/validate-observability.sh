@@ -10,10 +10,17 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMPOSE_FILE="$REPO_ROOT/observability/compose.yaml"
 COMPOSE=(docker compose --file "$COMPOSE_FILE")
+RUNTIME_DIR="$REPO_ROOT/observability/.runtime"
 
 need docker
 need jq
+need python3
 docker info >/dev/null 2>&1 || die "Docker is not running"
+
+python3 "$REPO_ROOT/scripts/prepare-observability-runtime.py" \
+  --runtime-dir "$RUNTIME_DIR" \
+  --access-principals \
+  "$REPO_ROOT/observability/tests/fixtures/access/access-principals.csv"
 
 log "validating Docker Compose model"
 "${COMPOSE[@]}" config --quiet
@@ -30,7 +37,9 @@ log "building test fixtures and contract test images"
   source-fixture \
   otel-collector \
   contract-tests \
-  catalogue-renderer
+  catalogue-renderer \
+  dashboard-renderer \
+  grafana-access-provisioner
 
 log "checking test emitter Python syntax"
 "${COMPOSE[@]}" run --rm --no-deps \
@@ -70,6 +79,12 @@ log "running attribution snapshot fixture tests"
   contract-tests \
   observability/tests/test-attribution.sh
 
+log "running Grafana dashboard and access fixture tests"
+"${COMPOSE[@]}" run --rm --no-deps \
+  --entrypoint bash \
+  contract-tests \
+  observability/tests/test-grafana-access.sh
+
 log "rendering Vector lookups from the event catalogue"
 "${COMPOSE[@]}" run --rm --no-deps catalogue-renderer
 
@@ -89,6 +104,7 @@ log "validating Prometheus configuration"
 log "validating Loki configuration"
 "${COMPOSE[@]}" run --rm --no-deps loki \
   -config.file=/etc/loki/local-config.yaml \
+  -config.expand-env=true \
   -verify-config=true
 
 log "observability validation passed"

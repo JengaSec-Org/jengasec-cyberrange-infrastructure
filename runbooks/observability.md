@@ -3,8 +3,7 @@
 Owner: Observability
 
 Run commands from the repository root. Docker Compose must be available. Keep
-service ports private. Grafana anonymous access is only for isolated
-validation.
+service ports private. Grafana anonymous access is disabled.
 
 ## Codespaces
 
@@ -21,10 +20,17 @@ make obs-smoke
 ```
 
 The stack binds to loopback by default. Grafana uses port 3000, Prometheus 9090,
-Loki 3100, the application fixture 8080, the source fixture 8081, Vector
+the scoped metrics proxy 9091, Loki 3100, the application fixture 8080, the
+source fixture 8081, Vector
 metrics 9598, OTLP 4317, syslog 1514 TCP/UDP and NetFlow 2055 UDP. The syslog
 host port maps to the contracted container port 514. Override a binding with
 its `JENGASEC_*_BIND` or `JENGASEC_*_PORT` variable.
+
+Startup creates random development-only Grafana credentials under the ignored
+`observability/.runtime/` directory. Development retention is 168 hours. For a
+production rehearsal, set `JENGASEC_RETENTION_HOURS`,
+`JENGASEC_EVENT_WINDOW_HOURS` and `JENGASEC_APPEAL_WINDOW_HOURS`; startup
+rejects retention shorter than the event plus appeal windows.
 
 ## Inspect and recover
 
@@ -40,6 +46,8 @@ Both commands are safe to repeat.
 Kubernetes events. It checks the stored records against the telemetry schema.
 It also proves application and Kubernetes metrics reached Prometheus through
 scrape and remote-write paths.
+It proves APP01 tenant isolation, read-only Blue access, staff/judge access and
+the contract and attribution-health alerts.
 
 The source fixture uses participant `JS26-P-0001` from team `JS26-R-001`.
 APP01 traffic resolves as allowed. The same sender's APP02 request resolves as
@@ -58,7 +66,8 @@ JENGASEC_GRAFANA_PORT=3300 make obs-smoke
 make obs-down
 ```
 
-This removes the containers and network. It keeps the named data volumes.
+This removes the containers and network. It keeps the named data volumes and
+untracked development credentials.
 
 ## Rehearse the k3s agents
 
@@ -107,3 +116,13 @@ to other users. Refresh the lookup directory with:
 Configure the deployment timer to run this once per minute and reload Vector
 only after a successful refresh. A failure keeps the last valid snapshot.
 Alert when `attribution-snapshot.json` has not been refreshed for two minutes.
+
+The refresh also writes `access-principals.csv`. Preview access changes with
+`scripts/provision-grafana-access.py --dry-run` before applying them. Live
+identities must already exist in Grafana; only the development fixture creates
+synthetic users. Managed users are Viewers, stale memberships are removed, and
+staff/judge accounts receive the all-application view.
+
+Prometheus exposes the OBS alert rules at `/api/v1/rules`. Alert notification
+routing remains a deployment setting; this repository stores no receiver
+credentials.

@@ -23,8 +23,8 @@ interfaces.
 A renderer builds the Vector event lookup, application lookup and
 sensitive-key policy from the shared catalogue and `scripts/cells.yaml`.
 Vector rejects unknown events, uncatalogued detail fields and sensitive keys.
-The development stack also renders a synthetic snapshot of the three
-attribution views in `contracts/observability-data-interface.md`.
+The development stack also renders a synthetic snapshot of the attribution
+and access views in `contracts/observability-data-interface.md`.
 
 | Telemetry field | Source |
 |---|---|
@@ -40,10 +40,17 @@ Loki indexes bounded deployment and event fields. IDs and attribution remain
 in the JSON body. The quarantine stores the time, source, rejection reason and
 payload hash. It never stores rejected payloads or sensitive values.
 
+Accepted events go to a staff Loki tenant and an application tenant. Grafana
+uses one organisation per application. Loki tenancy and the Prometheus label
+proxy enforce each namespace boundary; attribution never becomes a label.
+
 `scripts/sync-observability-lookups.sh` is the live snapshot consumer. It uses
-a TLS PostgreSQL service, reads only the three versioned views, validates their
+a TLS PostgreSQL service, reads only the versioned OBS views, validates their
 identifiers and relationships, and replaces lookup files atomically. Invalid
 or unavailable source data leaves the last valid snapshot unchanged.
+
+Prometheus alerts on contract rejection, unknown attribution and unavailable
+pipeline targets. Loki and Prometheus share configurable retention.
 
 ## k3s inputs
 

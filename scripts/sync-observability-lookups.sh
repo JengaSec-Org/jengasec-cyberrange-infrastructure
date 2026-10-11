@@ -95,10 +95,16 @@ query_to_csv "$TEMP_DIR/scope-assignments.csv" '
          application, namespace, target_ip, active, valid_from, valid_until
   FROM obs_scope_assignments_v1
   ORDER BY team_id, enterprise, application'
+query_to_csv "$TEMP_DIR/access-principals.csv" '
+  SELECT contract_version, updated_at, participant_id, role, team_id,
+         enterprise, application, namespace
+  FROM obs_access_principals_v1
+  ORDER BY participant_id, namespace, role'
 
 python3 "$REPO_ROOT/scripts/render-observability-lookups.py" \
   --ip-allocations "$TEMP_DIR/ip-allocations.csv" \
   --applications "$TEMP_DIR/applications.csv" \
   --scope-assignments "$TEMP_DIR/scope-assignments.csv" \
+  --access-principals "$TEMP_DIR/access-principals.csv" \
   --output-dir "$OUTPUT_DIR"
 log "observability attribution lookup snapshot refreshed"

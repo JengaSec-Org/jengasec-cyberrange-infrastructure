@@ -1,4 +1,4 @@
-auth_enabled: false
+auth_enabled: true
 
 server:
   http_listen_port: 3100
@@ -28,7 +28,7 @@ schema_config:
 limits_config:
   allow_structured_metadata: true
   ingestion_rate_strategy: local
-  retention_period: 168h
+  retention_period: ${JENGASEC_RETENTION_HOURS}h
 
 compactor:
   working_directory: /loki/compactor

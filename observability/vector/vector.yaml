@@ -553,6 +553,21 @@ transforms:
           source: "{{ source }}"
           status: "{{ metadata.scope_status }}"
 
+  quarantine_metrics:
+    type: log_to_metric
+    inputs:
+      - quarantine_sensitive
+      - quarantine_invalid
+    metrics:
+      - type: counter
+        field: reason
+        name: jengasec_contract_rejections_total
+        increment_by_value: false
+        kind: incremental
+        tags:
+          reason: "{{ reason }}"
+          source: "{{ source }}"
+
   quarantine_sensitive:
     type: remap
     inputs:
@@ -582,12 +597,34 @@ transforms:
       }
 
 sinks:
-  loki:
+  loki_application:
     type: loki
     inputs:
       - normalized_application
       - normalized_sources
     endpoint: http://loki:3100
+    tenant_id: "application-{{ namespace }}"
+    healthcheck:
+      enabled: false
+    labels:
+      enterprise: "{{ enterprise }}"
+      application: "{{ application }}"
+      namespace: "{{ namespace }}"
+      source: "{{ source }}"
+      event_type: "{{ event_type }}"
+      severity: "{{ severity }}"
+    encoding:
+      codec: json
+    batch:
+      timeout_secs: 1
+
+  loki_staff:
+    type: loki
+    inputs:
+      - normalized_application
+      - normalized_sources
+    endpoint: http://loki:3100
+    tenant_id: staff
     healthcheck:
       enabled: false
     labels:
@@ -618,4 +655,5 @@ sinks:
     inputs:
       - vector_metrics
       - attribution_metrics
+      - quarantine_metrics
     address: 0.0.0.0:9598

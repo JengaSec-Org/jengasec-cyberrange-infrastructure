@@ -21,4 +21,7 @@ datasources:
     url: http://loki:3100
     editable: false
     jsonData:
+      httpHeaderName1: X-Scope-OrgID
       maxLines: 1000
+    secureJsonData:
+      httpHeaderValue1: staff

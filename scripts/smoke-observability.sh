@@ -15,7 +15,9 @@ TEST_EMITTER_URL="http://${HOST}:${JENGASEC_TEST_EMITTER_PORT:-8080}"
 SOURCE_FIXTURE_URL="http://${HOST}:${JENGASEC_SOURCE_FIXTURE_PORT:-8081}"
 LOKI_URL="http://${HOST}:${JENGASEC_LOKI_PORT:-3100}"
 PROMETHEUS_URL="http://${HOST}:${JENGASEC_PROMETHEUS_PORT:-9090}"
+PROMETHEUS_SCOPE_URL="http://${HOST}:${JENGASEC_PROMETHEUS_SCOPE_PROXY_PORT:-9091}"
 GRAFANA_URL="http://${HOST}:${JENGASEC_GRAFANA_PORT:-3000}"
+RUNTIME_DIR="$REPO_ROOT/observability/.runtime"
 TEMP_DIR="$(mktemp -d)"
 
 cleanup() {
@@ -29,6 +31,17 @@ need curl
 need docker
 need jq
 docker info >/dev/null 2>&1 || die "Docker is not running"
+[[ -s "$RUNTIME_DIR/grafana-user-passwords.json" ]] \
+  || die "Grafana test user credentials are missing; run make obs-up"
+blue_login="JS26-P-0002"
+judge_login="JS26-P-9001"
+staff_login="JS26-P-9002"
+blue_password="$(jq --exit-status --raw-output --arg login "$blue_login" '.[$login]' \
+  "$RUNTIME_DIR/grafana-user-passwords.json")"
+judge_password="$(jq --exit-status --raw-output --arg login "$judge_login" '.[$login]' \
+  "$RUNTIME_DIR/grafana-user-passwords.json")"
+staff_password="$(jq --exit-status --raw-output --arg login "$staff_login" '.[$login]' \
+  "$RUNTIME_DIR/grafana-user-passwords.json")"
 
 wait_for_http() {
   local description="$1"
@@ -61,6 +74,12 @@ wait_for_http "source fixture" "$SOURCE_FIXTURE_URL/healthz"
 wait_for_http "Loki" "$LOKI_URL/ready"
 wait_for_http "Prometheus" "$PROMETHEUS_URL/-/ready"
 wait_for_http "Grafana" "$GRAFANA_URL/api/health"
+provisioner_id="$("${COMPOSE[@]}" ps --all --quiet grafana-access-provisioner)"
+[[ -n "$provisioner_id" ]] || die "Grafana access provisioner was not created"
+provisioner_status="$(docker inspect --format '{{.State.Status}}' "$provisioner_id")"
+provisioner_exit="$(docker inspect --format '{{.State.ExitCode}}' "$provisioner_id")"
+[[ "$provisioner_status" == "exited" && "$provisioner_exit" == "0" ]] \
+  || die "Grafana access provisioning failed"
 
 "${COMPOSE[@]}" build --quiet contract-tests
 
@@ -78,6 +97,7 @@ loki_event=""
 for _attempt in {1..60}; do
   end_ns="$(date +%s)999999999"
   curl --fail --silent --show-error --get \
+    --header 'X-Scope-OrgID: staff' \
     --data-urlencode 'query={enterprise="ENT-A",application="APP01",event_type="http_request"}' \
     --data-urlencode "start=$start_ns" \
     --data-urlencode "end=$end_ns" \
@@ -120,6 +140,7 @@ source_events_ready=false
 for _attempt in {1..60}; do
   end_ns="$(date +%s)999999999"
   curl --fail --silent --show-error --get \
+    --header 'X-Scope-OrgID: staff' \
     --data-urlencode 'query={enterprise="ENT-A",application=~"APP0[12]"}' \
     --data-urlencode "start=$start_ns" \
     --data-urlencode "end=$end_ns" \
@@ -247,6 +268,20 @@ while IFS= read -r source_event; do
 done <"$TEMP_DIR/source-telemetry-events.jsonl"
 log "Loki stored seven contract-valid application, gateway, network, host, and cluster events"
 
+curl --fail --silent --show-error --get \
+  --header 'X-Scope-OrgID: application-jengasec-ent-a-app01' \
+  --data-urlencode 'query={application=~"APP0[12]"}' \
+  --data-urlencode "start=$start_ns" \
+  --data-urlencode "end=$(date +%s)999999999" \
+  "$LOKI_URL/loki/api/v1/query_range" \
+  --output "$TEMP_DIR/app01-tenant-response.json"
+jq --exit-status '
+  (.data.result | length) > 0 and
+  all(.data.result[]; .stream.application == "APP01")
+' "$TEMP_DIR/app01-tenant-response.json" >/dev/null \
+  || die "APP01 Loki tenant crossed an application boundary"
+log "Loki isolated the APP01 tenant from APP02 telemetry"
+
 quarantine_count() {
   "${COMPOSE[@]}" exec -T vector sh -c \
     'if [ -f /var/lib/vector/quarantine/events.jsonl ]; then wc -l < /var/lib/vector/quarantine/events.jsonl; else echo 0; fi' \
@@ -354,14 +389,75 @@ done
   || die "Prometheus did not scrape the attribution health metric"
 log "Prometheus stored the attribution health metric"
 
+curl --fail --silent --show-error --get \
+  --header 'X-JengaSec-Namespace: jengasec-ent-a-app01' \
+  --data-urlencode 'query={__name__=~".+"}' \
+  "$PROMETHEUS_SCOPE_URL/api/v1/query" \
+  --output "$TEMP_DIR/app01-metrics-response.json"
+jq --exit-status '
+  (.data.result | length) > 0 and
+  all(.data.result[]; .metric.namespace == "jengasec-ent-a-app01")
+' "$TEMP_DIR/app01-metrics-response.json" >/dev/null \
+  || die "APP01 metrics proxy crossed an application boundary"
+conflict_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --get \
+  --header 'X-JengaSec-Namespace: jengasec-ent-a-app01' \
+  --data-urlencode 'query={namespace="jengasec-ent-a-app02"}' \
+  "$PROMETHEUS_SCOPE_URL/api/v1/query")"
+[[ "$conflict_status" == "400" ]] \
+  || die "metrics proxy did not reject a conflicting APP02 selector"
+log "Prometheus enforced the APP01 namespace boundary"
+
+alerts_ready=false
+for _attempt in {1..60}; do
+  curl --fail --silent --show-error \
+    "$PROMETHEUS_URL/api/v1/alerts" \
+    --output "$TEMP_DIR/alerts-response.json"
+  if jq --exit-status '
+    [.data.alerts[] | select(.state == "firing") | .labels.alertname] as $alerts |
+    ($alerts | index("JengaSecTelemetryContractRejections")) != null and
+    ($alerts | index("JengaSecAttributionUnknown")) != null
+  ' "$TEMP_DIR/alerts-response.json" >/dev/null; then
+    alerts_ready=true
+    break
+  fi
+  sleep 1
+done
+[[ "$alerts_ready" == true ]] \
+  || die "Prometheus did not fire contract and attribution health alerts"
+log "Prometheus fired the contract and pipeline health alerts"
+
 curl --fail --silent --show-error \
+  --user "$staff_login:$staff_password" \
   "$GRAFANA_URL/api/datasources/uid/prometheus/health" \
   | jq --exit-status '.status == "OK"' >/dev/null
 curl --fail --silent --show-error \
+  --user "$staff_login:$staff_password" \
   "$GRAFANA_URL/api/datasources/uid/loki/health" \
   | jq --exit-status '.status == "OK"' >/dev/null
 curl --fail --silent --show-error \
+  --user "$staff_login:$staff_password" \
   "$GRAFANA_URL/api/dashboards/uid/jengasec-observability" \
   | jq --exit-status '.dashboard.uid == "jengasec-observability"' >/dev/null
-log "Grafana provisioned the data sources and dashboard"
+curl --fail --silent --show-error \
+  --user "$blue_login:$blue_password" \
+  "$GRAFANA_URL/api/user/orgs" \
+  | jq --exit-status '
+      length == 1 and
+      .[0].name == "JengaSec ENT-A APP01" and
+      .[0].role == "Viewer"
+    ' >/dev/null
+curl --fail --silent --show-error \
+  --user "$blue_login:$blue_password" \
+  "$GRAFANA_URL/api/dashboards/uid/jengasec-ent-a-app01" \
+  | jq --exit-status '.dashboard.uid == "jengasec-ent-a-app01"' >/dev/null
+blue_staff_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  --user "$blue_login:$blue_password" \
+  "$GRAFANA_URL/api/dashboards/uid/jengasec-observability")"
+[[ "$blue_staff_status" == "404" ]] \
+  || die "Blue APP01 viewer could access the staff dashboard"
+curl --fail --silent --show-error \
+  --user "$judge_login:$judge_password" \
+  "$GRAFANA_URL/api/dashboards/uid/jengasec-observability" \
+  | jq --exit-status '.dashboard.uid == "jengasec-observability"' >/dev/null
+log "Grafana enforced read-only application and staff/judge views"
 log "end-to-end observability smoke check passed"
