@@ -1,19 +1,37 @@
-# Contract: cell template
+# Contract: application cell template
 
-Owner: Application Platform, with Security. Every Application cell gets exactly this, created by `charts/cell`.
+Owner: Application Platform, with Security. Each enabled application instance
+is created by `charts/cell`.
 
 | Item | Value |
 |---|---|
-| Namespace | `app-NN` (01–07 Zawadi Bank, 08–14 Afya Health) |
-| Guaranteed resources | 1 vCPU, 2 GB memory (including the cell's database) |
-| Limit | 2 vCPU, 3 GB memory |
-| Storage | 5 GB volume for the database |
-| Network policy | Deny all, then: ingress controller → app, app → own database, app → log collection, app → DNS |
-| Service account | `deployer`, may change only its own namespace |
-| Database | PostgreSQL 16, credentials in a Kubernetes Secret `db-credentials` |
-| Hostname | `app-NN.range.<domain>`, TLS from the range wildcard certificate |
-| Ingress | Traefik route with a per-cell allow list and a rate limit |
-| Logs and metrics | Collected automatically; a read-only Grafana folder per team |
-| Preview (build stage only) | `app-NN.preview.<domain>` behind a per-team password |
+| Enterprise | `ENT-A` or `ENT-B` |
+| Application | `APP01` through `APP09` |
+| Namespace | `jengasec-<enterprise>-<application>`, lower-case |
+| Reserved IP | Contracted VLAN 108 address from `applications` |
+| Guaranteed resources | 1 vCPU and 2 GB memory, including the database |
+| Limit | 2 vCPU and 3 GB memory |
+| Storage | 5 GB database volume |
+| Database | PostgreSQL 16; credentials in Secret `db-credentials` |
+| Workload identity | Namespace-scoped `deployer` service account |
+| Ingress | Reserved IP and application hostname with scoped gateway rules |
+| Observability | stdout logs, `/metrics`, health and Kubernetes events shipped automatically |
 
-A cell never gets: cluster-wide rights, access to another namespace, access to the platform namespace, access to the management network.
+APP08 and APP09 are optional. They are enabled or disabled in ENT-A and ENT-B
+together so the two enterprise instances remain identical.
+
+The default policy denies all traffic, then permits only declared application
+ingress, the application to its own database, same-enterprise application
+dependencies, DNS, and egress to the collector. It never permits cross-
+enterprise traffic, another application's database, the platform namespace,
+or the management network.
+
+The platform injects these immutable environment variables into every
+application container:
+
+- `JENGASEC_ENTERPRISE`
+- `JENGASEC_APPLICATION`
+- `JENGASEC_NAMESPACE`
+
+Teams have read-only access to their own observability view. They never receive
+cluster-wide credentials or direct access to another namespace.

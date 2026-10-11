@@ -2,8 +2,8 @@
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
-  name: {{ .Values.cell }}-scope
-  namespace: {{ .Values.cell }}
+  name: application-scope
+  namespace: {{ .Values.namespace }}
 spec:
   ipAllowList:
     sourceRange:
@@ -14,8 +14,8 @@ spec:
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
-  name: {{ .Values.cell }}-ratelimit
-  namespace: {{ .Values.cell }}
+  name: application-ratelimit
+  namespace: {{ .Values.namespace }}
 spec:
   rateLimit:
     average: {{ .Values.ingress.rateLimit.average }}
@@ -25,13 +25,13 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: app
-  namespace: {{ .Values.cell }}
+  namespace: {{ .Values.namespace }}
   annotations:
     traefik.ingress.kubernetes.io/router.middlewares: >-
-      {{ .Values.cell }}-{{ .Values.cell }}-scope@kubernetescrd,{{ .Values.cell }}-{{ .Values.cell }}-ratelimit@kubernetescrd
+      {{ .Values.namespace }}-application-scope@kubernetescrd,{{ .Values.namespace }}-application-ratelimit@kubernetescrd
 spec:
   rules:
-    - host: {{ .Values.cell }}.{{ .Values.domain }}
+    - host: {{ .Values.enterprise | lower }}-{{ .Values.application | lower }}.{{ .Values.domain }}
       http:
         paths:
           - path: /
@@ -41,6 +41,6 @@ spec:
                 name: app
                 port: { number: 80 }
   tls:
-    - hosts: ["{{ .Values.cell }}.{{ .Values.domain }}"]
+    - hosts: ["{{ .Values.enterprise | lower }}-{{ .Values.application | lower }}.{{ .Values.domain }}"]
       secretName: range-wildcard-tls
 {{- end }}

@@ -1,0 +1,143 @@
+# Shared raw-event to normalized-event mapping.
+# Owners: AI Track with Observability; brief lists require Application Briefs
+# and Scoring confirmation before this status changes to accepted.
+version: 1
+status: draft
+
+event_types:
+  authentication_success: A login or token exchange worked.
+  authentication_failure: A login, MFA or token check failed.
+  session_end: A session ended normally or expired.
+  session_revoked: A session or token was revoked.
+  token_issued: A new access or refresh token was issued.
+  access_denied: An authenticated action was not permitted.
+  privilege_change: A role, permission or limit changed.
+  account_change: An account was created, locked, unlocked or updated.
+  data_export: Records left the system in bulk.
+  data_change: A record was created, changed or deleted.
+  financial_transaction: Money moved or was requested to move.
+  input_rejected: Malformed or suspicious input was rejected.
+  notification_sent: An email, SMS or push notification was sent.
+  http_request: An application or ingress handled an HTTP request.
+  network_flow: A network flow was observed.
+  scope_violation: The gateway refused out-of-scope traffic.
+  ids_alert: The IDS produced an alert.
+  kubernetes_event: Kubernetes emitted a lifecycle or health event.
+  container_restart: A workload container restarted.
+  host_alert: A node or VM produced a health or security alert.
+
+common:
+  - {event: request_completed, event_type: http_request, severity: low, detail: [route]}
+  - {event: login_success, event_type: authentication_success, severity: low, detail: [method]}
+  - {event: login_failure, event_type: authentication_failure, severity: low, detail: [reason, attempt], attack: [T1110, T1110.004]}
+  - {event: logout, event_type: session_end, severity: low}
+  - {event: permission_denied, event_type: access_denied, severity: medium, detail: [required_role], attack: [T1078]}
+  - {event: session_revoked, event_type: session_revoked, severity: medium, detail: [reason]}
+  - {event: token_refreshed, event_type: token_issued, severity: low}
+  - {event: record_exported, event_type: data_export, severity: medium, detail: [record_type, count], attack: [T1530, T1567]}
+  - {event: record_changed, event_type: data_change, severity: low, detail: [record_type, change]}
+  - {event: input_rejected, event_type: input_rejected, severity: medium, detail: [field, rule], attack: [T1190]}
+
+briefs:
+  APP01:
+    service: Internet Banking Portal
+    events:
+      - {event: account_viewed, event_type: data_change, severity: low, detail: [account]}
+      - {event: beneficiary_added, event_type: account_change, severity: medium, detail: [beneficiary_bank], attack: [T1098]}
+      - {event: transfer_requested, event_type: financial_transaction, severity: low, detail: [amount_kes, channel]}
+      - {event: profile_updated, event_type: account_change, severity: medium, detail: [fields_changed], attack: [T1098]}
+  APP02:
+    service: Mobile Banking API
+    events:
+      - {event: device_registered, event_type: account_change, severity: medium, detail: [device_type], attack: [T1098.005]}
+      - {event: api_token_issued, event_type: token_issued, severity: low, detail: [client_id]}
+      - {event: balance_queried, event_type: data_change, severity: low, detail: [account]}
+      - {event: rate_limit_hit, event_type: access_denied, severity: medium, detail: [endpoint], attack: [T1110]}
+  APP03:
+    service: Customer Authentication and Identity Service
+    events:
+      - {event: mfa_challenge_failed, event_type: authentication_failure, severity: medium, detail: [factor], attack: [T1621]}
+      - {event: password_reset_requested, event_type: account_change, severity: low, detail: [channel]}
+      - {event: password_changed, event_type: account_change, severity: medium, attack: [T1098]}
+      - {event: account_locked, event_type: account_change, severity: medium, detail: [failed_attempts], attack: [T1110]}
+      - {event: role_granted, event_type: privilege_change, severity: high, detail: [role, granted_by], attack: [T1098, T1078]}
+  APP04:
+    service: Payment Processing Service
+    events:
+      - {event: transfer_created, event_type: financial_transaction, severity: low, detail: [amount_kes, currency]}
+      - {event: transfer_approved, event_type: financial_transaction, severity: low, detail: [amount_kes, approver]}
+      - {event: payment_reversed, event_type: financial_transaction, severity: medium, detail: [amount_kes, reason], attack: [T1565.001]}
+      - {event: limit_changed, event_type: privilege_change, severity: high, detail: [old_limit_kes, new_limit_kes], attack: [T1565.001]}
+  APP05:
+    service: Loan Origination System
+    events:
+      - {event: loan_application_submitted, event_type: data_change, severity: low, detail: [amount_kes, product]}
+      - {event: document_uploaded, event_type: data_change, severity: low, detail: [doc_type, size_kb]}
+      - {event: credit_check_run, event_type: data_change, severity: low, detail: [result]}
+      - {event: loan_decision_overridden, event_type: privilege_change, severity: high, detail: [from, to], attack: [T1565.001]}
+  APP06:
+    service: Internal Back-Office Portal
+    events:
+      - {event: staff_login, event_type: authentication_success, severity: low, detail: [method]}
+      - {event: customer_record_viewed, event_type: data_change, severity: low, detail: [customer]}
+      - {event: bulk_export, event_type: data_export, severity: high, detail: [record_type, count], attack: [T1530, T1005]}
+      - {event: admin_setting_changed, event_type: privilege_change, severity: high, detail: [setting], attack: [T1562]}
+  APP07:
+    service: Customer Support and Ticketing System
+    events:
+      - {event: ticket_created, event_type: data_change, severity: low, detail: [category]}
+      - {event: ticket_assigned, event_type: data_change, severity: low, detail: [agent]}
+      - {event: attachment_uploaded, event_type: data_change, severity: low, detail: [mime_type, size_kb], attack: [T1204]}
+      - {event: customer_impersonated, event_type: privilege_change, severity: high, detail: [agent, customer], attack: [T1078]}
+  APP08:
+    service: Fraud and Transaction Monitoring Service
+    optional: true
+    events:
+      - {event: transaction_flagged, event_type: financial_transaction, severity: medium, detail: [rule, score]}
+      - {event: rule_disabled, event_type: privilege_change, severity: high, detail: [rule], attack: [T1562.001]}
+      - {event: case_closed, event_type: data_change, severity: low, detail: [resolution]}
+  APP09:
+    service: Notifications and Statements Service
+    optional: true
+    events:
+      - {event: statement_generated, event_type: data_export, severity: low, detail: [period]}
+      - {event: notification_sent, event_type: notification_sent, severity: low, detail: [channel, template]}
+      - {event: template_changed, event_type: data_change, severity: high, detail: [template], attack: [T1566]}
+
+source_events:
+  ingress:
+    - {event: ingress_request, event_type: http_request, severity: low}
+    - {event: ingress_scope_refused, event_type: scope_violation, severity: medium}
+  network:
+    - {event: netflow_record, event_type: network_flow, severity: low}
+    - {event: firewall_allowed, event_type: network_flow, severity: low}
+    - {event: firewall_refused, event_type: scope_violation, severity: medium}
+  ids:
+    - {event: suricata_alert, event_type: ids_alert, severity: high}
+  kubernetes:
+    - {event: kubernetes_event, event_type: kubernetes_event, severity: low}
+    - {event: container_restart, event_type: container_restart, severity: medium}
+  host:
+    - {event: host_alert, event_type: host_alert, severity: high}
+
+never_log_keys:
+  - access_token
+  - api_key
+  - authorization
+  - body
+  - card_number
+  - cookie
+  - cvv
+  - id_number
+  - national_id
+  - pan
+  - passport
+  - passwd
+  - password
+  - private_key
+  - refresh_token
+  - request_body
+  - response_body
+  - secret
+  - set_cookie
+  - token

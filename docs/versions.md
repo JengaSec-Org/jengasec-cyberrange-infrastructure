@@ -10,7 +10,7 @@ Everyone runs these. Change by pull request so the whole team moves together.
 | Helm | 3.x (record exact) | Dev VMs, deploy pipeline |
 | Ansible | core 2.x (record exact) | Dev VMs |
 | Python | 3.11 (Debian 12 default) | Scripts |
-| PostgreSQL | 16 (official image) | Platform and cells |
+| PostgreSQL | 16.15-bookworm | Platform, cells and future OBS event store |
 | Vector | record exact | Cluster |
 | Prometheus / Loki / Grafana | record exact | obs VM |
 

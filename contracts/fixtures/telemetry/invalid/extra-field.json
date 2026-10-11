@@ -1,0 +1,19 @@
+{
+  "schema_version": "2.0",
+  "catalogue_version": 1,
+  "stream": "telemetry",
+  "event_id": "evt_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "integrity_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "ts": "2026-10-10T09:15:02.113Z",
+  "received_ts": "2026-10-10T09:15:02.301Z",
+  "enterprise": "ENT-A",
+  "application": "APP01",
+  "namespace": "jengasec-ent-a-app01",
+  "asset": "jengasec-ent-a-app01/app",
+  "source": "application",
+  "event_type": "http_request",
+  "severity": "low",
+  "outcome": "success",
+  "verdict": "allowed",
+  "raw_payload": "must not be retained"
+}

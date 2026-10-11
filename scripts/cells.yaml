@@ -1,16 +1,21 @@
-# The 14 Application cells. Add nothing else here — AI cells need no cluster space in event one.
+# Canonical application instances. Optional applications are toggled in both
+# enterprises together; the full 18-cell competition model enables them.
 cells:
-  - { name: app-01, enterprise: zawadi-bank, service: "Internet banking" }
-  - { name: app-02, enterprise: zawadi-bank, service: "Mobile banking API" }
-  - { name: app-03, enterprise: zawadi-bank, service: "Customer authentication" }
-  - { name: app-04, enterprise: zawadi-bank, service: "Payments" }
-  - { name: app-05, enterprise: zawadi-bank, service: "Loan applications" }
-  - { name: app-06, enterprise: zawadi-bank, service: "Staff portal" }
-  - { name: app-07, enterprise: zawadi-bank, service: "Customer support" }
-  - { name: app-08, enterprise: afya-health, service: "Patient portal" }
-  - { name: app-09, enterprise: afya-health, service: "Appointments API" }
-  - { name: app-10, enterprise: afya-health, service: "Records service" }
-  - { name: app-11, enterprise: afya-health, service: "Billing" }
-  - { name: app-12, enterprise: afya-health, service: "Pharmacy orders" }
-  - { name: app-13, enterprise: afya-health, service: "Staff portal" }
-  - { name: app-14, enterprise: afya-health, service: "Referrals" }
+  - {namespace: jengasec-ent-a-app01, enterprise: ENT-A, application: APP01, reserved_ip: 10.108.0.11, optional: false, enabled: true, service: "Internet Banking Portal"}
+  - {namespace: jengasec-ent-a-app02, enterprise: ENT-A, application: APP02, reserved_ip: 10.108.0.12, optional: false, enabled: true, service: "Mobile Banking API"}
+  - {namespace: jengasec-ent-a-app03, enterprise: ENT-A, application: APP03, reserved_ip: 10.108.0.13, optional: false, enabled: true, service: "Customer Authentication and Identity Service"}
+  - {namespace: jengasec-ent-a-app04, enterprise: ENT-A, application: APP04, reserved_ip: 10.108.0.14, optional: false, enabled: true, service: "Payment Processing Service"}
+  - {namespace: jengasec-ent-a-app05, enterprise: ENT-A, application: APP05, reserved_ip: 10.108.0.15, optional: false, enabled: true, service: "Loan Origination System"}
+  - {namespace: jengasec-ent-a-app06, enterprise: ENT-A, application: APP06, reserved_ip: 10.108.0.16, optional: false, enabled: true, service: "Internal Back-Office Portal"}
+  - {namespace: jengasec-ent-a-app07, enterprise: ENT-A, application: APP07, reserved_ip: 10.108.0.17, optional: false, enabled: true, service: "Customer Support and Ticketing System"}
+  - {namespace: jengasec-ent-a-app08, enterprise: ENT-A, application: APP08, reserved_ip: 10.108.0.18, optional: true, enabled: true, service: "Fraud and Transaction Monitoring Service"}
+  - {namespace: jengasec-ent-a-app09, enterprise: ENT-A, application: APP09, reserved_ip: 10.108.0.19, optional: true, enabled: true, service: "Notifications and Statements Service"}
+  - {namespace: jengasec-ent-b-app01, enterprise: ENT-B, application: APP01, reserved_ip: 10.108.0.21, optional: false, enabled: true, service: "Internet Banking Portal"}
+  - {namespace: jengasec-ent-b-app02, enterprise: ENT-B, application: APP02, reserved_ip: 10.108.0.22, optional: false, enabled: true, service: "Mobile Banking API"}
+  - {namespace: jengasec-ent-b-app03, enterprise: ENT-B, application: APP03, reserved_ip: 10.108.0.23, optional: false, enabled: true, service: "Customer Authentication and Identity Service"}
+  - {namespace: jengasec-ent-b-app04, enterprise: ENT-B, application: APP04, reserved_ip: 10.108.0.24, optional: false, enabled: true, service: "Payment Processing Service"}
+  - {namespace: jengasec-ent-b-app05, enterprise: ENT-B, application: APP05, reserved_ip: 10.108.0.25, optional: false, enabled: true, service: "Loan Origination System"}
+  - {namespace: jengasec-ent-b-app06, enterprise: ENT-B, application: APP06, reserved_ip: 10.108.0.26, optional: false, enabled: true, service: "Internal Back-Office Portal"}
+  - {namespace: jengasec-ent-b-app07, enterprise: ENT-B, application: APP07, reserved_ip: 10.108.0.27, optional: false, enabled: true, service: "Customer Support and Ticketing System"}
+  - {namespace: jengasec-ent-b-app08, enterprise: ENT-B, application: APP08, reserved_ip: 10.108.0.28, optional: true, enabled: true, service: "Fraud and Transaction Monitoring Service"}
+  - {namespace: jengasec-ent-b-app09, enterprise: ENT-B, application: APP09, reserved_ip: 10.108.0.29, optional: true, enabled: true, service: "Notifications and Statements Service"}

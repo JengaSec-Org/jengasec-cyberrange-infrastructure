@@ -14,7 +14,7 @@
 - [ ] No secrets, keys, tokens, passwords or real participant data
 - [ ] Paths, addresses and names come from variables or a contract file, not typed in
 - [ ] A runbook entry exists or is updated
-- [ ] If a contract changed: the pull request is labelled `contract` and announced at stand-up
+- [ ] If a contract changed: the pull request is labelled `contract`
 
 ## Reviewing
 

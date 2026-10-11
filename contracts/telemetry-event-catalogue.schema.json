@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jengasec.example/contracts/telemetry-event-catalogue.schema.json",
+  "title": "JengaSec telemetry event catalogue",
+  "type": "object",
+  "required": ["version", "status", "event_types", "common", "briefs", "source_events", "never_log_keys"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {"const": 1},
+    "status": {"enum": ["draft", "accepted"]},
+    "event_types": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string", "minLength": 1},
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]{1,63}$"}
+    },
+    "common": {"type": "array", "items": {"$ref": "#/$defs/mapping"}},
+    "briefs": {
+      "type": "object",
+      "required": ["APP01", "APP02", "APP03", "APP04", "APP05", "APP06", "APP07", "APP08", "APP09"],
+      "additionalProperties": false,
+      "properties": {
+        "APP01": {"$ref": "#/$defs/brief"},
+        "APP02": {"$ref": "#/$defs/brief"},
+        "APP03": {"$ref": "#/$defs/brief"},
+        "APP04": {"$ref": "#/$defs/brief"},
+        "APP05": {"$ref": "#/$defs/brief"},
+        "APP06": {"$ref": "#/$defs/brief"},
+        "APP07": {"$ref": "#/$defs/brief"},
+        "APP08": {"$ref": "#/$defs/brief"},
+        "APP09": {"$ref": "#/$defs/brief"}
+      }
+    },
+    "source_events": {
+      "type": "object",
+      "required": ["ingress", "network", "ids", "kubernetes", "host"],
+      "additionalProperties": false,
+      "properties": {
+        "ingress": {"$ref": "#/$defs/mappings"},
+        "network": {"$ref": "#/$defs/mappings"},
+        "ids": {"$ref": "#/$defs/mappings"},
+        "kubernetes": {"$ref": "#/$defs/mappings"},
+        "host": {"$ref": "#/$defs/mappings"}
+      }
+    },
+    "never_log_keys": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$"}
+    }
+  },
+  "$defs": {
+    "mapping": {
+      "type": "object",
+      "required": ["event", "event_type", "severity"],
+      "additionalProperties": false,
+      "properties": {
+        "event": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$"},
+        "event_type": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$"},
+        "severity": {"enum": ["low", "medium", "high", "critical"]},
+        "detail": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"}
+        },
+        "attack": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$"}
+        }
+      }
+    },
+    "mappings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/mapping"}
+    },
+    "brief": {
+      "type": "object",
+      "required": ["service", "events"],
+      "additionalProperties": false,
+      "properties": {
+        "service": {"type": "string", "minLength": 1},
+        "optional": {"type": "boolean"},
+        "events": {"$ref": "#/$defs/mappings"}
+      }
+    }
+  }
+}

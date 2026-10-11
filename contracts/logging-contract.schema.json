@@ -2,89 +2,142 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jengasec.example/contracts/logging-contract.schema.json",
   "title": "JengaSec application log line",
-  "description": "One JSON object per line on stdout. Everything an application logs must fit this shape.",
+  "description": "One bounded JSON object per line on application stdout.",
   "type": "object",
   "required": [
+    "schema_version",
     "ts",
     "level",
-    "cell",
+    "enterprise",
+    "application",
+    "namespace",
     "event",
     "outcome"
   ],
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
     "ts": {
       "type": "string",
       "format": "date-time",
-      "description": "UTC, ISO 8601, e.g. 2026-10-10T09:15:02.113Z"
+      "description": "UTC ISO 8601 timestamp"
     },
     "level": {
-      "enum": [
-        "debug",
-        "info",
-        "warn",
-        "error"
-      ]
+      "enum": ["debug", "info", "warn", "error"]
     },
-    "cell": {
+    "enterprise": {
+      "enum": ["ENT-A", "ENT-B"]
+    },
+    "application": {
+      "enum": ["APP01", "APP02", "APP03", "APP04", "APP05", "APP06", "APP07", "APP08", "APP09"]
+    },
+    "namespace": {
       "type": "string",
-      "pattern": "^(app|ai)-[0-9]{2}$",
-      "description": "Your cell code, e.g. app-07"
+      "pattern": "^jengasec-ent-(a|b)-app0[1-9]$"
     },
     "event": {
       "type": "string",
-      "description": "What happened, lower_snake_case: login_success, login_failure, transfer_created, record_exported"
+      "pattern": "^[a-z][a-z0-9_]{1,63}$",
+      "description": "Raw event name from telemetry-event-catalogue.yaml"
     },
     "outcome": {
-      "enum": [
-        "success",
-        "failure",
-        "denied",
-        "error"
-      ]
+      "enum": ["success", "failure", "denied", "error", "unknown"]
     },
     "request_id": {
       "type": "string",
-      "description": "Same value across all lines for one request"
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Opaque correlation value for one request; never a credential"
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
     },
     "source_ip": {
-      "type": "string",
-      "description": "Client address as your app sees it"
+      "oneOf": [
+        {"type": "string", "format": "ipv4"},
+        {"type": "string", "format": "ipv6"}
+      ]
     },
-    "user": {
+    "user_id": {
       "type": "string",
-      "description": "Account or session identifier, never a password or token"
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Opaque application account or session identifier; never a name, email or token"
     },
-    "target": {
+    "target_id": {
       "type": "string",
-      "description": "What was acted on: an account id, a record id, an endpoint"
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "method": {
+      "enum": ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "description": "Path only; omit query strings and request bodies"
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 599
+    },
+    "action": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,63}$"
     },
     "severity": {
-      "enum": [
-        "low",
-        "medium",
-        "high",
-        "critical"
-      ],
-      "description": "Only if your app judges it; the platform may override"
+      "enum": ["low", "medium", "high", "critical"],
+      "description": "Optional producer assessment; the catalogue supplies the default"
     },
     "detail": {
       "type": "object",
-      "description": "Anything else, as key/value. No secrets, no card numbers, no full identity documents."
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/detailValue"
+      },
+      "description": "Flat catalogue-listed values only; no secrets, identity data, bodies or nested objects"
+    }
+  },
+  "$defs": {
+    "detailScalar": {
+      "type": ["string", "number", "integer", "boolean", "null"]
+    },
+    "detailValue": {
+      "oneOf": [
+        {"$ref": "#/$defs/detailScalar"},
+        {
+          "type": "array",
+          "maxItems": 16,
+          "items": {"$ref": "#/$defs/detailScalar"}
+        }
+      ]
     }
   },
   "examples": [
     {
+      "schema_version": "2.0",
       "ts": "2026-10-10T09:15:02.113Z",
       "level": "warn",
-      "cell": "app-03",
+      "enterprise": "ENT-A",
+      "application": "APP03",
+      "namespace": "jengasec-ent-a-app03",
       "event": "login_failure",
       "outcome": "failure",
-      "request_id": "7f2a",
-      "source_ip": "10.60.12.4",
-      "user": "j.mwangi",
+      "request_id": "req-7f2a",
+      "source_ip": "10.60.12.14",
+      "user_id": "acct-1842",
       "detail": {
-        "attempt": 5
+        "attempt": 5,
+        "reason": "invalid_credentials"
       }
     }
   ]
