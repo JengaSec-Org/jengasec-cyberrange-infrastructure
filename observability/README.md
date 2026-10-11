@@ -89,3 +89,13 @@ The AI boundary is a mode-locked NDJSON spool of normalized telemetry at
 transport or authentication. Those remain AI-owned integration dependencies.
 
 See `runbooks/observability.md` for operation and recovery.
+
+## OBS VM
+
+`observability/compose.production.yaml` runs the shared services without the
+development emitters. It exposes only the contracted collection ports on the
+Functions interface and Grafana on loopback for the access gateway. Ansible
+stages immutable releases, renders the catalogue and platform lookups, and
+keeps live startup behind explicit approval variables. The rehearsal profile
+contains only the website mock needed to validate the unresolved website
+boundary.

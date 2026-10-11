@@ -158,6 +158,86 @@ Keep the source finding snapshot and pack through the appeal window. Do not
 copy packs into the repository or expose the evidence directory through
 Grafana.
 
+## OBS VM delivery
+
+The role `ansible/roles/observability` targets the `observability` inventory
+group on Debian 12. Docker Engine and Docker Compose 2.24 or newer are host
+prerequisites. The role installs the remaining packages. Run the safe local
+rehearsal twice before any VM change:
+
+```bash
+python3 -m venv /tmp/jengasec-ansible-venv
+/tmp/jengasec-ansible-venv/bin/pip install -r ansible/requirements.txt
+PATH="/tmp/jengasec-ansible-venv/bin:$PATH" make obs-vm-validate
+```
+
+Set these non-secret values in inventory: a unique `obs_release_id`, the
+Functions VLAN interface and its assigned OBS address, and the approved
+website `/api/feed` URL. The network owner must create and approve the VLAN 109
+interface first. The role validates the address but never creates a VLAN.
+
+Store `obs_grafana_admin_password` and the full TLS PostgreSQL service file in
+Ansible Vault as `obs_postgresql_service_content`. The database role is
+read-only. Do not put either value in inventory, an environment file, or Git.
+
+Stage and validate a release without starting services:
+
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/site.yml \
+  --limit obs --check --extra-vars obs_release_id=RELEASE_ID
+ansible-playbook -i ansible/inventory.ini ansible/site.yml \
+  --limit obs --extra-vars obs_release_id=RELEASE_ID
+```
+
+Live startup requires a separate approved operation. After confirming current
+health, network ownership, the website interface, secrets and rollback, run
+the same play with `obs_start=true`, `obs_live_operation_approved=true`,
+`obs_website_feed_interface_approved=true` and `obs_validate_network=true`.
+Do not run that operation against Server 3 without explicit approval.
+
+The production ports are:
+
+| Bind | Port | Allowed source and purpose |
+|---|---:|---|
+| Functions interface | TCP/UDP 514 | Gateway firewall and IDS syslog |
+| Functions interface | UDP 2055 | Gateway NetFlow/IPFIX |
+| Functions interface | TCP 4317 | k3s OTLP logs and events |
+| Functions interface | TCP 9090 | k3s Prometheus remote write only |
+| Loopback | TCP 3000 | Approved HTTPS access gateway to Grafana |
+
+The port 9090 proxy rejects every path except `POST /api/v1/write`. Loki,
+Prometheus query APIs, the Vector API and scoped metrics proxy stay inside the
+Docker network. Restrict the four Functions ports to the contracted gateway
+and k3s sources in the network policy.
+
+The active release is `/opt/jengasec-observability/current`. Releases are
+immutable below `/opt/jengasec-observability/releases`. Configuration and
+secrets are below `/etc/jengasec-observability`. Loki, Prometheus, Grafana,
+Vector quarantine, the AI handoff and evidence packs are below
+`/var/lib/jengasec-observability`. The role does not delete an old release or
+data directory.
+
+For an upgrade, stage a new release ID, run the validation and smoke checks,
+then use the approved startup variables. To roll back, identify a retained
+release, rehearse with `--check`, then set that ID with
+`obs_activate_existing_release=true` and the same live approval variables.
+The role switches the `current` link and restarts the stack. Never reuse a
+release ID for different source.
+
+Take a cold backup during an approved maintenance window. Stop
+`jengasec-observability.service`, copy the full state directory with numeric
+owners to encrypted storage, record a SHA-256 inventory, then start the unit
+and run the smoke check. Back up Vault and the PostgreSQL service secret
+through the secrets owner, not with the data copy. To recover, keep the unit
+stopped, restore the state directory and numeric ownership, stage the matching
+release, start it, verify native Loki and Prometheus queries, then run the full
+smoke check. Retain backups and evidence through the appeal window.
+
+The website receiver and authentication remain website-owned. The AI network
+endpoint, transport and authentication remain AI-owned. Until those owners
+publish their interfaces, do not treat a rehearsal mock or the local AI spool
+as a live integration.
+
 ## Outbound integrations
 
 The development stack posts sanitized events to its mock `/api/feed` receiver.
