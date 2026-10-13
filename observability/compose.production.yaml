@@ -4,6 +4,7 @@ services:
       - rehearsal
     build:
       context: ./tests/fixtures/sources
+    user: ${JENGASEC_FIXTURE_USER:-10001}
     depends_on:
       vector:
         condition: service_healthy

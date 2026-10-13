@@ -215,7 +215,7 @@
     - {path: vector, owner: root, group: root, mode: "0750"}
     - {path: vector/quarantine, owner: root, group: root, mode: "0750"}
     - {path: vector/ai-handoff, owner: root, group: root, mode: "0750"}
-    - {path: fixtures, owner: root, group: root, mode: "0755"}
+    - {path: fixtures, owner: "10001", group: "10001", mode: "0755"}
   loop_control:
     label: "{{ item.path }}"
 
