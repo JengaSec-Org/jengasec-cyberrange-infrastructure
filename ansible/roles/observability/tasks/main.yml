@@ -14,6 +14,11 @@
         obs_retention_hours | int >=
         (obs_event_window_hours | int + obs_appeal_window_hours | int)
       - obs_refresh_seconds | int >= 30
+      - >-
+        obs_rehearsal_event_interval_seconds | int == 0 or
+        (obs_rehearsal_mode and
+         obs_rehearsal_event_interval_seconds | int >= 30 and
+         obs_rehearsal_event_interval_seconds | int <= 3600)
     fail_msg: Observability deployment variables are missing or inconsistent
     quiet: true
 
@@ -210,6 +215,7 @@
     - {path: vector, owner: root, group: root, mode: "0750"}
     - {path: vector/quarantine, owner: root, group: root, mode: "0750"}
     - {path: vector/ai-handoff, owner: root, group: root, mode: "0750"}
+    - {path: fixtures, owner: root, group: root, mode: "0755"}
   loop_control:
     label: "{{ item.path }}"
 
@@ -231,7 +237,7 @@
     src: "{{ playbook_dir }}/../{{ item.source }}/"
     dest: >-
       {{ obs_install_root }}/releases/{{ obs_release_id }}/{{ item.destination }}/
-    mode: preserve
+    mode: "0644"
     directory_mode: "0755"
   loop:
     - source: contracts
@@ -242,10 +248,14 @@
       destination: observability/loki
     - source: observability/prometheus
       destination: observability/prometheus
+    - source: observability/otel
+      destination: observability/otel
     - source: observability/grafana
       destination: observability/grafana
     - source: observability/tests/fixtures/website-feed
       destination: observability/tests/fixtures/website-feed
+    - source: observability/tests/fixtures/sources
+      destination: observability/tests/fixtures/sources
   loop_control:
     label: "{{ item.destination }}"
   when: not obs_activate_existing_release
@@ -255,7 +265,7 @@
     src: "{{ playbook_dir }}/../{{ item }}"
     dest: >-
       {{ obs_install_root }}/releases/{{ obs_release_id }}/{{ item }}
-    mode: preserve
+    mode: "{{ '0755' if item is match('^scripts/.*\\.(sh|py)$') else '0644' }}"
   loop:
     - observability/compose.production.yaml
     - scripts/_lib.sh
@@ -302,6 +312,7 @@
   ansible.builtin.copy:
     content: "{{ obs_grafana_admin_password }}\n"
     dest: "{{ obs_config_root }}/secrets/grafana_admin_password"
+    owner: "{{ '472' if obs_manage_storage_ownership else omit }}"
     mode: "0600"
   no_log: true
 

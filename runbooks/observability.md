@@ -173,16 +173,43 @@ Grafana.
 
 ## OBS VM delivery
 
-The role `ansible/roles/observability` targets the `observability` inventory
-group on Debian 12. Docker Engine and Docker Compose 2.24 or newer are host
-prerequisites. The role installs the remaining packages. Run the safe local
-rehearsal twice before any VM change:
+Use `ansible/observability.yml` with a private inventory containing one
+`observability` host. This entrypoint excludes the common role and leaves
+accounts and SSH settings alone. Docker Engine and Compose 2.24 or newer
+are required. Run the isolated deployment rehearsal before a VM change:
 
 ```bash
 python3 -m venv /tmp/jengasec-ansible-venv
 /tmp/jengasec-ansible-venv/bin/pip install -r ansible/requirements.txt
 PATH="/tmp/jengasec-ansible-venv/bin:$PATH" make obs-vm-validate
 ```
+
+For a fresh Debian 12 amd64 host, `obs_prepare_host=true` also installs Docker
+and prepares a dedicated data volume. First test the storage helper on a
+disposable expanded GPT image:
+
+```bash
+sudo bash observability/tests/test-storage.sh
+```
+
+Copy `scripts/prepare-observability-storage.py` to the selected host. Run it
+as root with `--device` set to the inspected disk. Without `--apply`, it only
+prints a JSON plan. Save that plan in private controller storage and review
+the disk size, existing partitions, new extent and mount point.
+
+Set `obs_data_device`, `obs_storage_plan_file` (the controller path),
+`obs_data_mount=/srv/jengasec-observability` and
+`obs_state_root=/srv/jengasec-observability/state`. Run the OBS playbook with
+`--tags obs-host` to prepare the host before staging a release. The helper
+refuses a changed layout, existing filesystem signatures or an occupied
+mount point. It preserves the original partitions, backs up GPT, adds only
+the unused trailing extent, formats that new partition and mounts it by UUID.
+
+The recovery record is under `/var/backups/jengasec-observability/storage`.
+Repeat applies verify that record and keep the filesystem. An interrupted
+partition operation needs inspection before retry. Never restore GPT while
+the data volume is mounted. Docker and containerd keep their data under the
+new mount, and their systemd units require it before starting.
 
 Set these non-secret values in inventory: a unique `obs_release_id`, the
 Functions VLAN interface and its assigned OBS address, and the approved
@@ -196,11 +223,28 @@ read-only. Do not put either value in inventory, an environment file, or Git.
 Stage and validate a release without starting services:
 
 ```bash
-ansible-playbook -i ansible/inventory.ini ansible/site.yml \
-  --limit obs --check --extra-vars obs_release_id=RELEASE_ID
-ansible-playbook -i ansible/inventory.ini ansible/site.yml \
-  --limit obs --extra-vars obs_release_id=RELEASE_ID
+ansible-playbook -i PRIVATE_INVENTORY ansible/observability.yml --syntax-check
+ansible-playbook -i PRIVATE_INVENTORY ansible/observability.yml \
+  --extra-vars obs_release_id=RELEASE_ID
 ```
+
+For a private VM rehearsal, set `obs_rehearsal_mode=true`,
+`obs_function_bind=127.0.0.1`, `obs_grafana_bind=127.0.0.1` and `obs_start=true`.
+The rehearsal profile enables the existing source fixture, collector and
+website mock. Set `obs_rehearsal_event_interval_seconds=60` to emit a clearly
+marked synthetic activity batch each minute; the default is disabled. These
+records exercise the dashboards without performing application actions.
+
+Use an SSH forward for staff access:
+
+```bash
+ssh -N -L 3300:127.0.0.1:3000 OBS_HOST
+```
+
+Open `http://127.0.0.1:3300/d/jengasec-observability`. Provision approved users
+with `scripts/provision-grafana-access.py` and private initial credentials.
+The provisioner keeps passwords for existing users. Keep the same Grafana
+admin secret across releases.
 
 Live startup requires a separate approved operation. After confirming current
 health, network ownership, the website interface, secrets and rollback, run
@@ -226,9 +270,9 @@ and k3s sources in the network policy.
 The active release is `/opt/jengasec-observability/current`. Releases are
 immutable below `/opt/jengasec-observability/releases`. Configuration and
 secrets are below `/etc/jengasec-observability`. Loki, Prometheus, Grafana,
-Vector quarantine, the AI handoff and evidence packs are below
-`/var/lib/jengasec-observability`. The role does not delete an old release or
-data directory.
+Vector quarantine, the AI handoff and evidence packs are below `obs_state_root`
+(`/var/lib/jengasec-observability` by default, or the dedicated volume's
+`state` directory). The role does not delete an old release or data directory.
 
 For an upgrade, stage a new release ID, run the validation and smoke checks,
 then use the approved startup variables. To roll back, identify a retained

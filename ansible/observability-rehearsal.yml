@@ -7,7 +7,7 @@
   vars:
     obs_rehearsal_root: >-
       {{ lookup('ansible.builtin.env', 'JENGASEC_OBS_REHEARSAL_ROOT') }}
-    obs_release_id: codespace-rehearsal
+    obs_release_id: local-rehearsal
     obs_install_root: "{{ obs_rehearsal_root }}/opt"
     obs_state_root: "{{ obs_rehearsal_root }}/state"
     obs_config_root: "{{ obs_rehearsal_root }}/etc"

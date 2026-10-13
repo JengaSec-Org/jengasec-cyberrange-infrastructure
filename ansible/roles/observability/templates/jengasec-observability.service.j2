@@ -3,12 +3,13 @@ Description=JengaSec observability stack
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target
+RequiresMountsFor={{ obs_state_root }}
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory={{ obs_install_root }}/current/observability
-ExecStart=/usr/bin/docker compose --project-name jengasec-observability --env-file {{ obs_config_root }}/observability.env --file {{ obs_install_root }}/current/observability/compose.production.yaml up --detach --remove-orphans
+ExecStart=/usr/bin/docker compose --project-name jengasec-observability --env-file {{ obs_config_root }}/observability.env --file {{ obs_install_root }}/current/observability/compose.production.yaml up --build --detach --remove-orphans
 ExecStartPost={{ obs_install_root }}/current/scripts/wait-observability-stack.sh --compose-file {{ obs_install_root }}/current/observability/compose.production.yaml --env-file {{ obs_config_root }}/observability.env
 ExecReload=/usr/bin/docker compose --project-name jengasec-observability --env-file {{ obs_config_root }}/observability.env --file {{ obs_install_root }}/current/observability/compose.production.yaml up --detach --no-deps --force-recreate vector
 ExecStop=/usr/bin/docker compose --project-name jengasec-observability --env-file {{ obs_config_root }}/observability.env --file {{ obs_install_root }}/current/observability/compose.production.yaml down --remove-orphans

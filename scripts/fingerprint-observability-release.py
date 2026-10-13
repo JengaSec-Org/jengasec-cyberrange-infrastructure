@@ -18,6 +18,8 @@ DIRECTORIES = (
     "observability/grafana",
     "observability/loki",
     "observability/prometheus",
+    "observability/otel",
+    "observability/tests/fixtures/sources",
     "observability/tests/fixtures/website-feed",
     "observability/vector",
 )
