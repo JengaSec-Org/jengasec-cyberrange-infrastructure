@@ -80,6 +80,7 @@ class PlatformExportTests(unittest.TestCase):
             "optional": False,
             "enabled": True,
             "service": "Service APP01",
+            "team": "JS26-B-001",
         })
         self.assertEqual(scope, [{
             "team_id": "JS26-R-001",

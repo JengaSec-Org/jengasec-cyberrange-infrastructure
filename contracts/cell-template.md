@@ -33,6 +33,15 @@ application container:
 - `JENGASEC_APPLICATION`
 - `JENGASEC_NAMESPACE`
 
+Ingress permits the staff range `10.63.0.0/24`, the owning Blue team's
+WireGuard range (`JS26-B-NNN` maps to `10.61.N.0/24`), and only active Red
+assignments from the imported scope contract. `scripts/make-scope.py` validates
+team IDs against the address plan and updates existing Helm releases with
+`--reuse-values`, preserving their deployed image and other release settings.
+Import current platform exports before applying scope changes; the script does
+not create missing releases. Use `python3 scripts/make-scope.py --dry-run` to
+render the Helm changes without modifying the cluster.
+
 Teams have read-only access to their own observability view. They never receive
 cluster-wide credentials or direct access to another namespace.
 

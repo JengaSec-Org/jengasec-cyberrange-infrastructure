@@ -24,6 +24,7 @@ CELL_FIELDS = {
     "kind",
     "enabled",
     "service",
+    "team",
     "service_ip",
 }
 PLATFORM_SCOPE_FIELDS = {
@@ -108,6 +109,10 @@ def read_platform_cells(path):
             raise ExportError(f"{namespace}.enabled must be true or false")
         if not isinstance(row["service"], str) or not row["service"].strip():
             raise ExportError(f"{namespace}.service must be a non-empty string")
+        if not isinstance(row["team"], str) or not re.fullmatch(
+            r"JS26-B-[0-9]{3}", row["team"]
+        ):
+            raise ExportError(f"{namespace}.team must be a blue team identifier")
         try:
             address = ipaddress.ip_address(row["service_ip"])
         except (ValueError, TypeError):
@@ -130,6 +135,7 @@ def read_platform_cells(path):
             "optional": application in {"APP08", "APP09"},
             "enabled": row["enabled"],
             "service": row["service"],
+            "team": row["team"],
         })
 
     if len(cells) != 18:

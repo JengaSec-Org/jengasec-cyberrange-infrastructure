@@ -23,3 +23,6 @@ A contract is the agreement between two areas. Everything else is an implementat
 The AI API remains AI-owned. Its all-estate scope and authentication must be
 agreed by that owner before implementation; Observability does not create a
 replacement ingestion endpoint.
+
+Application ingress allowlists are updated from imported platform exports
+using [`runbooks/application-scope.md`](../runbooks/application-scope.md).
