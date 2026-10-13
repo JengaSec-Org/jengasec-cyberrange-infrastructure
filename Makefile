@@ -23,6 +23,7 @@ lint:
 	$(MAKE) contracts
 
 contracts:
+	python3 scripts/test_platform_exports.py
 	python3 scripts/validate-contracts.py
 
 cells:

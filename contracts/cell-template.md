@@ -35,3 +35,10 @@ application container:
 
 Teams have read-only access to their own observability view. They never receive
 cluster-wide credentials or direct access to another namespace.
+
+The competition website's range export is the source of assigned cell
+namespaces and reserved service addresses. `scripts/import_platform_exports.py`
+translates its `cells.yaml` and scope-assignment CSV into this repository's
+`scripts/cells.yaml` and `contracts/scope-assignments.csv` formats. Application
+namespaces must retain the canonical form shown above; the import fails rather
+than silently renaming an assigned namespace or address.
