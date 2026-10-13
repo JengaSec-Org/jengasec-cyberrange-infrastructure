@@ -40,3 +40,11 @@ Run `make contracts` after importing and review both generated files before
 provisioning. The importer rejects non-canonical namespaces or service
 addresses rather than silently renaming a cell that the website deploy agent
 targets directly.
+
+The platform's `--reset-day` operation calls `make-scope.py` with
+`JENGASEC_COMPETITION_ID` and `JENGASEC_DEPLOY_TOKEN`; the script fetches the
+current competition exports directly from the website API. Local import files
+remain useful for manual scope updates. Application day resets should be run
+through the platform's `make-cells.py --reset-day N` command, which restores
+the frozen digest and seed database before applying scope. Do not use the
+legacy Helm-revision `reset-cell.sh` path for competition day resets.

@@ -3,15 +3,26 @@
 
 import argparse
 import csv
+import http.client
 import ipaddress
+import json
 import os
 import pathlib
 import re
 import subprocess
 import sys
 import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
 
 import yaml
+
+from import_platform_exports import (
+    ExportError,
+    read_platform_cells,
+    read_platform_scope,
+)
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -32,6 +43,7 @@ SCOPE_FIELDS = {
     "active",
     "notes",
 }
+DEFAULT_PLATFORM_BASE = "https://jengasec.com"
 
 
 class ScopeError(ValueError):
@@ -56,8 +68,20 @@ def read_scope_inputs(cells_path, scope_path):
     if not isinstance(cells_doc, dict) or not isinstance(cells_doc.get("cells"), list):
         raise ScopeError("imported cells must contain a cells list")
 
+    try:
+        with scope_path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            if set(reader.fieldnames or ()) != SCOPE_FIELDS:
+                raise ScopeError("scope CSV columns do not match the infrastructure contract")
+            assignments = list(reader)
+    except OSError as exc:
+        raise ScopeError(f"cannot read imported scope assignments: {exc}") from exc
+    return build_allowlists(cells_doc["cells"], assignments)
+
+
+def build_allowlists(cells, assignments):
     allowlists = {}
-    for cell in cells_doc["cells"]:
+    for cell in cells:
         if not isinstance(cell, dict):
             raise ScopeError("each imported cell must be a mapping")
         if not isinstance(cell.get("enabled"), bool):
@@ -90,15 +114,6 @@ def read_scope_inputs(cells_path, scope_path):
     if not allowlists:
         raise ScopeError("there are no enabled application cells to scope")
 
-    try:
-        with scope_path.open(newline="", encoding="utf-8") as handle:
-            reader = csv.DictReader(handle)
-            if set(reader.fieldnames or ()) != SCOPE_FIELDS:
-                raise ScopeError("scope CSV columns do not match the infrastructure contract")
-            assignments = list(reader)
-    except OSError as exc:
-        raise ScopeError(f"cannot read imported scope assignments: {exc}") from exc
-
     for number, row in enumerate(assignments, start=2):
         if row["active"] not in {"true", "false"}:
             raise ScopeError(f"scope row {number}.active must be true or false")
@@ -120,30 +135,96 @@ def read_scope_inputs(cells_path, scope_path):
         if source_range.version != 4 or target_ip.version != 4:
             raise ScopeError(f"scope row {number} must use IPv4 addresses")
         team_id = row["team_id"]
-        red_match = RED_TEAM_RE.fullmatch(team_id) if isinstance(team_id, str) else None
+        red_match = (
+            RED_TEAM_RE.fullmatch(team_id) if isinstance(team_id, str) else None
+        )
         ai_red_match = (
             AI_RED_TEAM_RE.fullmatch(team_id) if isinstance(team_id, str) else None
         )
         if red_match:
-            team_number = int(red_match.group(1))
-            expected_range = f"10.60.{team_number}.0/24"
-            if not 1 <= team_number <= 54:
-                raise ScopeError(f"scope row {number} has an invalid Red team number")
+            valid_pool = ipaddress.ip_network("10.60.0.0/16")
+            pool_max = 54
         elif ai_red_match:
-            team_number = int(ai_red_match.group(1))
-            expected_range = f"10.64.{team_number}.0/24"
-            if not 1 <= team_number <= 6:
-                raise ScopeError(f"scope row {number} has an invalid AI Red team number")
+            valid_pool = ipaddress.ip_network("10.64.0.0/16")
+            pool_max = 6
         else:
             raise ScopeError(f"scope row {number} has an invalid Red team identifier")
-        if source_range != ipaddress.ip_network(expected_range):
+        subnet_number = int(str(source_range.network_address).split(".")[2])
+        if (
+            source_range.prefixlen != 24
+            or not source_range.subnet_of(valid_pool)
+            or not 1 <= subnet_number <= pool_max
+        ):
             raise ScopeError(
-                f"scope row {number}.source_cidr must be {expected_range} for {team_id}"
+                f"scope row {number}.source_cidr must be a /24 within {valid_pool} "
+                f"with a team number from 1 to {pool_max}"
             )
         if row["active"] == "true":
             cell["ranges"].add(str(source_range))
 
     return allowlists
+
+
+def read_live_scope_inputs(base_url, token, competition_id):
+    if not token:
+        raise ScopeError("JENGASEC_DEPLOY_TOKEN is required to fetch live scope exports")
+    try:
+        competition = int(competition_id)
+    except (TypeError, ValueError):
+        raise ScopeError("JENGASEC_COMPETITION_ID must be a positive integer") from None
+    if competition < 1:
+        raise ScopeError("JENGASEC_COMPETITION_ID must be a positive integer")
+
+    parsed_base = urllib.parse.urlsplit(base_url)
+    if parsed_base.scheme not in {"http", "https"} or not parsed_base.netloc:
+        raise ScopeError("JENGASEC_BASE must be an absolute HTTP(S) URL")
+    url = (
+        f"{base_url.rstrip('/')}/deployments/api/range-exports/"
+        f"?competition={competition}"
+    )
+    request = urllib.request.Request(
+        url, headers={"X-Deploy-Token": token}, method="GET"
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read(5 * 1024 * 1024 + 1)
+    except urllib.error.HTTPError as exc:
+        raise ScopeError(
+            f"platform export request failed with HTTP {exc.code}"
+        ) from exc
+    except (
+        http.client.HTTPException,
+        urllib.error.URLError,
+        TimeoutError,
+        OSError,
+    ) as exc:
+        raise ScopeError(f"could not fetch platform scope exports: {exc}") from exc
+    if len(body) > 5 * 1024 * 1024:
+        raise ScopeError("platform scope export response exceeds 5 MiB")
+    try:
+        payload = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ScopeError(f"platform returned invalid scope export JSON: {exc}") from exc
+    if (
+        not isinstance(payload, dict)
+        or not isinstance(payload.get("cells_yaml"), str)
+        or not isinstance(payload.get("scope_csv"), str)
+    ):
+        raise ScopeError("platform returned an invalid scope export response")
+
+    with tempfile.TemporaryDirectory(prefix="jengasec-platform-export-") as temporary:
+        directory = pathlib.Path(temporary)
+        cells_path = directory / "cells.yaml"
+        scope_path = directory / "scope.csv"
+        cells_path.write_text(payload["cells_yaml"], encoding="utf-8")
+        scope_path.write_text(payload["scope_csv"], encoding="utf-8", newline="")
+        try:
+            cells = read_platform_cells(cells_path)
+            assignments = read_platform_scope(scope_path, cells)
+        except ExportError as exc:
+            raise ScopeError(f"invalid platform scope exports: {exc}") from exc
+
+        return build_allowlists(cells["cells"], assignments)
 
 
 def apply_scope(allowlists, chart, helm_bin, dry_run=False):
@@ -184,7 +265,16 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    allowlists = read_scope_inputs(args.cells, args.scope)
+    competition = os.environ.get("JENGASEC_COMPETITION_ID")
+    if competition is not None:
+        allowlists = read_live_scope_inputs(
+            os.environ.get("JENGASEC_BASE", DEFAULT_PLATFORM_BASE),
+            os.environ.get("JENGASEC_DEPLOY_TOKEN", ""),
+            competition,
+        )
+        print(f"loaded scope exports for competition {competition}")
+    else:
+        allowlists = read_scope_inputs(args.cells, args.scope)
     apply_scope(allowlists, args.chart, args.helm, dry_run=args.dry_run)
     print(f"processed {len(allowlists)} enabled application cells")
 
