@@ -235,14 +235,8 @@ website mock. Set `obs_rehearsal_event_interval_seconds=60` to emit a clearly
 marked synthetic activity batch each minute; the default is disabled. These
 records exercise the dashboards without performing application actions.
 
-Use an SSH forward for staff access:
-
-```bash
-ssh -N -L 3300:127.0.0.1:3000 OBS_HOST
-```
-
-Open `http://127.0.0.1:3300/d/jengasec-observability`. Provision approved users
-with `scripts/provision-grafana-access.py` and private initial credentials.
+Provision approved users with `scripts/provision-grafana-access.py` and
+private initial credentials.
 The provisioner keeps passwords for existing users. Keep the same Grafana
 admin secret across releases.
 
