@@ -34,6 +34,19 @@ rejects retention shorter than the event plus appeal windows.
 
 ## Inspect and recover
 
+The staff dashboard opens at `/d/jengasec-observability`. Select the time
+window, target and role, then use the event timeline to inspect the actor,
+event and reported outcome. Team and participant fields accept exact opaque
+IDs. The request/trace and event-ID fields also use exact matches; leave them
+blank to include all records. Expand a log line to follow its evidence or
+correlation links. A team-table link narrows the view to that team and target.
+
+Request counts use application request summaries. Ingress and network
+records remain available in the timeline. Security events and IDS alerts
+are observations for investigation. Workload events keep their source
+attribution. Response approvals, execution and AI decisions require their
+owners' feeds. Collection and delivery health are in the collapsed bottom row.
+
 ```bash
 docker compose -f observability/compose.yaml ps
 docker compose -f observability/compose.yaml logs --tail=100 vector loki

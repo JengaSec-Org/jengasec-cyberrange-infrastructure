@@ -267,7 +267,7 @@ class Grafana:
 
 def loki_datasource(tenant):
     tenant_id = tenant if tenant == "staff" else f"application-{tenant}"
-    return {
+    datasource = {
         "name": "Loki",
         "uid": "loki",
         "type": "loki",
@@ -278,6 +278,23 @@ def loki_datasource(tenant):
         "jsonData": {"httpHeaderName1": "X-Scope-OrgID", "maxLines": 1000},
         "secureJsonData": {"httpHeaderValue1": tenant_id},
     }
+    if tenant == "staff":
+        datasource["jsonData"]["derivedFields"] = [
+            {
+                "name": name,
+                "matcherType": "label",
+                "matcherRegex": f"^{field}$",
+                "url": "/d/jengasec-observability?"
+                       f"var-{variable}=${{__value.raw}}&from=${{__from}}&to=${{__to}}",
+                "urlDisplayLabel": label,
+            }
+            for name, field, variable, label in (
+                ("Event evidence", "event_id", "event_id", "View event"),
+                ("Request trail", "request_id", "correlation", "Follow request"),
+                ("Trace trail", "trace_id", "correlation", "Follow trace"),
+            )
+        ]
+    return datasource
 
 
 def prometheus_datasource(namespace=None):

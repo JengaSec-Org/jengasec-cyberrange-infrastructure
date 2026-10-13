@@ -23,5 +23,21 @@ datasources:
     jsonData:
       httpHeaderName1: X-Scope-OrgID
       maxLines: 1000
+      derivedFields:
+        - name: Event evidence
+          matcherType: label
+          matcherRegex: ^event_id$
+          url: /d/jengasec-observability?var-event_id=$${__value.raw}&from=$${__from}&to=$${__to}
+          urlDisplayLabel: View event
+        - name: Request trail
+          matcherType: label
+          matcherRegex: ^request_id$
+          url: /d/jengasec-observability?var-correlation=$${__value.raw}&from=$${__from}&to=$${__to}
+          urlDisplayLabel: Follow request
+        - name: Trace trail
+          matcherType: label
+          matcherRegex: ^trace_id$
+          url: /d/jengasec-observability?var-correlation=$${__value.raw}&from=$${__from}&to=$${__to}
+          urlDisplayLabel: Follow trace
     secureJsonData:
       httpHeaderValue1: staff

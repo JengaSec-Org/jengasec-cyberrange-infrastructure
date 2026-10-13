@@ -78,7 +78,8 @@ for name, now, allocation_changes, scope_changes, allocations, scopes in cases:
         with (fixtures / "attribution" / filename).open(newline="") as handle:
             reader = csv.DictReader(handle)
             fields = reader.fieldnames
-            rows = list(reader)
+            # Isolate one allocation/scope pair for the validity boundary cases.
+            rows = [next(reader)]
         rows[0].update(changes)
         with (case / filename).open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=fields)

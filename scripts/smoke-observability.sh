@@ -583,4 +583,11 @@ curl --fail --silent --show-error \
   "$GRAFANA_URL/api/dashboards/uid/jengasec-observability" \
   | jq --exit-status '.dashboard.uid == "jengasec-observability"' >/dev/null
 log "Grafana enforced read-only application and staff/judge views"
+
+"${COMPOSE[@]}" run --rm --no-deps --no-TTY --interactive=false \
+  --entrypoint python contract-tests \
+  observability/tests/test-staff-dashboard.py \
+  --loki-url http://loki:3100 \
+  --prometheus-url http://prometheus:9090 \
+  --source-url http://source-fixture:8081
 log "end-to-end observability smoke check passed"
