@@ -29,13 +29,18 @@ python scripts/provision-grafana-access.py \
   --plan-output "$workspace/access-plan.json" \
   --dry-run
 
-python - "$workspace/access-plan.json" "$workspace/dashboards" <<'PY'
+python - "$workspace/access-plan.json" "$workspace/dashboards" \
+  observability/grafana/dashboards/jengasec-observability.json \
+  <<'PY'
 import json
 import pathlib
 import sys
 
 plan = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 dashboards = pathlib.Path(sys.argv[2])
+staff_dashboard = json.loads(
+    pathlib.Path(sys.argv[3]).read_text(encoding="utf-8")
+)
 assert len(plan["applications"]) == 18
 assert plan["staff"]["members"] == ["JS26-P-9001", "JS26-P-9002"]
 app01 = next(
@@ -57,6 +62,30 @@ assert dashboard["uid"] == "jengasec-ent-a-app01"
 assert all("jengasec-ent-a-app01" in target["expr"]
            for panel in dashboard["panels"]
            for target in panel["targets"])
+
+required_staff_panels = {
+    "Events received",
+    "Refused traffic",
+    "Quarantined inputs",
+    "Unknown attribution",
+    "Active alerts",
+    "Pipeline targets",
+    "Ingestion rate by source",
+    "Events by application",
+    "Severity distribution",
+    "Delivery by destination",
+    "Target health",
+    "Refused and out-of-scope events",
+    "Recent security events",
+}
+assert staff_dashboard["uid"] == "jengasec-observability"
+assert staff_dashboard["time"]["from"] == "now-1h"
+assert required_staff_panels == {
+    panel["title"] for panel in staff_dashboard["panels"]
+}
+assert {panel["datasource"]["uid"] for panel in staff_dashboard["panels"]} == {
+    "loki", "prometheus"
+}
 PY
 
 if python scripts/provision-grafana-access.py \
