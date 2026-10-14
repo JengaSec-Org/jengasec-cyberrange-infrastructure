@@ -1,0 +1,1311 @@
+{
+  "uid": "jengasec-telemetry-health",
+  "id": null,
+  "title": "JengaSec \u00b7 Telemetry Health",
+  "description": "Collection, freshness, queues, rejection and destination delivery. Optional integrations stay independent from core metrics and logs.",
+  "tags": [
+    "jengasec",
+    "staff",
+    "observability"
+  ],
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "timezone": "utc",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "link",
+      "title": "Overview",
+      "url": "/d/jengasec-overview",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Team Activity",
+      "url": "/d/jengasec-observability",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Infrastructure & Services",
+      "url": "/d/jengasec-infrastructure",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Kubernetes",
+      "url": "/d/jengasec-kubernetes",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Network & Security",
+      "url": "/d/jengasec-network",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Event Investigation & Evidence",
+      "url": "/d/jengasec-investigation",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Telemetry Health",
+      "url": "/d/jengasec-telemetry-health",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Environment",
+        "type": "custom",
+        "query": "live, validation, rehearsal, unclassified",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "live"
+          ],
+          "value": [
+            "live"
+          ]
+        },
+        "options": [
+          {
+            "text": "live",
+            "value": "live",
+            "selected": true
+          },
+          {
+            "text": "validation",
+            "value": "validation",
+            "selected": false
+          },
+          {
+            "text": "rehearsal",
+            "value": "rehearsal",
+            "selected": false
+          },
+          {
+            "text": "unclassified",
+            "value": "unclassified",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "resource",
+        "label": "Resource",
+        "type": "custom",
+        "query": "vm101, vm102, vm103, vm104, vm105, vm106",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "text": "vm101",
+            "value": "vm101",
+            "selected": false
+          },
+          {
+            "text": "vm102",
+            "value": "vm102",
+            "selected": false
+          },
+          {
+            "text": "vm103",
+            "value": "vm103",
+            "selected": false
+          },
+          {
+            "text": "vm104",
+            "value": "vm104",
+            "selected": false
+          },
+          {
+            "text": "vm105",
+            "value": "vm105",
+            "selected": false
+          },
+          {
+            "text": "vm106",
+            "value": "vm106",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "cluster",
+        "label": "Cluster",
+        "type": "custom",
+        "query": "red, blue",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "text": "red",
+            "value": "red",
+            "selected": false
+          },
+          {
+            "text": "blue",
+            "value": "blue",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Separate quiet, missing and failing",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "A healthy input must have a fresh collector and successful delivery. **No matching events** can be quiet; **Missing signal** requires checking configuration or collection. Delivery counters report attempts acknowledged by each destination, while event panels show records queried from storage. Website publication, attribution and external owner feeds may be unconfigured without blocking host metrics."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Central scrape targets",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Failing",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Scraped",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=~\"prometheus|vector\",environment=~\"${environment:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{job}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Host metric age",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 120
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - jengasec_collection_timestamp_seconds{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Collection result",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Failing",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Collected",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_collection_success{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}} {{collector}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Recent contract rejections",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Rejected input counter increase. Missing series is not a claim that validation passed.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(jengasec_contract_rejections_total{environment=~\"${environment:regex}\"}[$__range]))",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Delivery by destination",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Accepted deliveries by destination. Disabled optional destinations have no series; quiet destinations can report zero.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (component_id) (rate(vector_component_sent_events_total{component_kind=\"sink\",environment=~\"${environment:regex}\"}[$__rate_interval]))",
+          "editorMode": "code",
+          "legendFormat": "{{component_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Vector buffered events",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Queued events. Sustained growth means a sink is not keeping up.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "vector_buffer_size_events{environment=~\"${environment:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{component_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Discarded records in the recent window",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Records discarded by a component. Correlate with contract rejections and collector loss events.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (component_id) (increase(vector_component_discarded_events_total{environment=~\"${environment:regex}\"}[$__rate_interval]))",
+          "editorMode": "code",
+          "legendFormat": "{{component_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Stored infrastructure events by source",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Records returned by native storage queries, independent of delivery counters.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (source,resource_id)(count_over_time({record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"} | keep source, resource_id [$__interval]))",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}} {{source}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Unknown application attribution in recent window",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Unresolved source identity remains explicit. Platform attribution may be unconfigured; OBS never invents identities.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (source) (increase(jengasec_attribution_events_total{status=\"unknown\",environment=~\"${environment:regex}\"}[$__rate_interval]))",
+          "editorMode": "code",
+          "legendFormat": "{{source}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Cluster metrics export failures",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (cluster,exporter) (increase(otelcol_exporter_send_failed_metric_points_total{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}[$__rate_interval]))",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} {{exporter}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Collection and loss events",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 10
+      },
+      "description": "Collector self-observations and explicit loss reports. A healthy process alone is not end-to-end evidence.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",source=\"collector\"} | json",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      }
+    },
+    {
+      "id": 13,
+      "title": "Alerts needing attention",
+      "type": "alertlist",
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 24,
+        "h": 8
+      },
+      "description": "Grafana managed infrastructure alerts. No data and evaluation errors remain visible. Open an alert for the affected resource and recovery state.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "alertName": "",
+        "alertInstanceLabelFilter": "{jengasec_managed=\"infrastructure\"}",
+        "dashboardAlerts": false,
+        "groupMode": "default",
+        "maxItems": 15,
+        "sortOrder": 1,
+        "showOptions": "current",
+        "stateFilter": {
+          "firing": true,
+          "pending": true,
+          "normal": false,
+          "noData": true,
+          "error": true
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Event delivery age",
+      "type": "stat",
+      "description": "Quiet sources still deliver a collector health record each minute. An old timestamp signals stopped delivery.",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 180
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - jengasec_event_agent_last_delivery_timestamp_seconds{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "legendFormat": "{{resource_id}}"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "Event collection age",
+      "type": "stat",
+      "description": "Age of the most recent successful collection pass. This is independent of delivery.",
+      "gridPos": {
+        "x": 6,
+        "y": 32,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 180
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - jengasec_event_agent_last_collect_timestamp_seconds{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "legendFormat": "{{resource_id}}"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "Recent event loss",
+      "type": "stat",
+      "description": "New dropped records in the selected period. A counter reset does not hide later loss.",
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "increase(jengasec_event_agent_dropped_total{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}[$__range])",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "legendFormat": "{{resource_id}}"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "Event agent queued records",
+      "type": "stat",
+      "description": "Persistent queue depth. Compare growth with delivery age and collection errors.",
+      "gridPos": {
+        "x": 18,
+        "y": 32,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_event_agent_queue_events{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "legendFormat": "{{resource_id}}"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "Event collection errors",
+      "type": "timeseries",
+      "description": "New collection errors during each interval.",
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "increase(jengasec_event_agent_collection_errors_total{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}[$__rate_interval])",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "legendFormat": "{{resource_id}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "Collector heartbeats returned by storage",
+      "type": "timeseries",
+      "description": "Native Loki results for collector heartbeats. This confirms storage of health records even when activity is quiet.",
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (resource_id)(count_over_time({record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"collector.health\"} | keep resource_id [$__interval]))",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "legendFormat": "{{resource_id}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

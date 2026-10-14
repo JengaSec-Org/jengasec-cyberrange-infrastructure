@@ -1,0 +1,633 @@
+{
+  "uid": "jengasec-investigation",
+  "id": null,
+  "title": "JengaSec \u00b7 Event Investigation & Evidence",
+  "description": "Find stable event IDs or exact request/trace IDs across application and infrastructure observations. Keep evidence record families separate.",
+  "tags": [
+    "jengasec",
+    "staff",
+    "observability"
+  ],
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "timezone": "utc",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "link",
+      "title": "Overview",
+      "url": "/d/jengasec-overview",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Team Activity",
+      "url": "/d/jengasec-observability",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Infrastructure & Services",
+      "url": "/d/jengasec-infrastructure",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Kubernetes",
+      "url": "/d/jengasec-kubernetes",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Network & Security",
+      "url": "/d/jengasec-network",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Event Investigation & Evidence",
+      "url": "/d/jengasec-investigation",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Telemetry Health",
+      "url": "/d/jengasec-telemetry-health",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Environment",
+        "type": "custom",
+        "query": "live, validation, rehearsal, unclassified",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "live"
+          ],
+          "value": [
+            "live"
+          ]
+        },
+        "options": [
+          {
+            "text": "live",
+            "value": "live",
+            "selected": true
+          },
+          {
+            "text": "validation",
+            "value": "validation",
+            "selected": false
+          },
+          {
+            "text": "rehearsal",
+            "value": "rehearsal",
+            "selected": false
+          },
+          {
+            "text": "unclassified",
+            "value": "unclassified",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "resource",
+        "label": "Resource",
+        "type": "custom",
+        "query": "vm101, vm102, vm103, vm104, vm105, vm106",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "text": "vm101",
+            "value": "vm101",
+            "selected": false
+          },
+          {
+            "text": "vm102",
+            "value": "vm102",
+            "selected": false
+          },
+          {
+            "text": "vm103",
+            "value": "vm103",
+            "selected": false
+          },
+          {
+            "text": "vm104",
+            "value": "vm104",
+            "selected": false
+          },
+          {
+            "text": "vm105",
+            "value": "vm105",
+            "selected": false
+          },
+          {
+            "text": "vm106",
+            "value": "vm106",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "event_id",
+        "label": "Event ID",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "description": "Exact value; leave empty for all.",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "correlation",
+        "label": "Request / trace ID",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "description": "Exact value; leave empty for all.",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "team",
+        "label": "Team ID",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "description": "Exact value; leave empty for all.",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "participant",
+        "label": "Participant ID",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "description": "Exact value; leave empty for all.",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "enterprise",
+        "label": "Enterprise",
+        "type": "custom",
+        "query": "ENT-A, ENT-B",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "text": "ENT-A",
+            "value": "ENT-A",
+            "selected": false
+          },
+          {
+            "text": "ENT-B",
+            "value": "ENT-B",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "application",
+        "label": "Application",
+        "type": "custom",
+        "query": "APP01, APP02, APP03, APP04, APP05, APP06, APP07, APP08, APP09",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "text": "APP01",
+            "value": "APP01",
+            "selected": false
+          },
+          {
+            "text": "APP02",
+            "value": "APP02",
+            "selected": false
+          },
+          {
+            "text": "APP03",
+            "value": "APP03",
+            "selected": false
+          },
+          {
+            "text": "APP04",
+            "value": "APP04",
+            "selected": false
+          },
+          {
+            "text": "APP05",
+            "value": "APP05",
+            "selected": false
+          },
+          {
+            "text": "APP06",
+            "value": "APP06",
+            "selected": false
+          },
+          {
+            "text": "APP07",
+            "value": "APP07",
+            "selected": false
+          },
+          {
+            "text": "APP08",
+            "value": "APP08",
+            "selected": false
+          },
+          {
+            "text": "APP09",
+            "value": "APP09",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Follow evidence",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 5
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Use an exact **Event ID** for one observation or **Request / trace ID** for correlated records. Open a log record for timestamps, source, outcome and integrity hash. Resource filters apply to infrastructure; team, participant and application filters apply to application records. Infrastructure, application telemetry, platform audit and competition records retain their own contracts. An observation does not establish a scoring result."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Matching infrastructure observations",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 4
+      },
+      "description": "Count of matching infrastructure telemetry records. Exact event IDs are stable evidence references.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"} | json event_id=\"event_id\", request_id=\"request_id\", trace_id=\"trace_id\" | __error__=\"\" | label_format event_filter=${event_id:doublequote}, correlation_filter=${correlation:doublequote} | (event_filter=\"\" or event_id=${event_id:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | keep source [$__range]))",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Matching application observations",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 4
+      },
+      "description": "Count of matching application telemetry records; preserves canonical application scope.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\",enterprise=~\"${enterprise:regex}\",application=~\"${application:regex}\"} | json actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", event_id=\"event_id\", request_id=\"request_id\", trace_id=\"trace_id\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, event_filter=${event_id:doublequote}, correlation_filter=${correlation:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | keep source [$__range]))",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Infrastructure evidence",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 13
+      },
+      "description": "Staff-only infrastructure records. Expand each record to inspect its integrity hash and event time.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"} | json event_id=\"event_id\", request_id=\"request_id\", trace_id=\"trace_id\" | __error__=\"\" | label_format event_filter=${event_id:doublequote}, correlation_filter=${correlation:doublequote} | (event_filter=\"\" or event_id=${event_id:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | json",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Application evidence",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 13
+      },
+      "description": "Canonical application observations including exact request and trace correlation. No identity is guessed for unattributed events.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{namespace=~\"jengasec-ent-(a|b)-app0[1-9]\",enterprise=~\"${enterprise:regex}\",application=~\"${application:regex}\"} | json actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", event_id=\"event_id\", request_id=\"request_id\", trace_id=\"trace_id\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, event_filter=${event_id:doublequote}, correlation_filter=${correlation:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | json",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Evidence availability",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 24,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Search uses the retained telemetry window. Missing cited IDs require investigation before an evidence export is accepted. Platform audit and competition evidence are supplied separately by their owners; a blank telemetry query does not mean that no platform action, signup, finding or score exists."
+      }
+    }
+  ]
+}

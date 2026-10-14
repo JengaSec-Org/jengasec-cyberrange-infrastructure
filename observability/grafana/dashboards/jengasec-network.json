@@ -1,0 +1,741 @@
+{
+  "uid": "jengasec-network",
+  "id": null,
+  "title": "JengaSec \u00b7 Network & Security",
+  "description": "VPN, passive network flows, actual firewall decisions and IDS observations. No traffic observation grants scope or awards points.",
+  "tags": [
+    "jengasec",
+    "staff",
+    "observability"
+  ],
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "timezone": "utc",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "link",
+      "title": "Overview",
+      "url": "/d/jengasec-overview",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Team Activity",
+      "url": "/d/jengasec-observability",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Infrastructure & Services",
+      "url": "/d/jengasec-infrastructure",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Kubernetes",
+      "url": "/d/jengasec-kubernetes",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Network & Security",
+      "url": "/d/jengasec-network",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Event Investigation & Evidence",
+      "url": "/d/jengasec-investigation",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Telemetry Health",
+      "url": "/d/jengasec-telemetry-health",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Environment",
+        "type": "custom",
+        "query": "live, validation, rehearsal, unclassified",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "live"
+          ],
+          "value": [
+            "live"
+          ]
+        },
+        "options": [
+          {
+            "text": "live",
+            "value": "live",
+            "selected": true
+          },
+          {
+            "text": "validation",
+            "value": "validation",
+            "selected": false
+          },
+          {
+            "text": "rehearsal",
+            "value": "rehearsal",
+            "selected": false
+          },
+          {
+            "text": "unclassified",
+            "value": "unclassified",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "resource",
+        "label": "Resource",
+        "type": "custom",
+        "query": "vm101, vm102, vm103, vm104, vm105, vm106",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "text": "vm101",
+            "value": "vm101",
+            "selected": false
+          },
+          {
+            "text": "vm102",
+            "value": "vm102",
+            "selected": false
+          },
+          {
+            "text": "vm103",
+            "value": "vm103",
+            "selected": false
+          },
+          {
+            "text": "vm104",
+            "value": "vm104",
+            "selected": false
+          },
+          {
+            "text": "vm105",
+            "value": "vm105",
+            "selected": false
+          },
+          {
+            "text": "vm106",
+            "value": "vm106",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Read decisions from the firewall",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "A **flow** records observed traffic. Only a **firewall decision** supplies an allowed or refused verdict. IDS alerts are detections requiring investigation. Zero VPN peers is a valid empty deployment. Network panels show \u201cNo matching events\u201d when quiet; check Telemetry Health to distinguish silence from missing collection."
+      }
+    },
+    {
+      "id": 2,
+      "title": "VPN interface",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Down",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Up",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_wireguard_interface_up{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Configured VPN peers",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Zero peers is valid. Public peer keys and identity are never metric labels.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_wireguard_peers{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Observed flows",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Passive observations in the selected period. These are not policy decisions.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"network.flow\"}[$__range]))",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "New IDS observations",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"ids.alert\"}[$__range]))",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "VPN aggregate traffic",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Aggregate receive and transmit byte rates. Idle peers can produce zero throughput.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(jengasec_wireguard_receive_bytes_total{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}[$__rate_interval])",
+          "editorMode": "code",
+          "legendFormat": "{{__name__}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(jengasec_wireguard_transmit_bytes_total{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}[$__rate_interval])",
+          "editorMode": "code",
+          "legendFormat": "{{__name__}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Reported firewall verdicts",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Only explicit firewall verdicts. Flow records are excluded.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (verdict)(count_over_time({record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"firewall.decision\"} | json verdict=\"attributes.verdict\" | keep verdict [$__interval]))",
+          "editorMode": "code",
+          "legendFormat": "{{verdict}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Firewall decisions",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 10
+      },
+      "description": "Rate-limited real decisions. The event body carries the rule and reported verdict; no verdict is inferred from packet flow.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"firewall.decision\"} | json",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      }
+    },
+    {
+      "id": 9,
+      "title": "IDS detections",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 10
+      },
+      "description": "Passive IDS detections. Open event evidence to inspect the sanitized signature and addresses.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"ids.alert\"} | json",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      }
+    },
+    {
+      "id": 10,
+      "title": "Passive flow observations",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 10
+      },
+      "description": "Observed network tuples and volumes. Absence of flows cannot prove the gateway is healthy.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"network.flow\"} | json",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      }
+    }
+  ]
+}
