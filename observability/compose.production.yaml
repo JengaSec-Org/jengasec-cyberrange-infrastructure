@@ -122,7 +122,6 @@ services:
   vector:
     image: timberio/vector:0.58.0-debian
     environment:
-      JENGASEC_DOCKER_SOURCE_PROJECT: ${COMPOSE_PROJECT_NAME:-jengasec-observability}
       JENGASEC_INFRASTRUCTURE_RESOURCE_IDS: ${JENGASEC_INFRASTRUCTURE_RESOURCE_IDS:-test-host}
       JENGASEC_V2_TELEMETRY_ENVIRONMENT: ${JENGASEC_V2_TELEMETRY_ENVIRONMENT:-rehearsal}
     command:

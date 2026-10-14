@@ -54,7 +54,7 @@ sources:
     type: docker_logs
     include_labels:
       - jengasec.observability.source=application
-      - com.docker.compose.project=${JENGASEC_DOCKER_SOURCE_PROJECT:-jengasec-observability}
+      - com.docker.compose.project=__DOCKER_SOURCE_PROJECT__
 
   cluster_otlp:
     type: opentelemetry
@@ -71,7 +71,7 @@ sources:
     type: docker_logs
     include_labels:
       - jengasec.observability.source=netflow
-      - com.docker.compose.project=${JENGASEC_DOCKER_SOURCE_PROJECT:-jengasec-observability}
+      - com.docker.compose.project=__DOCKER_SOURCE_PROJECT__
 
   gateway_syslog_tcp:
     type: syslog
