@@ -137,6 +137,7 @@ class ProcessorTests(unittest.TestCase):
                         {"key": "namespace", "value": {"stringValue": "forged"}},
                         {"key": "cluster", "value": {"stringValue": "forged"}},
                         {"key": "token", "value": {"stringValue": "metric-secret-sentinel"}},
+                        {"key": "filter", "value": {"stringValue": "filter/json_object"}},
                     ],
                 }]}}]}]}]}
                 request = urllib.request.Request(f"http://127.0.0.1:{port}/v1/metrics", data=json.dumps(metric).encode(),
@@ -186,7 +187,7 @@ class ProcessorTests(unittest.TestCase):
             self.assertNotIn("k8s.pod.uid", attributes)
             point = resources[0]["scopeMetrics"][0]["metrics"][0]["gauge"]["dataPoints"][0]
             labels = {item["key"]: decode_value(item["value"]) for item in point["attributes"]}
-            self.assertEqual(labels, {"namespace": "kube-system"})
+            self.assertEqual(labels, {"namespace": "kube-system", "filter": "filter/json_object"})
 
 
 class HostLogTests(unittest.TestCase):
@@ -215,6 +216,7 @@ class HostLogTests(unittest.TestCase):
                      "resource": {"cluster": "blue", "namespace": "kube-system", "kind": "Pod", "name": "fixture"},
                      "attributes": {"type": "Normal", "reason": "Started", "count": 1}}
             infra_lines = [infra, infra | {"record_family": "platform_audit"},
+                           infra | {"resource": "invalid-resource-secret-sentinel"},
                            infra | {"attributes": {"type": "Normal", "reason": "Started", "count": 1,
                                                     "authorization": "infra-secret-sentinel"}}]
             for path, lines in [(app_dir, app_lines), (infra_dir, infra_lines)]:
@@ -233,7 +235,12 @@ class HostLogTests(unittest.TestCase):
             config["extensions"] = {"file_storage/logs": {"directory": str(root / "state"), "create_directory": True}}
             config["exporters"] = {"file": {"path": str(root / "output.jsonl"), "flush_interval": "100ms"}}
             config["service"]["extensions"] = ["file_storage/logs"]
-            config["service"]["telemetry"] = {"metrics": {"level": "none"}}
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                metrics_port = listener.getsockname()[1]
+            config["service"]["telemetry"] = {"metrics": {"level": "normal", "readers": [
+                {"pull": {"exporter": {"prometheus": {"host": "127.0.0.1", "port": metrics_port}}}}
+            ]}}
             config["service"]["pipelines"].pop("metrics")
             for pipeline in config["service"]["pipelines"].values():
                 pipeline["exporters"] = ["file"]
@@ -251,6 +258,8 @@ class HostLogTests(unittest.TestCase):
                         if "accepted-fixture" in output and "infrastructure/1.0" in output:
                             break
                     time.sleep(0.1)
+                with urllib.request.urlopen(f"http://127.0.0.1:{metrics_port}/metrics", timeout=2) as response:
+                    metrics_text = response.read().decode()
             finally:
                 process.terminate()
                 stdout, stderr = process.communicate(timeout=15)
@@ -268,6 +277,9 @@ class HostLogTests(unittest.TestCase):
             body = next(decode_value(record["body"]) for record in records if decode_value(record["body"])["schema_version"] == "2.0")
             self.assertEqual(body, app)
             self.assertIn("payments-api", output)
+            filtered = [line for line in metrics_text.splitlines() if line.startswith("otelcol_processor_filter_logs_filtered")]
+            self.assertTrue(any("filter/json_object" in line and float(line.rsplit(" ", 1)[1]) > 0
+                                for line in filtered), filtered)
 
 
     def test_persistent_queue_replays_once_after_receiver_outage_and_restart(self):

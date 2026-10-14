@@ -21,14 +21,11 @@ receivers:
     - id: container-parser
       type: container
       max_log_size: 65536
-      on_error: drop_quiet
-    - id: json-only
-      type: filter
-      expr: body not matches "^\\s*\\{"
+      on_error: send_quiet
     - id: parse-json
       type: json_parser
       parse_to: body
-      on_error: drop_quiet
+      on_error: send_quiet
     include:
     - /var/log/pods/jengasec-ent-a-app0[1-9]_*/*/*.log
     - /var/log/pods/jengasec-ent-b-app0[1-9]_*/*/*.log
@@ -45,14 +42,11 @@ receivers:
     - id: container-parser
       type: container
       max_log_size: 65536
-      on_error: drop_quiet
-    - id: json-only
-      type: filter
-      expr: body not matches "^\\s*\\{"
+      on_error: send_quiet
     - id: parse-json
       type: json_parser
       parse_to: body
-      on_error: drop_quiet
+      on_error: send_quiet
     include:
     - /var/log/pods/*/*/*.log
     exclude:
@@ -84,15 +78,18 @@ processors:
     error_mode: propagate
     logs:
       log_record:
+      - attributes["invalid_shape"] == true
       - not IsMap(body)
       - body["schema_version"] != "2.0"
       - body["namespace"] != resource.attributes["k8s.namespace.name"]
       - not IsMatch(resource.attributes["k8s.namespace.name"], "^jengasec-ent-(a|b)-app0[1-9]$")
-      - attributes["invalid_shape"] == true
   filter/infrastructure_contract:
     error_mode: propagate
     logs:
       log_record:
+      - attributes["invalid_shape"] == true
+      - not IsMap(body["resource"])
+      - not IsMap(body["attributes"])
       - not IsMap(body)
       - body["schema_version"] != "infrastructure/1.0"
       - body["record_family"] != "infrastructure_telemetry"
@@ -100,7 +97,6 @@ processors:
       - body["environment"] != "${env:OBS_ENVIRONMENT:-rehearsal}"
       - body["resource"]["namespace"] != resource.attributes["k8s.namespace.name"]
       - body["resource"]["cluster"] != "${env:OBS_CLUSTER:-red}"
-      - attributes["invalid_shape"] == true
   transform/log_identity:
     error_mode: propagate
     log_statements:
@@ -139,8 +135,8 @@ processors:
       - set(attributes["workload"], resource.attributes["k8s.replicaset.name"]) where resource.attributes["k8s.replicaset.name"]
         != nil
       - keep_keys(attributes, ["namespace", "pod", "container", "node", "workload", "condition", "state", "reason",
-        "cpu", "mode", "direction", "interface", "receiver", "exporter", "transport", "code", "status", "method",
-        "enterprise", "application", "component"])
+        "cpu", "mode", "direction", "interface", "receiver", "exporter", "processor", "filter", "transport", "code",
+        "status", "method", "enterprise", "application", "component"])
   transform/metric_resources:
     error_mode: propagate
     metric_statements:
@@ -176,6 +172,12 @@ processors:
       - set(attributes["shape_fields"], Len(cache["shape"]))
       - keep_matching_keys(cache["shape"], "^(environment|event_type|outcome|record_family|resource_id|schema_version|severity|source|source_event_id|ts|resource\\.(cluster|interface|kind|name|namespace|service)|attributes\\.(action|bytes|category|collection_errors_total|count|delivered_total|dropped_total|dst_ip|dst_port|ids_action|journal_lag_seconds|mechanism|packets|peer_ip|protocol|queue_bytes|queue_events|reason|rejected_total|rule_id|sampling_rate|signature_id|signature_revision|src_ip|src_port|state|type|verdict))$")
       - set(attributes["invalid_shape"], true) where Len(cache["shape"]) != attributes["shape_fields"]
+  filter/json_object:
+    error_mode: propagate
+    logs:
+      log_record:
+      - not IsMap(body)
+      - resource.attributes["k8s.namespace.name"] == nil
 exporters:
   otlp/obs:
     endpoint: ${env:OBS_OTLP_ENDPOINT}
@@ -227,6 +229,7 @@ service:
       - filelog/application
       processors:
       - memory_limiter
+      - filter/json_object
       - transform/application_shape
       - filter/application_contract
       - transform/log_identity
@@ -238,6 +241,7 @@ service:
       - filelog/infrastructure
       processors:
       - memory_limiter
+      - filter/json_object
       - transform/infrastructure_shape
       - filter/infrastructure_contract
       - transform/log_identity

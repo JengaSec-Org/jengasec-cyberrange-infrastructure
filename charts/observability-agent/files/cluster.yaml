@@ -229,7 +229,7 @@ processors:
       - set(attributes["workload"], resource.attributes["k8s.replicaset.name"]) where resource.attributes["k8s.replicaset.name"]
         != nil
       - keep_keys(attributes, ["namespace", "pod", "container", "node", "workload", "condition", "state", "reason",
-        "cpu", "mode", "direction", "interface", "receiver", "exporter", "transport", "code", "status", "method",
+        "cpu", "mode", "direction", "interface", "receiver", "exporter", "processor", "filter", "transport", "code", "status", "method",
         "enterprise", "application", "component"])
   transform/metric_resources:
     error_mode: propagate
