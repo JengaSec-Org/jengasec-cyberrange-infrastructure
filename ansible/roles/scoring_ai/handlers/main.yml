@@ -1,7 +1,7 @@
 ---
 - name: Restart the AI gateway
   ansible.builtin.systemd:
-    name: jengasec-ai.service
+    name: jengasec-scoring-ai.service
     state: restarted
     daemon_reload: true
   when: scoring_ai_mode == 'gateway' and scoring_ai_start | bool

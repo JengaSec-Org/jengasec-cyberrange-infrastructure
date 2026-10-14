@@ -183,6 +183,10 @@
         "producer_map"
       ],
       "properties": {
+        "api_prefix": {
+          "enum": ["/api/v1/scoring", "/api/v1"],
+          "default": "/api/v1/scoring"
+        },
         "url": {
           "type": "string",
           "format": "uri"

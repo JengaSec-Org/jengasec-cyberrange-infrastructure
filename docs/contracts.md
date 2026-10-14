@@ -14,7 +14,10 @@ A contract is the agreement between two areas. Everything else is an implementat
 | OBS platform data | `contracts/observability-data-interface.md`, `contracts/observability-finding.schema.json` | Competition Platform and Observability | Attribution, access and evidence automation | Versioned read-only platform database views |
 | Evidence pack | `contracts/evidence-pack.md`, `contracts/evidence-pack.schema.json` | Observability (with Scoring) | Judges and staff | Sanitized, integrity-checked finding export |
 | Infrastructure evidence | `contracts/evidence-pack.md`, `contracts/infrastructure-evidence.schema.json` | Observability | Staff | Verified infrastructure records selected by resource, time and event ID |
-| AI API | `contracts/ai-api/openapi.yaml` | AI Track | AI cells | Endpoints, authentication, limits |
+| AI API | `contracts/ai-api/openapi.yaml` (v1.3), integration in `docs/ai-integration.md`, hosting in `docs/platform-vm.md` | AI Track | AI teams, Observability (`/ingest`), website (marks) | Endpoints, authentication, limits; how the AI VM talks to OBS, the website and the teams |
+| Scoring observations and actions | `contracts/ai-api/scoring-openapi.yaml` (v2), rollout in `runbooks/observability.md` | AI Track, Observability, Platform, Scoring | AI producers, independent verifiers, scoring collector | Additive `/api/v1/scoring` protocol for scoped actions and authenticated evidence; the website owns marks |
+| AI teams | `scripts/ai-teams.yaml` (imported from the website's `allocation.csv`) | AI Track | AI API, Network (WireGuard ranges), Scoring | The 3 AI Blue and 6 AI Red teams, their website `team_id` and pairings |
+| OBS → AI sink | `ai-api/deploy/vector-ai-sink.yaml` (rendered by `render-vector-ai-sink.py`) | AI Track (with Observability) | Observability's Vector | How normalized telemetry reaches the AI VM |
 | Detect-to-respond handoff | `contracts/handoff.schema.json` | AI Track | AI cells | What a detection cell hands the response cell |
 | Address plan | `contracts/address-plan.md` | Network & Access | Everyone | Networks, address ranges, hostnames |
 | Red scope | `contracts/scope-assignments.example.csv` | Engagement & Operations | Security, Application Platform, marshals | Which Red team may attack which cell |
@@ -22,6 +25,19 @@ A contract is the agreement between two areas. Everything else is an implementat
 
 **Rule:** if your change breaks one of these, it is not your change to make alone.
 
+The AI API remains AI-owned. Its all-estate scope, authentication and the
+ingestion endpoint OBS posts to are defined in `contracts/ai-api/openapi.yaml`
+and `docs/ai-integration.md` (proposed, awaiting OBS and NET confirmation).
 The AI API remains AI-owned. Its all-estate scope and authentication must be
 agreed by that owner before implementation; Observability does not create a
-replacement ingestion endpoint.
+replacement ingestion endpoint. In scoring mode the AIC facade preserves v1
+reads, rejects legacy shadow writes and marks publication, and forwards the
+separate scoring protocol to its private loopback gateway. A missing backend
+is an explicit failure. It never selects the legacy scorer as a fallback.
+
+Application ingress allowlists are updated from imported platform exports
+using [`runbooks/application-scope.md`](../runbooks/application-scope.md).
+For competition day resets, the platform lifecycle command is authoritative:
+it restores frozen image digests and seed data, then calls the scope updater.
+The legacy infrastructure `reset-cell.sh` Helm-revision workflow is not the
+competition reset path.

@@ -181,6 +181,10 @@ class Handler(BaseHTTPRequestHandler):
                     gateway.authority.load(gateway.clock())
                     self.respond(200, {"identity": "fresh", "last_actuator_sync": gateway.store.meta("last_actuator_sync"),
                                        "actuator_error": gateway.store.meta("actuator_error")})
+                elif path == "/api/v1/kill-switch":
+                    if query:
+                        raise Rejected("unknown_query_parameter")
+                    self.respond(200, gateway.kill_switch_status(principal))
                 else:
                     raise Rejected("not_found", 404)
             else:

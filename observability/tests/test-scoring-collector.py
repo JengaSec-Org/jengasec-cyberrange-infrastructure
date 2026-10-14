@@ -402,12 +402,15 @@ class CollectorRecoveryTests(unittest.TestCase):
                     def read(path):
                         query = urllib.parse.parse_qs(urllib.parse.urlsplit(path).query)
                         sizes.append(int(query["limit"][0]))
+                        if source == "ai":
+                            self.assertEqual(urllib.parse.urlsplit(path).path, "/api/v1/scoring/receipts")
                         self.assertEqual(query["after"], ["cursor" if source == "ai" else "3"])
                         if sizes[-1] > 1:
                             raise error
                         return 200, page
                     collector = Collector.__new__(Collector)
                     collector.competition, collector.cache = 7, Mock()
+                    collector.ai_prefix = "/api/v1/scoring"
                     collector.cache.cursor.return_value = 3
                     collector.platform = collector.ai_client = Mock(call=read)
                     if source == "platform":
@@ -420,6 +423,15 @@ class CollectorRecoveryTests(unittest.TestCase):
                     with self.assertRaises(type(error)):
                         collector._ai_rows("cursor", 1)
                     collector.ai_client.call.assert_called_once()
+
+    def test_ack_uses_the_same_explicit_facade_or_private_backend_prefix(self):
+        for prefix in ("/api/v1/scoring", "/api/v1"):
+            collector = Collector.__new__(Collector)
+            collector.ai_prefix = prefix
+            collector.ai_client = Mock()
+            collector.ai_client.call.return_value = (200, {})
+            collector._ai_ack("durably-retained-cursor")
+            collector.ai_client.call.assert_called_once_with(prefix + "/receipts/ack", {"cursor": "durably-retained-cursor"})
 
     def test_readonly_check_runs_while_daemon_holds_its_lock(self):
         with tempfile.TemporaryDirectory() as directory:

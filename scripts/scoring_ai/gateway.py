@@ -246,3 +246,8 @@ class Gateway:
         result = self.actuator.call("kill-switch", enabled=enabled)
         self.synchronize()
         return result
+
+    def kill_switch_status(self, principal):
+        if principal["kind"] != "operator":
+            raise Rejected("forbidden", 403)
+        return self.actuator.call("kill-switch-status")

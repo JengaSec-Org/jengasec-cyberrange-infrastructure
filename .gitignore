@@ -17,3 +17,7 @@ __pycache__/
 out/
 .venv-contracts/
 observability/.runtime/
+
+# AI API local state
+ai-api/tokens.yaml
+ai-api/*.db

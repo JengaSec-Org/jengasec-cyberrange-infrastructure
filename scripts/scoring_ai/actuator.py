@@ -338,6 +338,10 @@ class Actuator:
         if operation == "revert":
             return self.revert(request["token"], request.get("action_id"))
         principal = self.tokens.authenticate(request["token"], ("operator",))
+        if operation == "kill-switch-status":
+            with self.store.execution_lock():
+                return {"kill_switch": self.store.meta("kill_switch") == "on",
+                        "unresolved_actions": len(self.store.pending_actions())}
         if operation in ("reconcile", "kill-switch"):
             if operation == "kill-switch":
                 if type(request.get("enabled")) is not bool:

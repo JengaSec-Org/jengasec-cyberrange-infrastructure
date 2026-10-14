@@ -79,6 +79,7 @@ class Collector:
         if config.get("ai_gateway"):
             from scoring_ai.platform_bridge import PlatformBridge
             ai = config["ai_gateway"]
+            self.ai_prefix = ai.get("api_prefix", "/api/v1/scoring")
             self.ai_client = Client(ai["url"], {"Authorization": "Bearer " + secret(ai["operator_token_file"])},
                                     loopback_http=config.get("allow_loopback_http", False), timeout=5)
             if any(row["producer_id"] not in self.producers for row in ai["producer_map"]):
@@ -87,7 +88,7 @@ class Collector:
                                             ai["producer_map"], self.cache.retain_proof, acknowledge=self._ai_ack)
 
     def _ai_ack(self, cursor):
-        status, _ = self.ai_client.call("/api/v1/receipts/ack", {"cursor": cursor})
+        status, _ = self.ai_client.call(self.ai_prefix + "/receipts/ack", {"cursor": cursor})
         if status != 200:
             raise Invalid("ai_acknowledgement_failed")
 
@@ -97,7 +98,7 @@ class Collector:
             if cursor:
                 parameters["after"] = cursor
             try:
-                status, page = self.ai_client.call("/api/v1/receipts?" + urllib.parse.urlencode(parameters))
+                status, page = self.ai_client.call(self.ai_prefix + "/receipts?" + urllib.parse.urlencode(parameters))
             except (Failure, Invalid) as error:
                 large = (isinstance(error, Failure) and error.code == 413) or (isinstance(error, Invalid) and str(error) == "body_too_large")
                 if large and limit > 1:

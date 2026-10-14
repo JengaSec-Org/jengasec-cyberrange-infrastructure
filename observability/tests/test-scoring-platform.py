@@ -92,21 +92,32 @@ class ScoringPlatformIntegration(TestCase):
         if ipaddress.ip_address(address).is_loopback:
             self.skipTest("The combined source-identity fixture requires an assigned local address.")
         for team in (self.app, self.peer, self.ai):
-            server = self.server(address)
-            self.servers[team.pk] = server
+            target_address, port = address, 8080
+            if team == self.peer:
+                # The paired remote workload is represented by registered
+                # observer receipts. No traffic is sent to this fixture IP.
+                target_address = "192.0.2.10" if address != "192.0.2.10" else "192.0.2.11"
+            else:
+                server = self.server(address)
+                self.servers[team.pk] = server
+                port = server.server_port
+            if team.track == "application":
+                team.service_ip = target_address
+                team.save(update_fields=["service_ip", "updated_at"])
             target = RangeApplication.objects.create(competition=self.competition, team=team,
                 application_instance_id=f"ENT-{team.enterprise.upper()}/{team.cell_id}",
                 enterprise=f"ENT-{team.enterprise.upper()}", application=team.cell_id,
-                namespace=team.namespace, service_name="Local fixture", ip_address=address,
-                port=server.server_port, status="live", image_digest="sha256:" + hashlib.sha256(str(team.pk).encode()).hexdigest(),
+                namespace=team.namespace, service_name="Local fixture", ip_address=target_address,
+                port=port, status="live", image_digest="sha256:" + hashlib.sha256(str(team.pk).encode()).hexdigest(),
                 verified_at=self.zero)
             self.targets[team.pk] = target
             if team.track == "application":
                 submission = AppSubmission.objects.create(competition=self.competition, team=team,
-                    attempt=1, image_reference="registry.invalid/fixture:v1", registry_username="fixture", port=server.server_port)
+                    attempt=1, image_reference="registry.invalid/fixture:v1", registry_username="fixture", port=port)
                 deployment_service.record_status(submission, "healthy", resolved_digest=target.image_digest)
+                deployment_service.record_freeze(submission, "registry.invalid/frozen@" + target.image_digest)
+                deployment_service.record_artifact(submission, target.image_digest)
                 self.submissions.append(submission)
-        deployment_service.freeze(self.competition)
         for index, (actor, defender) in enumerate(((self.app_red, self.app), (self.ai_red, self.ai)), 1):
             WireGuardProfile.objects.create(user=actor.captain, team=actor, address=f"10.60.{index}.2/32")
             TargetAssignment.objects.create(competition=self.competition, red_team=actor, target_team=defender, is_active=True)
@@ -133,7 +144,7 @@ class ScoringPlatformIntegration(TestCase):
             token_path.write_text(self.tokens[alias])
             token_path.chmod(0o600)
             self.config["producers"][alias] = {"id": str(producer.producer_id), "token_file": str(token_path)}
-        for team in (self.app, self.peer):
+        for team in (self.app,):
             self.config["probes"][self.targets[team.pk].application_instance_id] = {
                 "producer": "verifier", "health_path": "/healthz", "functional_path": "/functional",
                 "assertions": [{"path": ["serving"], "equals": True}]}
@@ -229,7 +240,11 @@ class ScoringPlatformIntegration(TestCase):
             with patch("scoring_obs.cli.clock_uncertainty_ms", return_value=1):
                 self.collector.probe(now=self.start + dt.timedelta(seconds=offset))
         self.clock.return_value = self.end
-        self.assertEqual(deliver(self.collector.outbox, self.collector.platform, producer=self.collector.producers), 8)
+        self.assertEqual(deliver(self.collector.outbox, self.collector.platform, producer=self.collector.producers), 4)
+        peer_target = self.targets[self.peer.pk]
+        for offset in (0, 15, 30, 45):
+            self.send("verifier", "probe", {"successful": True, "expected": 1, "completed": 1,
+                      "target_digest": peer_target.image_digest}, target=peer_target, offset=offset)
         for case in self.cases:
             self.send("runner", "delivered", {"delivered": True}, case=case, offset=1)
         for case in (self.app_case, self.peer_case):

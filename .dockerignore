@@ -1,0 +1,9 @@
+# Applies to images built from the repository root (ai-api/Dockerfile).
+.git
+**/__pycache__
+**/*.pyc
+**/.venv
+**/venv
+**/*.db
+ai-api/tokens.yaml
+scenarios/*/answer-key.yaml

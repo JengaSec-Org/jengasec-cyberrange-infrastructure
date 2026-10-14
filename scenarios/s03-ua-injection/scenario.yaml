@@ -1,0 +1,22 @@
+id: s03
+name: ua-injection
+enterprise: ENT-A
+application: APP01       # namespace jengasec-ent-a-app01
+summary: >-
+  A Red team probes the Internet Banking Portal with injection strings hidden in the User-Agent
+  header (SQL injection, a JNDI lookup string, Shellshock) and a scanner signature. The app rejects
+  most of them; one search request then causes a 500 error, the sign that input reached the
+  database. Normal customers browse the portal at the same time.
+attack_ids:
+  - T1190                   # exploit public-facing application
+  - T1595.002               # active scanning: vulnerability scanning
+duration_minutes: 10
+expected_detections:
+  - "http_request events whose user_agent holds SQL or JNDI payloads, or a scanner name (sqlmap)"
+  - "input_rejected events from the app for the same source address"
+  - "a 500 on /search from that address straight after the injection attempts"
+expected_responses:
+  - "alert with the injection requests and the 500 as evidence"
+  - "block-ip 10.60.1.9 on ENT-A APP01 (shadow mode) or rate-limit it"
+unacceptable_responses:
+  - "isolate-workload on ENT-A APP01 for a probe that did not succeed"

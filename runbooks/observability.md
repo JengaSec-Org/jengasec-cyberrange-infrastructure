@@ -448,7 +448,9 @@ For native proof, configure the existing private Loki endpoint and its staff
 headers file. List the infrastructure resources that the collector may cite.
 For AI receipts, configure `ai_gateway.url`, its operator credential file and
 an exact producer map from team, source ID and role to the platform producer
-UUID. The bridge retains complete native and embedded effect proof before
+UUID. Use the AIC service's HTTPS origin. `ai_gateway.api_prefix` defaults to
+`/api/v1/scoring`; select `/api/v1` only for an explicit private backend
+connection. The bridge retains complete native and embedded effect proof before
 queueing normalized receipts and acknowledging the gateway cursor. A missing
 mapping for an issued case holds that cursor. Unscheduled action audit records
 stay non-scoring records.
@@ -472,9 +474,41 @@ warning disappear. A missing source receipt or archive must remain a hold.
 Use `ansible/scoring-ai.yml` for the separately selected gateway, actuator or
 effect-probe role. The gateway requires an existing unprivileged account and
 group with the reviewed file access; the role does not create identities or
-change memberships. Include its location snippet in the existing TLS virtual
-host. Configure a fixed authenticated command to the actuator and a separate
-fixed command to the effect verifier.
+change memberships. Its defaults are `/opt/jengasec-scoring-ai`,
+`/etc/jengasec-scoring-ai` and `/var/lib/jengasec-scoring-ai`, with unit
+`jengasec-scoring-ai.service`. These are separate from the AIC service's
+`jengasec-ai` directories. The gateway listens only on `127.0.0.1`; it creates
+no public nginx location. Configure a fixed authenticated command to the
+actuator and a separate fixed command to the effect verifier.
+
+Install the private gateway on the same host as the AIC service, with reviewed
+read access to its configured OBS telemetry spool and current identity. The
+facade does not copy the AIC event database into that spool.
+The existing AIC service is the only public facade. Set its `SCORING_MODE=1`,
+`SANDBOX_SEED=0`, and `SCORING_GATEWAY_PORT` to the gateway's `listen_port`
+(default 9681). `SCORING_GATEWAY_TIMEOUT_SECONDS` defaults to 35, with a
+maximum of 60 seconds. Public `/api/v1/scoring/*` requests reach private
+`/api/v1/*` paths. The facade preserves the original bearer and request bytes.
+Register each producer's token hash, canonical identity and role in the
+gateway's protected configuration. Existing v1 reads retain their contract.
+Legacy decision, action and revert writes return 409 in scoring mode; callers
+must supply the scoring protocol's provenance. Backend failures never record
+a shadow replacement.
+
+The operator must clear the AIC service's legacy website feed credentials and
+disable `jengasec-ai-marks.timer`. The installer disables the timer in scoring
+mode; it does not rewrite existing credentials. The publisher also refuses
+publication. Use a reviewed database without sandbox
+events; explicit sandbox seeding prevents scoring-mode startup. The existing
+AIC `ADMIN_TOKEN` must also be registered as a gateway operator for
+`/admin/kill-switch` to work. The original staff token reaches the gateway;
+the facade supplies no privileged replacement token. GET reads real actuator
+state and POST must confirm actual revocation. Failed or pending recovery is
+an error, not a change to an independent flag.
+
+`snapshot-evidence` archives selected telemetry evidence. It is not a VM or
+application snapshot. Revert removes an actuator-owned block lease and checks
+functional recovery; workload restoration remains unsupported.
 
 Deploy `ansible/scoring-ai-identity.yml` on each selected gateway and actuator
 host before enabling actions. Set the website's

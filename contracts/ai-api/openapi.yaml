@@ -1,404 +1,252 @@
 openapi: 3.1.0
 info:
   title: JengaSec AI API
-  version: 2.0.0
-  description: >-
-    Authenticated observations and real bounded competition actions. The website
-    owns scores. This version replaces the shadow-only action contract. Teams
-    supply their own AI competitors. Callers must inspect action state after 202.
+  version: 1.3.0
+  description: >
+    Telemetry for the AI track, and a gateway for permitted actions (Competition Architecture §3, §15).
+    Event one runs the gateway in shadow mode: every action is authorised, recorded and scored,
+    but only `alert` takes effect.
+
+    Two roles, one token per team (scripts/ai-teams.yaml).
+    AI Blue (AI-01…AI-03) reads every event for all 18 applications, posts decisions and requests actions.
+    AI Red (RI-01…RI-06) reads only events about its own traffic and the baseline alerts that traffic
+    triggered; it cannot post decisions or actions (403) — its output is traffic.
+
+    Events are telemetry contract v2 (telemetry-event.schema.json), produced and attributed by Observability:
+    `actor.team_id` / `actor.team_label` come from the platform's ip_allocations and are the ground truth.
+    AI Red's view is every event whose `actor.team_id` is its own team's.
+
+    v1.1 added `/ingest`, `/healthz` and the shapes. v1.2 moved to per-team tokens and the AI Red view.
+    v1.3 serves telemetry v2 (ENT-A/APP01/namespace identifiers), accepts NDJSON on `/ingest`, and runs on
+    the platform VM 101 next to the website (docs/platform-vm.md). Owner: AIC. Implementation: `ai-api/`.
 servers:
-  - url: /api/v1
+  - url: https://10.109.0.10:8443/api/v1
+    description: platform VM 101 on the Functions VLAN, for AI teams over WireGuard (once VLAN 109 is live)
+  - url: https://192.168.40.11:8443/api/v1
+    description: platform VM 101 on the VM network, for Observability's Vector and staff
+  - url: https://ai.range.jengasec.lan:8443/api/v1
 security:
-  - cellToken: []
-x-owners: [AI, Observability, Platform, Scoring]
-x-identity: >-
-  Gateway and executor independently read scoring-identity/2.0. Snapshots expire
-  within 120 seconds. Targets require canonical ownership, verified frozen
-  digest, exact IP/protocol/port, allocated traffic source and active action
-  scope. source_cidr identifies traffic that may be blocked, not the caller's
-  address. Unknown, stale or overlapping identity prevents execution.
-x-execution: >-
-  block-ip installs only a timed drop for the source/target/protocol/port tuple
-  in a dedicated nft table. It does not alter the provisioning guard chain.
-  Limits are one active block per team/target, five new actions per minute and
-  thirty per hour. Requested TTL is 10 to 60 seconds, shortened by assignment
-  and competition expiry. The kernel enforces expiry if workers stop. A trusted
-  probe must show functional traffic from both selected and control sources
-  before execution, then failure only from the selected source afterward.
-  Failed verification, interrupted work, stale authority and kill switch cause
-  reversal. Recovery is checked before a reverted receipt is issued. Missing
-  rules after a rebuild are not silently replayed.
-x-privacy: >-
-  No tokens, prompts, raw response bodies or free-text model rationale are
-  stored. Decisions use rationale codes and typed evidence IDs. Reads expose
-  only assigned targets. Telemetry is an ai-telemetry/1.0 safe projection with
-  source_schema_version, source_integrity_hash and its own integrity_hash.
-  Infrastructure references remain staff-only. SHA-256 detects changed content;
-  authenticated producers and transport establish origin, not the hash itself.
-x-operations: >-
-  scripts/run-scoring-ai.py serve binds loopback behind the existing TLS nginx
-  ingress. The actuator subcommand runs via a fixed SSH forced command and reads
-  credentials from stdin, its own token file and its own fresh snapshot. The
-  probe subcommand runs on a trusted host or namespace owning the selected and
-  control source IPs. It runs source-bound HTTP checks against private frozen
-  configuration, never participant-supplied commands or URLs. Probe results,
-  assertion inputs and content hashes travel inside action receipts. Deployment
-  needs reviewed host keys, narrow SSH access, fresh identity delivery, existing
-  Vector spool read access, private state and evidence storage. Source
-  installation does not install accounts, keys or mutate a firewall.
-x-state: >-
-  SQLite stores leases, producer sequences and delivery receipts, never marks.
-  Each store is bounded to 64 MiB and 50000 receipts and rejects new work when
-  full. Gateway reconnects import actuator receipts without changing IDs and
-  acknowledge the durable replica. Operator export acknowledgement removes
-  delivered journal rows while preserving current protocol state and action
-  retry keys. Older cursors fail explicitly. Operators retain complete proofs
-  before acknowledgement. Local snapshots and probe evidence each have a 64 MiB
-  ceiling and require owner-managed archival cleanup. This does not extend raw
-  telemetry retention.
-x-platform-bridge: >-
-  scoring_ai.platform_bridge.PlatformBridge reads operator receipt pages,
-  validates their hashes and competition, retains complete proof through the
-  collector callback, and queues deterministic UUID receipts using each
-  configured platform producer. Only after all queue writes and the page cursor
-  are durable may its acknowledgement callback call /receipts/ack. Unscheduled
-  activity is explicitly audit-only, retained without inventing a scenario.
-  Missing mappings for real scoring cases hold the page cursor. Source health
-  starts at the first actual observation; two registered-epoch sequence reports
-  describe delivery coverage and cumulative gap_count, not inferred app uptime.
+  - teamToken: []
 components:
   securitySchemes:
-    cellToken:
+    teamToken:
       type: http
       scheme: bearer
-      description: >-
-        A random per-producer token, bound to canonical team, cell, producer kind
-        and epoch. An owner-only token file stores SHA-256 hashes. Competitors
-        cannot use observer or operator grants. Requests are limited to 120/min.
+      description: One token per AI team, published on the team's page on the website. Never share it.
+    ingestToken:
+      type: http
+      scheme: bearer
+      description: Held only by the observability collector (Vector). Cannot read anything.
   parameters:
-    Limit:
-      name: limit
-      in: query
-      schema: {type: integer, minimum: 1, maximum: 1000, default: 200}
-    Cursor:
-      name: cursor
-      in: query
-      schema: {type: string, maxLength: 2048}
-      description: Opaque cursor bound to the team and endpoint.
-    ActionId:
-      name: id
+    actionType:
+      name: type
       in: path
       required: true
-      schema: {type: string, pattern: '^aia_[a-f0-9]{64}$'}
+      schema:
+        enum: [alert, block-ip, revoke-session, disable-account, rate-limit, isolate-workload, snapshot-evidence]
+  responses:
+    Unauthorised: { description: Missing or unknown token }
+    RateLimited: { description: Over your rate limit — back off }
+    Halted: { description: The gateway kill switch is on; the request was recorded but not accepted }
   schemas:
-    EvidenceRef:
+    Event:
+      $ref: "../telemetry-event.schema.json"
+    Asset:
       type: object
-      additionalProperties: false
-      required: [family, id]
+      required: [asset_id, enterprise, application, namespace, ip, enabled]
+      description: One application instance, from scripts/cells.yaml
       properties:
-        family: {enum: [application, infrastructure, ai, scenario]}
-        id: {type: string, maxLength: 128}
-      description: >-
-        evt_ IDs are application evidence, infra_ staff infrastructure, air_ AI,
-        and scenario IDs are platform-issued. Families cannot be interchanged.
-    Receipt:
+        asset_id: { type: string, description: "<namespace>/app, the value telemetry uses in `asset`" }
+        enterprise: { enum: [ENT-A, ENT-B] }
+        application: { type: string, pattern: "^APP0[1-9]$" }
+        namespace: { type: string, pattern: "^jengasec-ent-(a|b)-app0[1-9]$" }
+        ip: { type: string, description: Reserved VLAN 108 address }
+        service: { type: string }
+        optional: { type: boolean }
+        enabled: { type: boolean }
+    EventPage:
       type: object
-      required: [schema_version, receipt_id, source_id, sequence, kind, occurred_at,
-                 received_at, competition, team_id, target_id, assignment_id,
-                 assignment_revision, case_id, payload, integrity_hash]
+      required: [events, next_cursor, has_more]
       properties:
-        schema_version: {const: ai-receipt/1.0}
-        receipt_id: {type: string, pattern: '^air_[a-f0-9]{64}$'}
-        source_id: {type: string, maxLength: 128}
-        sequence: {type: integer, minimum: 1}
-        kind: {enum: [action, decision, source_health, runtime_check]}
-        occurred_at: {type: string, format: date-time}
-        received_at: {type: string, format: date-time}
-        competition: {type: [integer, 'null']}
-        team_id: {type: string}
-        target_id: {type: [string, 'null']}
-        assignment_id: {type: [string, 'null']}
-        assignment_revision: {type: [integer, 'null']}
-        case_id: {type: [string, 'null']}
-        payload: {type: object}
-        integrity_hash: {type: string, pattern: '^sha256:[a-f0-9]{64}$'}
-      description: >-
-        Source sequence is immutable; export cursors are separate. Hashes use
-        sorted-key compact ASCII JSON. receipt_id hashes the body without ID or
-        integrity_hash; integrity_hash includes the ID. Rejections have null
-        assignment fields and are not verified scoring facts.
-    Observation:
+        events: { type: array, items: { $ref: "#/components/schemas/Event" } }
+        next_cursor:
+          type: string
+          description: Pass back as `cursor` to continue from here. Always present, so you can keep polling after you catch up.
+        has_more:
+          type: boolean
+          description: true = more events are waiting now; false = you have caught up, poll again in a few seconds
+    IngestResult:
       type: object
-      required: [epoch, source_sequence, occurred_at, target_id, case_id]
+      required: [accepted, rejected]
       properties:
-        epoch: {type: string, maxLength: 128}
-        source_sequence: {type: integer, minimum: 1}
-        occurred_at: {type: string, format: date-time}
-        target_id: {type: string, maxLength: 128}
-        case_id: {type: string, maxLength: 128}
-      description: >-
-        Token configuration fixes epoch. Sequence gaps are retained; stale and
-        conflicting sequences fail. Identical latest retries are idempotent.
-        Delivery may be at most 120 seconds old or two seconds in the future.
+        accepted: { type: integer, description: Events stored (duplicates by event_id count as accepted) }
+        rejected:
+          type: array
+          items:
+            type: object
+            required: [index, error]
+            properties:
+              index: { type: integer, description: Position in the posted array }
+              error: { type: string }
+    Alert:
+      type: object
+      required: [alert_id, ts, enterprise, application, namespace, rule, severity, evidence]
+      properties:
+        alert_id: { type: string }
+        ts: { type: string, format: date-time }
+        enterprise: { enum: [ENT-A, ENT-B] }
+        application: { type: string }
+        namespace: { type: string }
+        rule: { type: string, description: "Baseline rule name, e.g. auth_failure_burst" }
+        severity: { enum: [low, medium, high, critical] }
+        summary: { type: string }
+        evidence: { type: array, items: { type: string }, description: telemetry event_id values }
+    ActionRequest:
+      type: object
+      required: [target, justification]
+      properties:
+        target:
+          type: object
+          required: [namespace]
+          properties:
+            namespace: { type: string, pattern: "^jengasec-ent-(a|b)-app0[1-9]$" }
+            ip: { type: string, description: The sender you act on; acting on a non-Red sender counts as a false action }
+            user_id: { type: string }
+            session: { type: string }
+        parameters: { type: object }
+        justification: { type: string, minLength: 1, description: Why — judges read this }
+        incident_id: { type: string }
+        evidence: { type: array, items: { type: string } }
+    ActionRecord:
+      type: object
+      required: [action_id, type, status, effective]
+      properties:
+        action_id: { type: string }
+        type: { type: string }
+        status: { enum: [recorded, halted, reverted] }
+        effective: { type: boolean, description: Only `alert` is true in event one (shadow mode) }
+        budget_remaining: { type: integer }
     Decision:
-      allOf:
-        - {$ref: '#/components/schemas/Observation'}
-        - type: object
-          required: [classification, incident_id, rationale_code, evidence_refs,
-                     action_id, clock_uncertainty_seconds]
-          properties:
-            classification: {enum: [attack, legitimate, abstain]}
-            incident_id: {type: string, maxLength: 128}
-            rationale_code:
-              enum: [signature_match, model_anomaly, correlated_activity,
-                     known_legitimate, insufficient_evidence, policy_response]
-            evidence_refs:
-              type: array
-              maxItems: 32
-              items: {$ref: '#/components/schemas/EvidenceRef'}
-            action_id: {type: [string, 'null'], pattern: '^aia_[a-f0-9]{64}$'}
-            clock_uncertainty_seconds: {type: number, minimum: 0, maximum: 86400}
-      unevaluatedProperties: false
-    SourceHealth:
-      allOf:
-        - {$ref: '#/components/schemas/Observation'}
-        - type: object
-          required: [healthy, gap_count, clock_uncertainty_seconds]
-          properties:
-            healthy: {type: boolean}
-            gap_count: {type: integer, minimum: 0}
-            clock_uncertainty_seconds: {type: number, minimum: 0, maximum: 86400}
-      unevaluatedProperties: false
-    RuntimeCheck:
-      allOf:
-        - {$ref: '#/components/schemas/Observation'}
-        - type: object
-          required: [check, passed, evidence_refs]
-          properties:
-            check: {enum: [deterministic, model, combined, fallback, scope, budget, reversal, kill_switch]}
-            passed: {type: boolean}
-            evidence_refs:
-              type: array
-              minItems: 1
-              maxItems: 32
-              items: {$ref: '#/components/schemas/EvidenceRef'}
-      unevaluatedProperties: false
-    BlockRequest:
       type: object
-      additionalProperties: false
-      required: [key, case_id, target_id, source_ip, ttl_seconds]
+      required: [incident_id, summary, confidence, evidence]
       properties:
-        key: {type: string, minLength: 1, maxLength: 128}
-        case_id: {type: string, maxLength: 128}
-        target_id: {type: string, maxLength: 128}
-        source_ip: {type: string}
-        ttl_seconds: {type: integer, minimum: 10, maximum: 60}
-        decision_id: {type: string, pattern: '^air_[a-f0-9]{64}$'}
-        evidence_refs:
-          type: array
-          maxItems: 32
-          items: {$ref: '#/components/schemas/EvidenceRef'}
-    SimpleAction:
+        incident_id: { type: string }
+        summary: { type: string, description: What you concluded and why, in plain words }
+        attack_mapping: { type: array, items: { type: string } }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        severity: { enum: [low, medium, high, critical] }
+        evidence: { type: array, minItems: 1, items: { type: string }, description: telemetry event_id values }
+        actions: { type: array, items: { type: string }, description: action_id values this decision led to }
+        handoff:
+          $ref: "../handoff.schema.json"
+    DecisionRecord:
       type: object
-      additionalProperties: false
-      required: [key, case_id, target_id, evidence_refs]
+      required: [decision_id, ts]
       properties:
-        key: {type: string, minLength: 1, maxLength: 128}
-        case_id: {type: string, maxLength: 128}
-        target_id: {type: string, maxLength: 128}
-        evidence_refs:
-          type: array
-          maxItems: 32
-          items: {$ref: '#/components/schemas/EvidenceRef'}
-    ActionResult:
-      type: object
-      properties:
-        action_id: {type: string, pattern: '^aia_[a-f0-9]{64}$'}
-        state: {enum: [requested, authorized, executed, verified, reverted, revert_failed, failed, rejected]}
-        lease_expires_at: {type: string, format: date-time}
-        receipts:
-          type: array
-          items: {$ref: '#/components/schemas/Receipt'}
+        decision_id: { type: string }
+        ts: { type: string, format: date-time }
 paths:
-  /capabilities:
+  /healthz:
     get:
-      summary: Read supported capabilities, explicit unsupported actions and limits
+      summary: Liveness check
+      security: []
       responses:
-        '200': {description: 'Implemented actions and limits; shadow is false'}
+        "200": { description: ok }
   /telemetry/events:
     get:
-      summary: Read safe projections for canonically assigned targets
+      summary: Page through events (AI Blue - everything; AI Red - your own traffic only)
       parameters:
-        - {name: since, in: query, schema: {type: string, format: date-time}}
-        - {$ref: '#/components/parameters/Cursor'}
-        - {$ref: '#/components/parameters/Limit'}
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } }
       responses:
-        '200': {description: 'events, next_cursor and coverage with invalid-record count'}
-        '410': {description: Cursor expired or source truncated; report a collection gap}
-        '503': {description: Authority or spool unavailable}
+        "200":
+          description: Events and a next cursor
+          content: { application/json: { schema: { $ref: "#/components/schemas/EventPage" } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }
+        "429": { $ref: "#/components/responses/RateLimited" }
   /telemetry/stream:
     get:
-      summary: Read bounded SSE batches with the same scope and resumable cursor
+      summary: Server-sent events, same shape, live
+      description: Each `data:` line is one Event. A comment line is sent every 15 seconds to keep the connection open.
       parameters:
-        - {name: since, in: query, schema: {type: string, format: date-time}}
-        - {$ref: '#/components/parameters/Cursor'}
-        - {$ref: '#/components/parameters/Limit'}
+        - { name: cursor, in: query, schema: { type: string }, description: Start after this cursor; default is now }
       responses:
-        '200': {description: 'Telemetry events, a cursor event, then connection close'}
+        "200": { description: text/event-stream }
+        "401": { $ref: "#/components/responses/Unauthorised" }
   /assets:
     get:
-      summary: Read canonical targets and permitted capabilities
+      summary: The applications in both enterprises (cells, reserved IPs, ports, services)
       responses:
-        '200': {description: Scoped asset inventory without participant credentials}
+        "200":
+          description: Asset inventory
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Asset" } } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }
   /alerts:
     get:
-      summary: Read scoped central IDS alerts separately from team detections
-      parameters:
-        - {name: since, in: query, schema: {type: string, format: date-time}}
-        - {$ref: '#/components/parameters/Cursor'}
-        - {$ref: '#/components/parameters/Limit'}
+      summary: Platform baseline alerts (AI Red - only those your traffic triggered, evidence trimmed to yours)
       responses:
-        '200': {description: Baseline alerts and coverage}
+        "200":
+          description: Alerts
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Alert" } } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }
   /actions/{type}:
     post:
-      summary: Request an implemented real action
+      summary: Request an action (shadow mode in event one)
       parameters:
-        - name: type
-          in: path
-          required: true
-          schema:
-            enum: [alert, block-ip, snapshot-evidence, revoke-session, disable-account, rate-limit, isolate-workload]
+        - $ref: "#/components/parameters/actionType"
       requestBody:
         required: true
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - {$ref: '#/components/schemas/BlockRequest'}
-                - {$ref: '#/components/schemas/SimpleAction'}
+        content: { application/json: { schema: { $ref: "#/components/schemas/ActionRequest" } } }
       responses:
-        '202':
-          description: >-
-            Actual state and receipts. alert publishes a durable team alert.
-            snapshot-evidence archives requested application projections; missing
-            evidence returns a failed state. 202 does not prove execution.
-          content:
-            application/json:
-              schema: {$ref: '#/components/schemas/ActionResult'}
-        '403': {description: Scope denied or kill switch active}
-        '409': {description: Conflicting retry or insufficient lease window}
-        '422': {description: Action has no implemented executor}
-        '429': {description: Action or request budget exhausted}
-        '503': {description: Authority, durable state, evidence or executor unavailable}
-  /actions/{id}:
-    get:
-      summary: Read an action owned by your team
-      parameters:
-        - {$ref: '#/components/parameters/ActionId'}
-      responses:
-        '200': {description: Current state and durable receipts}
-        '404': {description: Unknown action or another team's action}
+        "202":
+          description: Recorded, with an action_id
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActionRecord" } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }
+        "403": { description: Not an application in the range, over budget, or an AI Red token }
+        "423": { $ref: "#/components/responses/Halted" }
   /actions/{id}/revert:
     post:
-      summary: Remove your block and independently verify recovery
+      summary: Undo an action you requested
       parameters:
-        - {$ref: '#/components/parameters/ActionId'}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {type: object, additionalProperties: false}
+        - { name: id, in: path, required: true, schema: { type: string } }
       responses:
-        '200': {description: Reverted or explicit recovery failure state}
-        '404': {description: Unknown action or another team's action}
+        "202":
+          description: Recorded
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActionRecord" } } }
+        "403": { description: Not your action, or an AI Red token }
+        "404": { description: No such action }
   /decisions:
     post:
-      summary: Publish a competitor observation without awarding marks
+      summary: Publish a decision-log entry (this is what judges score)
       requestBody:
         required: true
-        content:
-          application/json:
-            schema: {$ref: '#/components/schemas/Decision'}
+        content: { application/json: { schema: { $ref: "#/components/schemas/Decision" } } }
       responses:
-        '201': {description: Durable authenticated producer receipt}
-        '200': {description: Identical latest sequence retry}
-        '409': {description: Stale or conflicting sequence, unregistered epoch or late delivery}
-  /source-health:
+        "201":
+          description: Stored
+          content: { application/json: { schema: { $ref: "#/components/schemas/DecisionRecord" } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }
+        "403": { description: AI Red token }
+        "422": { description: Evidence refers to an unknown event_id, or the body is malformed }
+  /ingest:
     post:
-      summary: Publish coverage from a separately authenticated trusted observer
+      summary: Collector only — post normalised telemetry events
+      description: >
+        Observability's Vector posts batches here over the Functions VLAN (docs/ai-integration.md). Each item is
+        validated against telemetry-event.schema.json (v2) on its own; bad items are rejected and reported,
+        good items are stored. Re-posting an event_id is a no-op, so Vector retries are safe.
+      security:
+        - ingestToken: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: {$ref: '#/components/schemas/SourceHealth'}
+            schema: { type: array, maxItems: 5000, items: { $ref: "#/components/schemas/Event" } }
+          application/x-ndjson:
+            schema: { type: string, description: One Event per line (Vector framing newline_delimited) }
       responses:
-        '201': {description: Source loss and clock uncertainty receipt}
-        '403': {description: Competitors cannot certify source health}
-  /runtime-checks:
-    post:
-      summary: Publish an evidence-linked assertion from its registered observer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: '#/components/schemas/RuntimeCheck'}
-      responses:
-        '201': {description: Check receipt; scoring verifies the frozen scenario}
-        '403': {description: Unregistered observer or check permission}
-  /receipts:
-    get:
-      summary: Export own receipts; operator tokens can export all teams
-      parameters:
-        - {name: after, in: query, schema: {type: string, maxLength: 2048}}
-        - {$ref: '#/components/parameters/Limit'}
-      responses:
-        '200': {description: 'receipts and next_cursor; IDs remain stable across retries'}
-  /evidence/{id}:
-    get:
-      summary: Retrieve your team's verified snapshot
-      parameters:
-        - {$ref: '#/components/parameters/ActionId'}
-      responses:
-        '200': {description: ai-evidence/1.0 projection archive}
-        '404': {description: Unknown or unauthorized snapshot}
-  /receipts/ack:
-    post:
-      summary: Acknowledge a complete durable export before reclaiming journal space
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [cursor]
-              properties:
-                cursor: {type: string, maxLength: 2048}
-      responses:
-        '200': {description: Acknowledged; active state and retry keys remain}
-        '403': {description: Operator token required}
-        '410': {description: Requested earlier history has already been exported}
-  /kill-switch:
-    post:
-      summary: Set the durable operator switch and revoke restrictive actions
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [enabled]
-              properties:
-                enabled: {type: boolean}
-      responses:
-        '200': {description: Switch state and unresolved reversal count}
-        '403': {description: Operator token required}
-        '503': {description: Could not confirm switch or reversal; kernel expiry remains}
-  /health:
-    get:
-      summary: Read authority and actuator delivery health with an operator token
-      responses:
-        '200': {description: Identity freshness, last actuator sync and bounded error code}
-        '403': {description: Operator token required}
-        '503': {description: Identity or state unavailable}
+        "202":
+          description: Batch processed
+          content: { application/json: { schema: { $ref: "#/components/schemas/IngestResult" } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }

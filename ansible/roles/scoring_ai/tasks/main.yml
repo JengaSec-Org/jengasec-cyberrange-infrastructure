@@ -3,6 +3,9 @@
   ansible.builtin.assert:
     that:
       - scoring_ai_mode in ['gateway', 'actuator', 'probe']
+      - not (scoring_ai_install_root is match('^/opt/jengasec-ai(/|$)'))
+      - not (scoring_ai_config_root is match('^/etc/jengasec-ai(/|$)'))
+      - not (scoring_ai_state_root is match('^/var/lib/jengasec-ai(/|$)'))
       - scoring_ai_config | length > 0
       - scoring_ai_mode == 'probe' or scoring_ai_tokens.principals | default([]) | length > 0
       - scoring_ai_mode == 'probe' or scoring_ai_config.identity_file is defined
@@ -10,6 +13,7 @@
       - scoring_ai_mode == 'probe' or scoring_ai_config.protected_networks | default([]) | length > 0
       - scoring_ai_mode != 'gateway' or scoring_ai_config.actuator_command | default([]) | length > 0
       - scoring_ai_mode != 'gateway' or scoring_ai_config.cursor_secret | default('') | length >= 32
+      - scoring_ai_mode != 'gateway' or scoring_ai_config.listen_address | default('127.0.0.1') == '127.0.0.1'
       - scoring_ai_mode == 'probe' or scoring_ai_config.tokens_file == scoring_ai_config_root ~ '/tokens.json'
       - scoring_ai_mode == 'probe' or scoring_ai_config.state_file is match('^' ~ scoring_ai_state_root ~ '/')
       - scoring_ai_mode == 'actuator' or scoring_ai_config.evidence_directory is match('^' ~ scoring_ai_state_root ~ '/')
@@ -117,8 +121,8 @@
 
 - name: Install the bounded HTTP gateway unit
   ansible.builtin.template:
-    src: jengasec-ai.service.j2
-    dest: /etc/systemd/system/jengasec-ai.service
+    src: jengasec-scoring-ai.service.j2
+    dest: /etc/systemd/system/jengasec-scoring-ai.service
     owner: root
     group: root
     mode: '0644'
@@ -137,18 +141,9 @@
   changed_when: false
   when: scoring_ai_mode == 'gateway' and scoring_ai_start | bool
 
-- name: Write the location snippet for the existing TLS virtual host
-  ansible.builtin.template:
-    src: nginx-location.conf.j2
-    dest: "{{ scoring_ai_nginx_snippet }}"
-    owner: root
-    group: root
-    mode: '0644'
-  when: scoring_ai_mode == 'gateway'
-
 - name: Start the gateway only in the approved rollout
   ansible.builtin.systemd:
-    name: jengasec-ai.service
+    name: jengasec-scoring-ai.service
     enabled: true
     state: started
     daemon_reload: true

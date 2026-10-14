@@ -1,0 +1,4 @@
+# AI-owned files ship to a Debian VM: keep LF on every platform (the repository root has no .gitattributes).
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
