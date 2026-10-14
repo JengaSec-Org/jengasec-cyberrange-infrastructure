@@ -79,8 +79,19 @@ def supervise(eve_file, command):
     previous = set()
     try:
         while True:
-            current = capped_inodes(child.pid, eve_file, soft)
             code = child.poll()
+            current = set()
+            if code is None:
+                try:
+                    current = capped_inodes(child.pid, eve_file, soft)
+                except OSError:
+                    # A child exiting during the scan can leave an inaccessible
+                    # zombie fd directory. Do not hide errors for a live child.
+                    code = child.poll()
+                    if code is None:
+                        raise
+                else:
+                    code = child.poll()
             if stopping:
                 stop_child(child)
                 return 0
