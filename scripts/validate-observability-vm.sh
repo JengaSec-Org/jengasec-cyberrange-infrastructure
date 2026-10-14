@@ -82,7 +82,8 @@ compose=(
   --compose-file "$current/observability/compose.production.yaml" \
   --env-file "$REHEARSAL_ROOT/etc/observability.env" \
   --project-name jengasec-observability-rehearsal
-curl --fail --silent --output /dev/null http://127.0.0.1:3000/api/health
+rehearsal_bind="${JENGASEC_OBS_REHEARSAL_BIND:-127.0.0.1}"
+curl --noproxy '*' --fail --silent --output /dev/null "http://${rehearsal_bind}:3000/api/health"
 
 # Exercise the deployed bind mounts and service UIDs, not just container health.
 "${compose[@]}" exec -T source-fixture python - <<'PY'
@@ -112,8 +113,8 @@ assert {record.get("actor", {}).get("team_label", "unattributed") for record in 
 }
 print("VM rehearsal emitted and stored all four roles and system records")
 PY
-[[ "$(curl --silent --output /dev/null --write-out '%{http_code}' \
-  http://127.0.0.1:9090/)" == "404" ]] \
+[[ "$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' \
+  "http://${rehearsal_bind}:9090/")" == "404" ]] \
   || die "Prometheus write proxy exposed an unexpected path"
 "${compose[@]}" down --remove-orphans
 "${compose[@]}" down --remove-orphans

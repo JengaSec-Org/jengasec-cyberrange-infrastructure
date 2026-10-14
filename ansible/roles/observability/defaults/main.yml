@@ -8,6 +8,19 @@ obs_systemd_root: /etc/systemd/system
 
 obs_rehearsal_mode: false
 obs_rehearsal_event_interval_seconds: 0
+obs_attribution_mode: "{{ 'rehearsal' if obs_rehearsal_mode else 'platform' }}"
+obs_infrastructure_enabled: false
+obs_metrics_bind: "{{ obs_function_bind }}"
+obs_metrics_interface: "{{ obs_function_interface }}"
+obs_infrastructure_config_root: "{{ obs_config_root }}/infrastructure"
+obs_metrics_environment: live
+obs_metrics_resource_id: collector
+obs_metrics_targets: []
+obs_metrics_tls_ca_file: ""
+obs_metrics_tls_cert_file: ""
+obs_metrics_tls_key_file: ""
+obs_ingest_tls_cert_file: ""
+obs_ingest_tls_key_file: ""
 obs_manage_packages: true
 obs_manage_systemd: true
 obs_manage_storage_ownership: true

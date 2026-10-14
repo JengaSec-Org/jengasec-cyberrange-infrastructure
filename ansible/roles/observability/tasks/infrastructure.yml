@@ -1,0 +1,98 @@
+---
+- name: Validate infrastructure collection settings
+  ansible.builtin.assert:
+    that:
+      - obs_metrics_environment in ['live', 'rehearsal', 'validation']
+      - obs_metrics_resource_id is match('^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$')
+      - obs_metrics_targets | length > 0
+      - obs_metrics_targets | length <= 64
+      - obs_metrics_bind not in ['', '0.0.0.0', '::']
+      - obs_metrics_tls_ca_file | length > 0
+      - obs_metrics_tls_cert_file | length > 0
+      - obs_metrics_tls_key_file | length > 0
+      - obs_ingest_tls_cert_file | length > 0
+      - obs_ingest_tls_key_file | length > 0
+    quiet: true
+
+- name: Validate each metrics resource
+  ansible.builtin.assert:
+    that:
+      - item.resource_id is match('^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$')
+      - item.role is match('^[a-z][a-z0-9-]{0,40}$')
+      - item.address is match('^[a-zA-Z0-9][a-zA-Z0-9.-]{0,253}$')
+      - item.port | default(9100) | int > 0
+      - item.port | default(9100) | int <= 65535
+    quiet: true
+  loop: "{{ obs_metrics_targets }}"
+  loop_control:
+    label: "{{ item.resource_id }}"
+
+- name: Require unique metrics resources
+  ansible.builtin.assert:
+    that:
+      - >-
+        obs_metrics_targets | map(attribute='resource_id') | unique | length ==
+        obs_metrics_targets | length
+    quiet: true
+
+- name: Inspect the metrics ingress interface
+  ansible.builtin.command:
+    argv: [ip, -json, address, show, dev, "{{ obs_metrics_interface }}"]
+  register: obs_metrics_interface_result
+  changed_when: false
+  when: obs_validate_network
+
+- name: Confirm the metrics ingress address
+  ansible.builtin.assert:
+    that:
+      - obs_metrics_interface | length > 0
+      - obs_metrics_bind in obs_metrics_interface_result.stdout
+    quiet: true
+  when: obs_validate_network
+
+- name: Create infrastructure configuration directories
+  ansible.builtin.file:
+    path: "{{ obs_infrastructure_config_root }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: ["", tls, tls/client, tls/server]
+
+- name: Install the telemetry trust root
+  ansible.builtin.copy:
+    src: "{{ obs_metrics_tls_ca_file }}"
+    dest: "{{ obs_infrastructure_config_root }}/tls/ca.crt"
+    mode: "0644"
+  notify: Restart observability stack
+
+- name: Install the metrics client certificate
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "{{ obs_infrastructure_config_root }}/tls/client/{{ item.name }}"
+    owner: "{{ '65534' if obs_manage_storage_ownership else omit }}"
+    mode: "0600"
+  loop:
+    - {source: "{{ obs_metrics_tls_cert_file }}", name: client.crt}
+    - {source: "{{ obs_metrics_tls_key_file }}", name: client.key}
+  no_log: true
+  notify: Restart observability stack
+
+- name: Install the telemetry ingress certificate
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "{{ obs_infrastructure_config_root }}/tls/server/{{ item.name }}"
+    mode: "0600"
+  loop:
+    - {source: "{{ obs_ingest_tls_cert_file }}", name: server.crt}
+    - {source: "{{ obs_ingest_tls_key_file }}", name: server.key}
+  no_log: true
+  notify: Restart observability stack
+
+- name: Render the infrastructure receiver and scrape configuration
+  ansible.builtin.template:
+    src: "{{ item.source }}"
+    dest: "{{ obs_infrastructure_config_root }}/{{ item.name }}"
+    mode: "0644"
+  loop:
+    - {source: infrastructure-prometheus.yml.j2, name: prometheus.yml}
+    - {source: infrastructure-nginx.conf.j2, name: nginx.conf}
+  notify: Restart observability stack

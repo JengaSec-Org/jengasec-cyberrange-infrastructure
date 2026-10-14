@@ -199,6 +199,9 @@ services:
 
   vector:
     image: timberio/vector:0.58.0-debian
+    environment:
+      JENGASEC_DOCKER_SOURCE_PROJECT: ${COMPOSE_PROJECT_NAME:-jengasec-observability}
+      JENGASEC_V2_TELEMETRY_ENVIRONMENT: rehearsal
     command:
       - --config
       - /etc/vector/generated/vector.yaml

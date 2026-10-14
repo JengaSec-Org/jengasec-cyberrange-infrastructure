@@ -4,17 +4,18 @@ on:
   pull_request:
     paths:
       - .github/workflows/observability.yml
-      - ansible/observability-rehearsal.yml
-      - ansible/observability.yml
+      - ansible/observability*.yml
       - ansible/requirements.txt
-      - ansible/roles/observability/**
-      - ansible/roles/observability_host/**
+      - ansible/roles/observability*/**
       - ansible/site.yml
       - Makefile
       - contracts/**
       - charts/observability-agent/**
       - observability/**
       - scripts/render-observability-lookups.py
+      - scripts/render-vector-catalogue.py
+      - scripts/*infrastructure*.py
+      - scripts/*provisioning*.py
       - scripts/render-grafana-dashboards.py
       - scripts/prepare-observability-runtime.py
       - scripts/prepare-observability-storage.py
@@ -34,17 +35,18 @@ on:
       - main
     paths:
       - .github/workflows/observability.yml
-      - ansible/observability-rehearsal.yml
-      - ansible/observability.yml
+      - ansible/observability*.yml
       - ansible/requirements.txt
-      - ansible/roles/observability/**
-      - ansible/roles/observability_host/**
+      - ansible/roles/observability*/**
       - ansible/site.yml
       - Makefile
       - contracts/**
       - charts/observability-agent/**
       - observability/**
       - scripts/render-observability-lookups.py
+      - scripts/render-vector-catalogue.py
+      - scripts/*infrastructure*.py
+      - scripts/*provisioning*.py
       - scripts/render-grafana-dashboards.py
       - scripts/prepare-observability-runtime.py
       - scripts/prepare-observability-storage.py
@@ -75,10 +77,18 @@ jobs:
           sudo apt-get install -y jq gdisk fdisk e2fsprogs
           python3 -m venv /tmp/jengasec-ansible-venv
           /tmp/jengasec-ansible-venv/bin/pip install -r ansible/requirements.txt
+          curl --fail --silent --show-error --location --output /tmp/helm-v3.19.0-linux-amd64.tar.gz https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz
+          curl --fail --silent --show-error --location --output /tmp/helm-v3.19.0-linux-amd64.tar.gz.sha256sum https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz.sha256sum
+          (cd /tmp && sha256sum --check helm-v3.19.0-linux-amd64.tar.gz.sha256sum)
+          tar --extract --gzip --file /tmp/helm-v3.19.0-linux-amd64.tar.gz --directory /tmp linux-amd64/helm
+          sudo install --mode=0755 /tmp/linux-amd64/helm /usr/local/bin/helm
       - name: Verify guarded spare-disk provisioning
         run: sudo bash observability/tests/test-storage.sh
       - name: Check the OBS-only deployment entrypoint
-        run: /tmp/jengasec-ansible-venv/bin/ansible-playbook -i localhost, ansible/observability.yml --syntax-check
+        run: |
+          for playbook in ansible/observability*.yml; do
+            /tmp/jengasec-ansible-venv/bin/ansible-playbook -i localhost, "$playbook" --syntax-check
+          done
       - name: Rehearse OBS VM deployment
         run: PATH="/tmp/jengasec-ansible-venv/bin:$PATH" make obs-vm-validate
       - name: Validate configs, builds and contracts

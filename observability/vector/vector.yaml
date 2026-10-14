@@ -38,6 +38,7 @@ sources:
     type: docker_logs
     include_labels:
       - jengasec.observability.source=application
+      - com.docker.compose.project=${JENGASEC_DOCKER_SOURCE_PROJECT:-jengasec-observability}
 
   cluster_otlp:
     type: opentelemetry
@@ -54,6 +55,7 @@ sources:
     type: docker_logs
     include_labels:
       - jengasec.observability.source=netflow
+      - com.docker.compose.project=${JENGASEC_DOCKER_SOURCE_PROJECT:-jengasec-observability}
 
   gateway_syslog_tcp:
     type: syslog
@@ -246,6 +248,8 @@ transforms:
       actor = {}
       metadata = detail
       metadata.level = level
+      metadata.environment = get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "rehearsal"
+      assert!(includes(["live", "validation", "rehearsal"], metadata.environment))
       verdict = "not_applicable"
       if exists(original.source_ip) {
         actor_ip = string!(original.source_ip)
@@ -433,6 +437,8 @@ transforms:
 
       actor = {}
       metadata = {"transport": source_hint}
+      metadata.environment = get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "rehearsal"
+      assert!(includes(["live", "validation", "rehearsal"], metadata.environment))
       if exists(original.source_ip) {
         actor_ip = string!(original.source_ip)
         actor.ip = actor_ip
@@ -798,6 +804,7 @@ transforms:
         increment_by_value: false
         kind: incremental
         tags:
+          environment: "{{ metadata.environment }}"
           source: "{{ source }}"
           status: "{{ metadata.attribution_status }}"
       - type: counter
@@ -806,6 +813,7 @@ transforms:
         increment_by_value: false
         kind: incremental
         tags:
+          environment: "{{ metadata.environment }}"
           source: "{{ source }}"
           status: "{{ metadata.scope_status }}"
 
@@ -882,6 +890,7 @@ sinks:
     healthcheck:
       enabled: false
     labels:
+      environment: "{{ metadata.environment }}"
       enterprise: "{{ enterprise }}"
       application: "{{ application }}"
       namespace: "{{ namespace }}"
@@ -903,6 +912,7 @@ sinks:
     healthcheck:
       enabled: false
     labels:
+      environment: "{{ metadata.environment }}"
       enterprise: "{{ enterprise }}"
       application: "{{ application }}"
       namespace: "{{ namespace }}"
