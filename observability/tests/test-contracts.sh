@@ -43,6 +43,7 @@ assert_invalid \
 
 python scripts/validate-contracts.py
 python observability/tests/test-infrastructure-events.py
+python observability/tests/test-infrastructure-evidence.py
 
 rendered="$(mktemp -d)"
 cleanup() {

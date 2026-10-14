@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jengasec.example/contracts/infrastructure-evidence.schema.json",
+  "title": "Infrastructure evidence pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pack_id",
+    "record_family",
+    "selection",
+    "exported_at",
+    "contract_versions",
+    "files"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "infrastructure-evidence/1.0"
+    },
+    "pack_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "record_family": {
+      "const": "infrastructure_telemetry"
+    },
+    "exported_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource_ids",
+        "start_ts",
+        "end_ts",
+        "environment",
+        "event_ids"
+      ],
+      "properties": {
+        "resource_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,31}$"
+          }
+        },
+        "start_ts": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "end_ts": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "environment": {
+          "enum": [
+            "live",
+            "validation",
+            "rehearsal"
+          ]
+        },
+        "event_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^infra_[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "contract_versions": {
+      "const": {
+        "infrastructure_telemetry": "infrastructure/1.0",
+        "platform_audit": null,
+        "competition_events": null
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "infrastructure-telemetry.ndjson",
+        "platform-audit.ndjson",
+        "competition-events.ndjson"
+      ],
+      "properties": {
+        "infrastructure-telemetry.ndjson": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rows",
+            "sha256"
+          ],
+          "properties": {
+            "rows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            }
+          }
+        },
+        "platform-audit.ndjson": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rows",
+            "sha256"
+          ],
+          "properties": {
+            "rows": {
+              "const": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            }
+          }
+        },
+        "competition-events.ndjson": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rows",
+            "sha256"
+          ],
+          "properties": {
+            "rows": {
+              "const": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            }
+          }
+        }
+      }
+    }
+  }
+}
