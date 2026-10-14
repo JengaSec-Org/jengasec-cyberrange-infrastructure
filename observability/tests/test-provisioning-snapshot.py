@@ -3,6 +3,7 @@
 
 import copy
 from datetime import datetime, timedelta, timezone
+import errno
 import fcntl
 import importlib.util
 import json
@@ -59,6 +60,20 @@ class ProvisioningTests(unittest.TestCase):
         self.status_validator.validate(json.loads((self.output / "provisioning-status.json").read_text()))
         return snapshot
 
+    def assert_empty_recovery(self):
+        now = NOW + timedelta(seconds=32)
+        payload = source()
+        payload["captured_at"] = ADAPTER.iso(now)
+        self.refresh(payload, now=now)
+        snapshot, state = ADAPTER.read_current(self.output, now=now)
+        self.assertEqual(state, "fresh")
+        self.assertEqual(snapshot["counts"], dict.fromkeys(ADAPTER.TABLES, 0))
+        self.assertTrue(all(not rows for rows in snapshot["records"].values()))
+        result = ADAPTER.resolve_address(self.output, "192.0.2.10", now=now)
+        self.assertEqual(result["state"], "unknown")
+        self.assertNotIn("participant_id", result)
+        self.assertEqual(result["authorization"], "none")
+
     def test_empty_database_is_valid_and_replaces_prior_rows(self):
         self.refresh(source(True))
         self.assertEqual(ADAPTER.resolve_address(self.output, "192.0.2.10", now=NOW)["state"], "known")
@@ -113,6 +128,50 @@ class ProvisioningTests(unittest.TestCase):
         self.assertEqual(snapshot["records"]["assignments"][0]["window_state"], "unknown")
         self.assertIsNone(snapshot["records"]["targets"][0]["endpoint_ip"])
 
+    def test_supported_ip_literals_remain_schema_valid_and_resolvable(self):
+        for value, normalized in (("192.0.2.10", "192.0.2.10"),
+                                  ("2001:0DB8::0010", "2001:db8::10"),
+                                  ("::ffff:192.0.2.10", "::ffff:c000:20a")):
+            with self.subTest(value=value):
+                payload = source(True)
+                payload["allocations"][0]["vpn_address"] = value
+                payload["targets"][0]["endpoint_ip"] = value
+                snapshot = self.refresh(payload)
+                self.assertEqual(snapshot["records"]["allocations"][0]["vpn_address"], normalized)
+                self.assertEqual(snapshot["records"]["targets"][0]["endpoint_ip"], normalized)
+                result = ADAPTER.resolve_address(self.output, value, now=NOW)
+                self.assertEqual(result["state"], "known")
+                self.assertEqual(result["authorization"], "none")
+
+    def test_scoped_allocation_addresses_invalidate_prior_attribution(self):
+        for value in ("fe80::1%wg0", "fe80::1%2", "fe80::1%DO_NOT_EXPORT"):
+            with self.subTest(value=value):
+                self.refresh(source(True))
+                before = (self.output / "provisioning-snapshot.json").read_bytes()
+                payload = source(True)
+                payload["allocations"][0]["vpn_address"] = value
+                with self.assertRaisesRegex(ADAPTER.SnapshotError, "^invalid_source$"):
+                    self.refresh(payload, now=NOW + timedelta(seconds=30))
+                self.assertEqual((self.output / "provisioning-snapshot.json").read_bytes(), before)
+                status = json.loads((self.output / "provisioning-status.json").read_text())
+                self.status_validator.validate(status)
+                self.assertFalse(status["usable"])
+                self.assertNotIn(value, json.dumps(status))
+                result = ADAPTER.resolve_address(self.output, "192.0.2.10", now=NOW + timedelta(seconds=31))
+                self.assertEqual(result["state"], "stale")
+                self.assertNotIn("participant_id", result)
+                self.assert_empty_recovery()
+
+    def test_scoped_target_addresses_remain_unknown_without_scope_data(self):
+        for value in ("fe80::1%wg0", "fe80::1%2", "fe80::1%DO_NOT_EXPORT"):
+            with self.subTest(value=value):
+                payload = source(True)
+                payload["targets"][0]["endpoint_ip"] = value
+                snapshot = self.refresh(payload)
+                self.assertIsNone(snapshot["records"]["targets"][0]["endpoint_ip"])
+                self.assertNotIn(value, json.dumps(snapshot))
+                self.assertEqual(snapshot["authorization"], "none")
+
     def test_assignment_expiry_and_disabled_targets_do_not_imply_permission(self):
         payload = source(True)
         payload["assignments"][0]["ends_at"] = ADAPTER.iso(NOW)
@@ -150,6 +209,51 @@ class ProvisioningTests(unittest.TestCase):
         self.assertNotIn("participant_id", result)
         self.refresh(source())
         self.assertEqual(ADAPTER.read_current(self.output, now=NOW)[1], "fresh")
+
+    def test_failed_status_write_cannot_keep_prior_attribution_fresh(self):
+        def query_failure():
+            raise ADAPTER.SnapshotError("database_query_failed")
+
+        for label, fetch in (("query", query_failure), ("validation", lambda: {})):
+            with self.subTest(failure=label):
+                self.refresh(source(True))
+                before = (self.output / "provisioning-snapshot.json").read_bytes()
+                with patch.object(ADAPTER, "atomic_write", side_effect=OSError(errno.ENOSPC, "disk full")):
+                    with self.assertRaises(OSError):
+                        ADAPTER.refresh(self.output, fetch, now=NOW + timedelta(seconds=30))
+                self.assertEqual((self.output / "provisioning-snapshot.json").read_bytes(), before)
+                self.assertFalse((self.output / "provisioning-status.json").exists())
+                result = ADAPTER.resolve_address(self.output, "192.0.2.10", now=NOW + timedelta(seconds=31))
+                self.assertEqual(result["state"], "unavailable")
+                self.assertNotIn("participant_id", result)
+                self.assertEqual(result["authorization"], "none")
+                self.assert_empty_recovery()
+
+    def test_timestamp_overflow_invalidates_prior_attribution(self):
+        for field, value, reason in (("created_at", "0001-01-01T00:00:00+01:00", "invalid_source"),
+                                     ("updated_at", "9999-12-31T23:59:59-01:00", "invalid_source"),
+                                     ("captured_at", "9999-12-31T23:59:59Z", "source_clock_or_age")):
+            with self.subTest(field=field):
+                self.refresh(source(True))
+                before = (self.output / "provisioning-snapshot.json").read_bytes()
+                payload = source(True)
+                if field == "captured_at":
+                    payload[field] = value
+                else:
+                    payload["participants"][0][field] = value
+                with self.assertRaisesRegex(ADAPTER.SnapshotError, "^" + reason + "$"):
+                    self.refresh(payload, now=NOW + timedelta(seconds=30))
+                self.assertEqual((self.output / "provisioning-snapshot.json").read_bytes(), before)
+                status = json.loads((self.output / "provisioning-status.json").read_text())
+                self.status_validator.validate(status)
+                self.assertEqual(status["state"], "refresh_failed")
+                self.assertEqual(status["reason"], reason)
+                self.assertFalse(status["usable"])
+                self.assertNotIn(value, json.dumps(status))
+                result = ADAPTER.resolve_address(self.output, "192.0.2.10", now=NOW + timedelta(seconds=31))
+                self.assertEqual(result["state"], "stale")
+                self.assertNotIn("participant_id", result)
+                self.assert_empty_recovery()
 
     def test_first_failure_publishes_unavailable_status_without_an_empty_success(self):
         with self.assertRaises(ADAPTER.SnapshotError):

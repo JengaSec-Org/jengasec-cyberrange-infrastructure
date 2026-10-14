@@ -56,11 +56,11 @@ def timestamp(value, nullable=False):
         raise SnapshotError("invalid_source")
     try:
         result = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as error:
+        if result.tzinfo is None:
+            raise ValueError("timezone required")
+        return result.astimezone(timezone.utc)
+    except (ValueError, OverflowError) as error:
         raise SnapshotError("invalid_source") from error
-    if result.tzinfo is None:
-        raise SnapshotError("invalid_source")
-    return result.astimezone(timezone.utc)
 
 
 def iso(value):
@@ -93,6 +93,8 @@ def address(value, allow_unknown=False):
     if not isinstance(value, str) or len(value) > 45:
         raise SnapshotError("invalid_source")
     try:
+        if "%" in value:
+            raise ValueError("scoped address")
         return str(ipaddress.ip_address(value))
     except ValueError as error:
         if allow_unknown:
@@ -129,7 +131,10 @@ def build_snapshot(source, *, now=None, max_age=120, transport="local_peer", dat
     if transport == "tls" and source["tls"] is not True:
         raise SnapshotError("tls_required")
     captured = timestamp(source["captured_at"])
-    expires = captured + timedelta(seconds=max_age)
+    try:
+        expires = captured + timedelta(seconds=max_age)
+    except OverflowError as error:
+        raise SnapshotError("source_clock_or_age") from error
     if captured > now + timedelta(seconds=5) or expires <= now:
         raise SnapshotError("source_clock_or_age")
     records = {}
@@ -314,6 +319,8 @@ def refresh(output, fetch, *, now=None, max_age=120, transport="local_peer", dat
                 "snapshot_hash": snapshot_hash(previous_bytes) if previous else None,
                 "usable": False,
             }
+            # A full disk must not leave the previous success marker usable.
+            (output / "provisioning-status.json").unlink(missing_ok=True)
             atomic_write(output / "provisioning-status.json", encode(status))
             raise SnapshotError(reason) from error
         # Invalidate the previous commit marker before replacing its data. A
