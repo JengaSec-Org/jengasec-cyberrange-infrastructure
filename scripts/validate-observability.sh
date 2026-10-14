@@ -120,7 +120,7 @@ log "testing native infrastructure event acceptance and rejection"
 log "checking infrastructure metrics and optional integrations"
 "${COMPOSE[@]}" run --rm --no-deps --entrypoint python contract-tests \
   charts/observability-agent/tests/test-wal-guard.py
-for test_script in test-infrastructure-metrics.py test-optional-integrations.py test-release-archive.py test-infrastructure-dashboards.py test-provisioning-snapshot.py test-provisioning-service.py test-gateway-observation.py test-suricata-file-cap.py; do
+for test_script in test-infrastructure-metrics.py test-optional-integrations.py test-release-archive.py test-infrastructure-dashboards.py test-provisioning-snapshot.py test-provisioning-service.py test-gateway-observation.py test-suricata-file-cap.py test-refresh-access.py; do
   "${COMPOSE[@]}" run --rm --no-deps \
     --entrypoint python \
     contract-tests \

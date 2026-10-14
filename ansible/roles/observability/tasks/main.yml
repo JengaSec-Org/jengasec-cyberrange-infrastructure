@@ -8,6 +8,7 @@
       - obs_config_root is match('^/[A-Za-z0-9_./-]+$')
       - obs_function_bind | length > 0
       - obs_attribution_mode in ['platform', 'rehearsal', 'disabled']
+      - obs_manage_grafana_access is boolean
       - obs_rehearsal_mode or obs_attribution_mode != 'rehearsal'
       - obs_retention_hours | int > 0
       - obs_event_window_hours | int > 0
@@ -271,6 +272,20 @@
   become: false
   changed_when: false
   when: not obs_activate_existing_release
+
+- name: Inspect refresh support when Grafana access management is disabled
+  ansible.builtin.slurp:
+    src: "{{ obs_install_root }}/releases/{{ obs_release_id }}/scripts/refresh-observability-state.sh"
+  register: obs_selected_refresh_script
+  when: not obs_manage_grafana_access
+
+- name: Require the selected release to support disabled Grafana access management
+  ansible.builtin.assert:
+    that:
+      - "'--manage-grafana-access)' in (obs_selected_refresh_script.content | b64decode)"
+    fail_msg: The selected release cannot disable Grafana access management
+    quiet: true
+  when: not obs_manage_grafana_access
 
 - name: Copy rehearsal attribution fixtures
   ansible.builtin.copy:
