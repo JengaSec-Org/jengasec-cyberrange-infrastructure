@@ -1,0 +1,17 @@
+---
+obs_cluster_apply: false
+obs_cluster_environment: live
+obs_cluster_name: ""
+obs_cluster_resource_id: ""
+obs_cluster_events_enabled: false
+obs_cluster_metrics_url: ""
+obs_cluster_otlp_endpoint: ""
+obs_cluster_tls_ca_file: ""
+obs_cluster_tls_cert_file: ""
+obs_cluster_tls_key_file: ""
+obs_cluster_kubeconfig: /etc/rancher/k3s/k3s.yaml
+obs_cluster_kubectl: /usr/local/bin/k3s
+obs_cluster_helm_version: 3.19.0
+obs_cluster_root: /opt/jengasec-cluster-observability
+obs_cluster_storage_class: ""
+obs_cluster_storage_size: 2Gi

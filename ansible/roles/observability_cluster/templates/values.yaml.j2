@@ -1,0 +1,14 @@
+namespace: jengasec-observability
+obs:
+  environment: {{ obs_cluster_environment | to_json }}
+  cluster: {{ obs_cluster_name | to_json }}
+  resourceId: {{ obs_cluster_resource_id | to_json }}
+  eventsEnabled: {{ obs_cluster_events_enabled | bool | to_json }}
+  otlpEndpoint: {{ obs_cluster_otlp_endpoint | to_json }}
+  prometheusRemoteWriteUrl: {{ obs_cluster_metrics_url | to_json }}
+  tls:
+    insecure: false
+    secretName: observability-client-tls
+persistence:
+  storageClassName: {{ obs_cluster_storage_class | to_json }}
+  size: {{ obs_cluster_storage_size | to_json }}

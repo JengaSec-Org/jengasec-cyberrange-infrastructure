@@ -1,59 +1,159 @@
 extensions:
   health_check:
     endpoint: 0.0.0.0:13133
-
+  file_storage/cluster:
+    directory: /var/lib/otelcol/queue
+    create_directory: true
+    timeout: 10s
+    compaction:
+      on_start: true
 receivers:
   k8sobjects/events:
     auth_type: serviceAccount
     objects:
-      - name: events
-        mode: watch
-        group: events.k8s.io
+    - name: events
+      mode: watch
+      group: events.k8s.io
   k8s_cluster:
     auth_type: serviceAccount
     collection_interval: 30s
     node_conditions_to_report:
-      - Ready
-      - MemoryPressure
-      - DiskPressure
-      - PIDPressure
+    - Ready
+    - MemoryPressure
+    - DiskPressure
+    - PIDPressure
     allocatable_types_to_report:
-      - cpu
-      - memory
+    - cpu
+    - memory
+    metrics:
+      k8s.container.status.state:
+        enabled: true
+      k8s.pod.status_reason:
+        enabled: true
   prometheus/applications:
     config:
       scrape_configs:
-        - job_name: jengasec-applications
-          kubernetes_sd_configs:
-            - role: pod
-          relabel_configs:
-            - action: keep
-              source_labels: [__meta_kubernetes_namespace]
-              regex: jengasec-ent-(a|b)-app0[1-9]
-            - action: keep
-              source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-              regex: "true"
-            - action: replace
-              source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
-              target_label: __metrics_path__
-              regex: (.+)
-            - action: replace
-              source_labels:
-                - __address__
-                - __meta_kubernetes_pod_annotation_prometheus_io_port
-              target_label: __address__
-              regex: ([^:]+)(?::\d+)?;(\d+)
-              replacement: $1:$2
-            - action: replace
-              source_labels: [__meta_kubernetes_namespace]
-              target_label: namespace
-            - action: replace
-              source_labels: [__meta_kubernetes_pod_label_jengasec_io_enterprise]
-              target_label: enterprise
-            - action: replace
-              source_labels: [__meta_kubernetes_pod_label_jengasec_io_application]
-              target_label: application
-
+      - job_name: jengasec-applications
+        kubernetes_sd_configs:
+        - role: pod
+        relabel_configs:
+        - action: keep
+          source_labels:
+          - __meta_kubernetes_namespace
+          regex: jengasec-ent-(a|b)-app0[1-9]
+        - action: keep
+          source_labels:
+          - __meta_kubernetes_pod_annotation_prometheus_io_scrape
+          regex: 'true'
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_pod_annotation_prometheus_io_path
+          target_label: __metrics_path__
+          regex: (.+)
+        - action: replace
+          source_labels:
+          - __address__
+          - __meta_kubernetes_pod_annotation_prometheus_io_port
+          target_label: __address__
+          regex: ([^:]+)(?::\d+)?;(\d+)
+          replacement: $1:$2
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_namespace
+          target_label: namespace
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_namespace
+          regex: jengasec-ent-(a|b)-app(0[1-9])
+          target_label: enterprise
+          replacement: ENT-$1
+        - action: uppercase
+          source_labels:
+          - enterprise
+          target_label: enterprise
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_namespace
+          regex: jengasec-ent-(a|b)-app(0[1-9])
+          target_label: application
+          replacement: APP$2
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_pod_name
+          target_label: pod
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_pod_container_name
+          target_label: container
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_pod_node_name
+          target_label: node
+        - target_label: component
+          replacement: application
+        scrape_interval: 30s
+        scrape_timeout: 10s
+        sample_limit: 10000
+        honor_labels: false
+  prometheus/kubelet:
+    config:
+      scrape_configs:
+      - job_name: jengasec-kubelet
+        scrape_interval: 30s
+        scrape_timeout: 20s
+        sample_limit: 15000
+        scheme: https
+        authorization:
+          credentials_file: ${env:OBS_KUBE_TOKEN_FILE:-/var/run/secrets/kubernetes.io/serviceaccount/token}
+        tls_config:
+          ca_file: ${env:OBS_KUBE_CA_FILE:-/var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
+          insecure_skip_verify: false
+        kubernetes_sd_configs:
+        - role: node
+        relabel_configs:
+        - source_labels:
+          - __meta_kubernetes_node_name
+          target_label: node
+        - target_label: __address__
+          replacement: kubernetes.default.svc:443
+        - source_labels:
+          - __meta_kubernetes_node_name
+          target_label: __metrics_path__
+          regex: (.+)
+          replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+        - target_label: component
+          replacement: kubelet
+        metric_relabel_configs:
+        - action: keep
+          source_labels:
+          - __name__
+          regex: container_(cpu_usage_seconds_total|memory_working_set_bytes|memory_usage_bytes|fs_usage_bytes|fs_limit_bytes)
+        - action: keep
+          source_labels:
+          - container
+          regex: .+
+        - action: drop
+          source_labels:
+          - container
+          regex: POD
+        - action: labelkeep
+          regex: __name__|namespace|pod|container|node|cpu|component
+  prometheus/collector:
+    config:
+      scrape_configs:
+      - job_name: jengasec-cluster-collector
+        scrape_interval: 30s
+        scrape_timeout: 5s
+        static_configs:
+        - targets:
+          - 127.0.0.1:8888
+          labels:
+            component: cluster-collector
+        metric_relabel_configs:
+        - action: keep
+          source_labels:
+          - __name__
+          regex: otelcol_(process_uptime|process_memory_rss|exporter_queue_size|exporter_queue_capacity|exporter_send_failed_metric_points|exporter_send_failed_log_records|exporter_sent_metric_points|exporter_sent_log_records|receiver_accepted_metric_points|receiver_refused_metric_points|receiver_accepted_log_records|receiver_refused_log_records|processor_refused_metric_points|processor_refused_log_records|wal_.*).*
 processors:
   memory_limiter:
     check_interval: 5s
@@ -62,28 +162,81 @@ processors:
   transform/kubernetes_events:
     error_mode: propagate
     log_statements:
-      - context: log
-        statements:
-          - set(attributes["jengasec.namespace"], body["metadata"]["namespace"])
-          - set(attributes["jengasec.asset"], Concat([body["metadata"]["namespace"], "/", body["regarding"]["kind"]], ""))
-          - set(attributes["jengasec.ts"], body["metadata"]["creationTimestamp"])
-          - set(attributes["jengasec.request_id"], body["metadata"]["uid"])
-          - set(attributes["jengasec.kind"], body["regarding"]["kind"])
-          - set(body["schema_version"], "2.0")
-          - set(body["ts"], attributes["jengasec.ts"])
-          - set(body["source"], "kubernetes")
-          - set(body["event"], "kubernetes_event")
-          - set(body["asset"], attributes["jengasec.asset"])
-          - set(body["namespace"], attributes["jengasec.namespace"])
-          - set(body["request_id"], attributes["jengasec.request_id"])
-          - set(body["kind"], attributes["jengasec.kind"])
-          - set(body["outcome"], "success")
-          - set(body["outcome"], "failure") where body["type"] == "Warning"
-          - set(body["verdict"], "not_applicable")
-          - keep_keys(body, ["schema_version", "ts", "source", "event", "asset", "namespace", "request_id", "kind", "reason", "outcome", "verdict"])
+    - context: log
+      statements:
+      - set(cache["event"], body)
+      - set(body, ParseJSON("{}"))
+      - set(body["schema_version"], "infrastructure/1.0")
+      - set(body["record_family"], "infrastructure_telemetry")
+      - set(body["environment"], "${env:OBS_ENVIRONMENT:-rehearsal}")
+      - set(body["resource_id"], "${env:OBS_RESOURCE_ID:-cluster-red}")
+      - set(body["source"], "kubernetes")
+      - set(body["event_type"], "kubernetes.event")
+      - set(body["ts"], cache["event"]["metadata"]["creationTimestamp"])
+      - set(body["ts"], cache["event"]["eventTime"]) where cache["event"]["eventTime"] != nil
+      - set(body["severity"], "low")
+      - set(body["severity"], "medium") where cache["event"]["type"] == "Warning"
+      - set(body["outcome"], "unknown")
+      - set(body["source_event_id"], SHA256(Concat([cache["event"]["metadata"]["uid"], cache["event"]["metadata"]["resourceVersion"]],
+        ":")))
+      - set(body["resource"], ParseJSON("{}"))
+      - set(body["resource"]["cluster"], "${env:OBS_CLUSTER:-red}")
+      - set(body["resource"]["namespace"], cache["event"]["metadata"]["namespace"])
+      - set(body["resource"]["kind"], cache["event"]["regarding"]["kind"])
+      - set(body["resource"]["name"], cache["event"]["regarding"]["name"])
+      - set(body["attributes"], ParseJSON("{}"))
+      - set(body["attributes"]["type"], cache["event"]["type"])
+      - set(body["attributes"]["reason"], cache["event"]["reason"]) where IsMatch(cache["event"]["reason"], "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,252}$")
+      - set(body["attributes"]["action"], cache["event"]["action"]) where cache["event"]["action"] != nil and IsMatch(cache["event"]["action"],
+        "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,252}$")
+      - set(body["attributes"]["count"], 1)
+      - set(body["attributes"]["count"], cache["event"]["deprecatedCount"]) where cache["event"]["deprecatedCount"]
+        != nil and cache["event"]["deprecatedCount"] > 0
+      - set(body["attributes"]["count"], cache["event"]["series"]["count"]) where cache["event"]["series"] != nil
+      - keep_keys(attributes, [])
   batch:
-    timeout: 1s
-
+    timeout: 5s
+    send_batch_size: 1000
+    send_batch_max_size: 2000
+  transform/metric_identity:
+    error_mode: propagate
+    metric_statements:
+    - context: datapoint
+      statements:
+      - set(attributes["namespace"], resource.attributes["k8s.namespace.name"]) where resource.attributes["k8s.namespace.name"]
+        != nil
+      - set(attributes["pod"], resource.attributes["k8s.pod.name"]) where resource.attributes["k8s.pod.name"] !=
+        nil
+      - set(attributes["container"], resource.attributes["k8s.container.name"]) where resource.attributes["k8s.container.name"]
+        != nil
+      - set(attributes["node"], resource.attributes["k8s.node.name"]) where resource.attributes["k8s.node.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.deployment.name"]) where resource.attributes["k8s.deployment.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.statefulset.name"]) where resource.attributes["k8s.statefulset.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.daemonset.name"]) where resource.attributes["k8s.daemonset.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.job.name"]) where resource.attributes["k8s.job.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.cronjob.name"]) where resource.attributes["k8s.cronjob.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.replicaset.name"]) where resource.attributes["k8s.replicaset.name"]
+        != nil
+      - keep_keys(attributes, ["namespace", "pod", "container", "node", "workload", "condition", "state", "reason",
+        "cpu", "mode", "direction", "interface", "receiver", "exporter", "transport", "code", "status", "method",
+        "enterprise", "application", "component"])
+  transform/metric_resources:
+    error_mode: propagate
+    metric_statements:
+    - context: resource
+      statements:
+      - keep_keys(attributes, [])
+      - set(attributes["environment"], "${env:OBS_ENVIRONMENT:-rehearsal}")
+      - set(attributes["cluster"], "${env:OBS_CLUSTER:-red}")
+      - set(attributes["resource_id"], "${env:OBS_RESOURCE_ID:-cluster-red}")
+      - set(attributes["service.name"], "jengasec-kubernetes")
+      - set(attributes["service.instance.id"], "${env:OBS_RESOURCE_ID:-cluster-red}")
 exporters:
   otlp/obs:
     endpoint: ${env:OBS_OTLP_ENDPOINT}
@@ -91,21 +244,64 @@ exporters:
       insecure: ${env:OBS_OTLP_INSECURE}
     retry_on_failure:
       enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 0s
+    sending_queue:
+      enabled: true
+      num_consumers: 2
+      queue_size: 512
+      storage: file_storage/cluster
   prometheusremotewrite/obs:
     endpoint: ${env:OBS_PROMETHEUS_REMOTE_WRITE_URL}
     resource_to_telemetry_conversion:
       enabled: true
     retry_on_failure:
       enabled: true
-
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 0s
+    remote_write_queue:
+      enabled: true
+      queue_size: 1000
+      num_consumers: 1
+    wal:
+      directory: /var/lib/otelcol/wal
+      buffer_size: 100
+      truncate_frequency: 45s
 service:
-  extensions: [health_check]
+  extensions:
+  - health_check
+  - file_storage/cluster
   pipelines:
     logs:
-      receivers: [k8sobjects/events]
-      processors: [memory_limiter, transform/kubernetes_events, batch]
-      exporters: [otlp/obs]
+      receivers:
+      - k8sobjects/events
+      processors:
+      - memory_limiter
+      - transform/kubernetes_events
+      - batch
+      exporters:
+      - otlp/obs
     metrics:
-      receivers: [k8s_cluster, prometheus/applications]
-      processors: [memory_limiter, batch]
-      exporters: [prometheusremotewrite/obs]
+      receivers:
+      - k8s_cluster
+      - prometheus/applications
+      - prometheus/kubelet
+      - prometheus/collector
+      processors:
+      - memory_limiter
+      - transform/metric_identity
+      - transform/metric_resources
+      - batch
+      exporters:
+      - prometheusremotewrite/obs
+  telemetry:
+    metrics:
+      level: normal
+      readers:
+      - pull:
+          exporter:
+            prometheus:
+              host: 127.0.0.1
+              port: 8888
