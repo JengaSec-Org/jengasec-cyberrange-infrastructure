@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Provisioning snapshot publication and freshness",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "authorization",
+    "state",
+    "reason",
+    "attempted_at",
+    "last_success_at",
+    "expires_at",
+    "snapshot_hash",
+    "usable"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "provisioning-status/1.0"
+    },
+    "authorization": {
+      "const": "none"
+    },
+    "state": {
+      "enum": [
+        "fresh",
+        "refresh_failed",
+        "unavailable"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "pattern": "^[a-z_]{1,64}$"
+    },
+    "attempted_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$",
+      "maxLength": 40
+    },
+    "last_success_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$",
+          "maxLength": 40
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "expires_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$",
+          "maxLength": 40
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "snapshot_hash": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "usable": {
+      "type": "boolean"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "fresh"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "usable": {
+            "const": true
+          },
+          "reason": {
+            "const": "none"
+          },
+          "snapshot_hash": {
+            "type": "string"
+          },
+          "last_success_at": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "usable": {
+            "const": false
+          }
+        }
+      }
+    }
+  ]
+}
