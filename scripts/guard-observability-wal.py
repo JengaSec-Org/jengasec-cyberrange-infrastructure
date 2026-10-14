@@ -263,7 +263,10 @@ def main():
         directory(STATE_ROOT)
         config = json.loads(args.config.read_text())
         if args.command == "can-start":
-            return 0 if Guard(config).can_start(args.target) else 1
+            if Guard(config).can_start(args.target):
+                return 0
+            print("OBS target is latched; inspect its recorded pause and use explicit resume")
+            return 1
         lock = STATE_ROOT / "lock"
         if lock.is_symlink():
             raise GuardError("Refusing a symlinked guard lock")

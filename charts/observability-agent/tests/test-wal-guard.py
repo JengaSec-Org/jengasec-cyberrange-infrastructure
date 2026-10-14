@@ -139,6 +139,15 @@ class GuardTests(unittest.TestCase):
             self.make().resume("cluster")
         self.assertFalse(self.mutations())
 
+    def test_disabling_host_collection_cannot_bypass_existing_pause(self):
+        with patch.object(guard, "measure", return_value=(8192, 32768)):
+            self.make().check()
+        self.config["host_enabled"] = False
+        self.assertFalse(self.make().can_start("host"))
+        self.assertFalse(self.make().can_start("cluster"))
+        with self.assertRaises(guard.GuardError):
+            self.make().resume("host")
+
     def test_replacement_volume_cannot_clear_a_pause(self):
         with patch.object(guard, "measure", return_value=(8192, 32768)):
             self.make().check()

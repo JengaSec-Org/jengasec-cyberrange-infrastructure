@@ -61,6 +61,9 @@ sudo python3 /opt/jengasec-cluster-observability/guard-observability-wal.py resu
 Use `--target host` for the host reader. Limits are supplied by
 `obs_cluster_wal_max_bytes` and `obs_cluster_wal_min_free_bytes`; a redeploy
 does not clear a latch. Keep independent guard freshness alerts enabled.
+An explicit guard opt-out first checks both existing latches. It refuses a
+paused or unreadable state and stops the old guard timer only after a safe
+check; disabling protection never implicitly resumes collection.
 
 Stage the OBS-only Ansible playbook with `obs_cluster_apply: false`. Review the
 rendered resources, current cluster health, and certificate paths before
@@ -96,3 +99,5 @@ OpenTelemetry Collector Contrib 0.137.0. It verifies rendering boundaries and
 executes the native event and metric sanitization processors.
 Run `tests/test-wal-guard.py` for limit, latch, recovery and ownership checks;
 these tests never stop a live workload.
+With PyYAML and Ansible available, `tests/test-wal-guard-role.py` executes the
+opt-out and concurrent-pause paths using isolated command fixtures.

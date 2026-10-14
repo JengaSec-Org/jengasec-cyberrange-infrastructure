@@ -44,6 +44,10 @@
     group: root
     mode: '0700'
 
+- name: Honor existing WAL pauses before changing collection or guard settings
+  ansible.builtin.include_tasks: wal-guard-preflight.yml
+  when: obs_cluster_apply | bool
+
 - name: Stage the WAL guard and honor any previous collection pause
   ansible.builtin.include_tasks: wal-guard.yml
   when: obs_cluster_wal_guard_enabled | bool

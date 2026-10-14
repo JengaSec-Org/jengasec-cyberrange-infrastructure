@@ -55,15 +55,16 @@
     mode: '0644'
   loop: [service, timer]
 
-- name: Refuse implicit restart of a paused OBS collector
+- name: Refuse implicit restart of any paused OBS collector
   ansible.builtin.command:
     argv:
       - /usr/bin/python3
       - "{{ obs_cluster_root }}/guard-observability-wal.py"
       - can-start
       - --target
-      - cluster
+      - "{{ item }}"
       - --config
       - "{{ obs_cluster_root }}/wal-guard.json"
   when: obs_cluster_apply | bool
+  loop: [cluster, host]
   changed_when: false
