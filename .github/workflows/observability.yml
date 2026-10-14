@@ -22,6 +22,7 @@ on:
       - scripts/prepare-observability-runtime.py
       - scripts/prepare-observability-storage.py
       - scripts/maintain-observability-spools.py
+      - scripts/guard-observability-wal.py
       - scripts/provision-grafana-access.py
       - scripts/smoke-observability.sh
       - scripts/start-observability.sh
@@ -56,6 +57,7 @@ on:
       - scripts/prepare-observability-runtime.py
       - scripts/prepare-observability-storage.py
       - scripts/maintain-observability-spools.py
+      - scripts/guard-observability-wal.py
       - scripts/provision-grafana-access.py
       - scripts/smoke-observability.sh
       - scripts/start-observability.sh
