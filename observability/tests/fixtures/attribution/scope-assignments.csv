@@ -1,2 +1,5 @@
 contract_version,updated_at,team_id,source_cidr,enterprise,application,namespace,target_ip,active,valid_from,valid_until
 1,2026-10-10T12:00:00Z,JS26-R-001,10.60.1.0/24,ENT-A,APP01,jengasec-ent-a-app01,10.108.0.11,true,2026-10-10T00:00:00Z,
+1,2026-10-10T12:00:00Z,JS26-B-001,10.60.1.20/32,ENT-A,APP01,jengasec-ent-a-app01,10.108.0.11,true,2026-10-10T00:00:00Z,
+1,2026-10-10T12:00:00Z,JS26-RA-001,10.60.2.10/32,ENT-B,APP03,jengasec-ent-b-app03,10.108.0.23,true,2026-10-10T00:00:00Z,
+1,2026-10-10T12:00:00Z,JS26-BA-001,10.60.2.20/32,ENT-B,APP03,jengasec-ent-b-app03,10.108.0.23,true,2026-10-10T00:00:00Z,

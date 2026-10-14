@@ -1,2 +1,5 @@
 contract_version,updated_at,allocation_id,ip_address,kind,participant_id,team_id,team_label,namespace,status,valid_from,valid_until
 1,2026-10-10T12:00:00Z,alloc-js26-p-0001,10.60.1.10,participant,JS26-P-0001,JS26-R-001,red-app,,active,2026-10-10T00:00:00Z,
+1,2026-10-10T12:00:00Z,alloc-js26-p-0002,10.60.1.20,participant,JS26-P-0002,JS26-B-001,blue-app,,active,2026-10-10T00:00:00Z,
+1,2026-10-10T12:00:00Z,alloc-js26-p-0101,10.60.2.10,participant,JS26-P-0101,JS26-RA-001,red-ai,,active,2026-10-10T00:00:00Z,
+1,2026-10-10T12:00:00Z,alloc-js26-p-0102,10.60.2.20,participant,JS26-P-0102,JS26-BA-001,blue-ai,,active,2026-10-10T00:00:00Z,
