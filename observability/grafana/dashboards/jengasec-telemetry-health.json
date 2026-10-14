@@ -929,7 +929,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",source=\"collector\"} | json",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",source=\"collector\"} | json | line_format \"{{.resource_id}} \u00b7 {{.source}} \u00b7 {{.event_type}} \u00b7 {{.outcome}}{{if .resource_service}} \u00b7 {{.resource_service}}{{end}}{{if .resource_namespace}} \u00b7 {{.resource_namespace}}/{{.resource_name}}{{end}}{{if .attributes_reason}} \u00b7 {{.attributes_reason}}{{end}}\"",
           "editorMode": "code",
           "legendFormat": "{{resource_id}}",
           "instant": false,
@@ -944,10 +944,11 @@
         "showTime": true,
         "showLabels": false,
         "showCommonLabels": false,
-        "wrapLogMessage": true,
+        "wrapLogMessage": false,
         "enableLogDetails": true,
         "sortOrder": "Descending",
-        "dedupStrategy": "none"
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
       }
     },
     {
@@ -1299,6 +1300,202 @@
           "placement": "bottom",
           "calcs": [
             "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "title": "Provisioning snapshot health",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 62,
+        "w": 12,
+        "h": 4
+      },
+      "description": "Source reads the database; cache supplies current native attribution. Healthy requires successful refresh, usable data and unexpired capture. Empty records are valid only while healthy.",
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Missing",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Unavailable",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "Healthy",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_provisioning_refresh_success{environment=~\"${environment:regex}\"} * jengasec_provisioning_snapshot_usable{environment=~\"${environment:regex}\"} * ((jengasec_provisioning_snapshot_expires_timestamp_seconds{environment=~\"${environment:regex}\"} - time()) > bool 0) * ((time() - jengasec_provisioning_last_attempt_timestamp_seconds{environment=~\"${environment:regex}\"}) < bool 120)",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}} / {{mode}}",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "Provisioning refresh age",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 62,
+        "w": 12,
+        "h": 4
+      },
+      "description": "Fresh cache delivery does not extend the database snapshot expiry.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Missing",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 120
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - jengasec_provisioning_last_attempt_timestamp_seconds{environment=~\"${environment:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}} / {{mode}}",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 22,
+      "title": "Metrics waiting for delivery",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 66,
+        "w": 24,
+        "h": 7
+      },
+      "description": "Records waiting in the collector remote-write WAL. The native metric name ends in ratio but reports backlog records. Read this with collection freshness and recent delivery failures.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "otelcol_exporter_prometheusremotewrite_wal_lag_ratio{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} / {{job}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
           ]
         },
         "tooltip": {

@@ -295,7 +295,7 @@
           "refId": "A",
           "expr": "k8s_node_condition_ready{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
-          "legendFormat": "{{cluster}} / {{k8s_node_name}}",
+          "legendFormat": "{{cluster}} / {{node}}",
           "instant": true,
           "range": false,
           "queryType": "instant",
@@ -432,7 +432,7 @@
           "refId": "A",
           "expr": "k8s_node_condition_memory_pressure{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
-          "legendFormat": "{{cluster}} / {{k8s_node_name}}",
+          "legendFormat": "{{cluster}} / {{node}}",
           "instant": true,
           "range": false,
           "queryType": "instant",
@@ -502,7 +502,7 @@
           "refId": "A",
           "expr": "k8s_node_condition_disk_pressure{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
-          "legendFormat": "{{cluster}} / {{k8s_node_name}}",
+          "legendFormat": "{{cluster}} / {{node}}",
           "instant": true,
           "range": false,
           "queryType": "instant",
@@ -564,7 +564,7 @@
           "refId": "A",
           "expr": "k8s_deployment_desired{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
-          "legendFormat": "{{cluster}} {{k8s_namespace_name}} / {{k8s_deployment_name}} {{__name__}}",
+          "legendFormat": "{{cluster}} {{namespace}} / {{workload}} {{__name__}}",
           "instant": false,
           "range": true,
           "queryType": "range",
@@ -576,7 +576,7 @@
           "refId": "B",
           "expr": "k8s_deployment_available{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
-          "legendFormat": "{{cluster}} {{k8s_namespace_name}} / {{k8s_deployment_name}} {{__name__}}",
+          "legendFormat": "{{cluster}} {{namespace}} / {{workload}} {{__name__}}",
           "instant": false,
           "range": true,
           "queryType": "range",
@@ -637,9 +637,9 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (cluster,k8s_namespace_name,k8s_pod_name) (clamp_min(delta(k8s_container_restarts{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}[$__rate_interval]), 0))",
+          "expr": "sum by (cluster,namespace,pod) (clamp_min(delta(k8s_container_restarts{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}[$__rate_interval]), 0))",
           "editorMode": "code",
-          "legendFormat": "{{cluster}} {{k8s_namespace_name}} / {{k8s_pod_name}}",
+          "legendFormat": "{{cluster}} {{namespace}} / {{pod}}",
           "instant": false,
           "range": true,
           "queryType": "range",
@@ -725,7 +725,7 @@
           "refId": "A",
           "expr": "k8s_pod_phase{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
-          "legendFormat": "{{cluster}} {{k8s_namespace_name}} / {{k8s_pod_name}}",
+          "legendFormat": "{{cluster}} {{namespace}} / {{pod}}",
           "instant": true,
           "range": false,
           "queryType": "instant",
@@ -750,11 +750,11 @@
                 "collector",
                 "cluster",
                 "namespace",
-                "k8s_namespace_name",
-                "k8s_pod_name",
-                "k8s_deployment_name",
-                "k8s_container_name",
-                "k8s_node_name",
+                "namespace",
+                "pod",
+                "workload",
+                "container",
+                "node",
                 "component_id",
                 "Value"
               ]
@@ -807,10 +807,11 @@
         "showTime": true,
         "showLabels": false,
         "showCommonLabels": false,
-        "wrapLogMessage": true,
+        "wrapLogMessage": false,
         "enableLogDetails": true,
         "sortOrder": "Descending",
-        "dedupStrategy": "none"
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
       }
     },
     {
@@ -1047,6 +1048,68 @@
           "queryType": "range",
           "maxLines": 200,
           "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Metrics waiting for delivery",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 24,
+        "h": 7
+      },
+      "description": "Records waiting in the collector remote-write WAL. The native metric name ends in ratio but reports backlog records. Read this with collection freshness and recent delivery failures.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "otelcol_exporter_prometheusremotewrite_wal_lag_ratio{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} / {{job}}",
+          "instant": false,
+          "range": true,
           "format": "time_series"
         }
       ],

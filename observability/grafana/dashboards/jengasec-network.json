@@ -616,7 +616,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"firewall.decision\"} | json",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"firewall.decision\"} | json | line_format \"{{.resource_id}} \u00b7 {{.source}} \u00b7 {{.event_type}} \u00b7 {{.outcome}}{{if .resource_service}} \u00b7 {{.resource_service}}{{end}}{{if .resource_namespace}} \u00b7 {{.resource_namespace}}/{{.resource_name}}{{end}}{{if .attributes_reason}} \u00b7 {{.attributes_reason}}{{end}}\"",
           "editorMode": "code",
           "legendFormat": "{{resource_id}}",
           "instant": false,
@@ -631,10 +631,11 @@
         "showTime": true,
         "showLabels": false,
         "showCommonLabels": false,
-        "wrapLogMessage": true,
+        "wrapLogMessage": false,
         "enableLogDetails": true,
         "sortOrder": "Descending",
-        "dedupStrategy": "none"
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
       }
     },
     {
@@ -666,7 +667,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"ids.alert\"} | json",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"ids.alert\"} | json | line_format \"{{.resource_id}} \u00b7 {{.source}} \u00b7 {{.event_type}} \u00b7 {{.outcome}}{{if .resource_service}} \u00b7 {{.resource_service}}{{end}}{{if .resource_namespace}} \u00b7 {{.resource_namespace}}/{{.resource_name}}{{end}}{{if .attributes_reason}} \u00b7 {{.attributes_reason}}{{end}}\"",
           "editorMode": "code",
           "legendFormat": "{{resource_id}}",
           "instant": false,
@@ -681,10 +682,11 @@
         "showTime": true,
         "showLabels": false,
         "showCommonLabels": false,
-        "wrapLogMessage": true,
+        "wrapLogMessage": false,
         "enableLogDetails": true,
         "sortOrder": "Descending",
-        "dedupStrategy": "none"
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
       }
     },
     {
@@ -716,7 +718,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"network.flow\"} | json",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",event_type=\"network.flow\"} | json | line_format \"{{.resource_id}} \u00b7 {{.source}} \u00b7 {{.event_type}} \u00b7 {{.outcome}}{{if .resource_service}} \u00b7 {{.resource_service}}{{end}}{{if .resource_namespace}} \u00b7 {{.resource_namespace}}/{{.resource_name}}{{end}}{{if .attributes_reason}} \u00b7 {{.attributes_reason}}{{end}}\"",
           "editorMode": "code",
           "legendFormat": "{{resource_id}}",
           "instant": false,
@@ -731,10 +733,11 @@
         "showTime": true,
         "showLabels": false,
         "showCommonLabels": false,
-        "wrapLogMessage": true,
+        "wrapLogMessage": false,
         "enableLogDetails": true,
         "sortOrder": "Descending",
-        "dedupStrategy": "none"
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
       }
     }
   ]

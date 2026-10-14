@@ -113,6 +113,21 @@ class Grafana:
         self.request("POST", "/api/dashboards/db",
                      json={"dashboard": payload, "folderUid": FOLDER_UID, "overwrite": True})
 
+    def set_staff_home(self):
+        preferences = self.request("GET", "/api/org/preferences")
+        if preferences.get("homeDashboardUID") == "jengasec-overview":
+            return
+        desired = copy.deepcopy(preferences)
+        desired.pop("homeDashboardId", None)
+        desired["homeDashboardUID"] = "jengasec-overview"
+        self.request("PUT", "/api/org/preferences", json=desired)
+        after = self.request("GET", "/api/org/preferences")
+        if after.get("homeDashboardUID") != "jengasec-overview" or any(
+            after.get(key) != value for key, value in preferences.items()
+            if key not in {"homeDashboardUID", "homeDashboardId"}
+        ):
+            raise ProvisioningError("Staff home update changed unrelated preferences")
+
     def update_evidence_links(self):
         source = self.request("GET", "/api/datasources/uid/loki")
         desired = copy.deepcopy(source.get("jsonData", {}))
@@ -263,6 +278,7 @@ def apply(grafana, dashboards, definition, topic=None):
     grafana.ensure_folder()
     for dashboard in dashboards:
         grafana.import_dashboard(dashboard)
+    grafana.set_staff_home()
     grafana.update_evidence_links()
     if topic is not None:
         contacts = grafana.request("GET", "/api/v1/provisioning/contact-points")

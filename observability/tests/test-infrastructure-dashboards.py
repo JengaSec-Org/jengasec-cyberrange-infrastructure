@@ -50,6 +50,7 @@ class FakeGrafana(PROVISION.Grafana):
         self.policy = {"receiver": "empty", "group_by": ["grafana_folder", "alertname"],
                        "routes": [{"receiver": "other-owner", "object_matchers": [["owner", "=", "other"]]}]}
         self.supports_payload = True
+        self.preferences = {"homeDashboardUID": "", "theme": "dark", "timezone": "utc"}
 
     def request(self, method, path, *, expected=(200,), **kwargs):
         self.calls.append((method, path, self.org_id, copy.deepcopy(kwargs.get("json"))))
@@ -58,6 +59,10 @@ class FakeGrafana(PROVISION.Grafana):
             raise AssertionError("Mutation escaped the verified staff organization")
         if path == "/api/health":
             return {"database": "ok"}
+        if path == "/api/org/preferences":
+            if method == "PUT":
+                self.preferences = copy.deepcopy(data)
+            return copy.deepcopy(self.preferences)
         if path.startswith("/api/orgs/name/"):
             return copy.deepcopy(self.org)
         if path.endswith("/health"):

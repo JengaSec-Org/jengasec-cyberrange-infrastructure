@@ -202,7 +202,7 @@
     {
       "uid": "jengasec-cluster-pressure",
       "title": "Kubernetes node pressure",
-      "query": "max by (cluster,k8s_node_name) ({__name__=~\"k8s_node_condition_memory_pressure|k8s_node_condition_disk_pressure|k8s_node_condition_pid_pressure\",environment=\"live\"})",
+      "query": "max by (cluster,node) ({__name__=~\"k8s_node_condition_memory_pressure|k8s_node_condition_disk_pressure|k8s_node_condition_pid_pressure\",environment=\"live\"})",
       "datasource": "prometheus",
       "threshold": 0,
       "for": "5m",
@@ -366,6 +366,20 @@
       "dashboard_uid": "jengasec-network",
       "panel_id": 9,
       "summary": "Recent high or critical IDS observations require investigation. Detection alone does not establish a score."
+    },
+    {
+      "uid": "jengasec-provisioning-stale",
+      "title": "Provisioning attribution unavailable",
+      "query": "(1 - (jengasec_provisioning_refresh_success{environment=\"live\"} * jengasec_provisioning_snapshot_usable{environment=\"live\"} * ((jengasec_provisioning_snapshot_expires_timestamp_seconds{environment=\"live\"} - time()) > bool 0) * ((time() - jengasec_provisioning_last_attempt_timestamp_seconds{environment=\"live\"}) < bool 120))) or on(resource_id,mode) (absent(jengasec_provisioning_snapshot_usable{environment=\"live\",mode=\"source\",resource_id=\"vm103\"}) or absent(jengasec_provisioning_snapshot_usable{environment=\"live\",mode=\"cache\",resource_id=\"vm104\"}))",
+      "datasource": "prometheus",
+      "threshold": 0,
+      "for": "2m",
+      "keep_firing_for": "1m",
+      "severity": "warning",
+      "no_data_state": "NoData",
+      "dashboard_uid": "jengasec-telemetry-health",
+      "panel_id": 20,
+      "summary": "The native provisioning snapshot is missing, failed or expired. Treat current attribution as unknown until source and cache recover."
     }
   ]
 }
