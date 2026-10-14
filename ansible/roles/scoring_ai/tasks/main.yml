@@ -22,33 +22,58 @@
     argv: ["{{ scoring_ai_python }}", -c, "import sys; assert sys.version_info >= (3, 10)"]
   changed_when: false
 
-- name: Create an unprivileged account for the HTTP gateway
-  ansible.builtin.user:
-    name: "{{ scoring_ai_gateway_user }}"
-    system: true
-    create_home: false
-    shell: /usr/sbin/nologin
-    groups: "{{ scoring_ai_gateway_groups }}"
-    append: true
+- name: Require reviewed existing gateway account and group names
+  ansible.builtin.assert:
+    that:
+      - scoring_ai_gateway_user is match('^[A-Za-z_][A-Za-z0-9_.-]*$')
+      - scoring_ai_gateway_group is match('^[A-Za-z_][A-Za-z0-9_.-]*$')
+    fail_msg: Select an existing unprivileged gateway account and one of its existing groups.
+  when: scoring_ai_mode == 'gateway'
+
+- name: Validate gateway identity without changing account or group membership
+  ansible.builtin.command:
+    argv:
+      - "{{ scoring_ai_python }}"
+      - -c
+      - |
+        import grp, os, pwd, sys
+        try:
+            account = pwd.getpwnam(sys.argv[1])
+            group = grp.getgrnam(sys.argv[2])
+        except KeyError:
+            raise SystemExit('The configured gateway account and group must already exist')
+        memberships = set(os.getgrouplist(account.pw_name, account.pw_gid))
+        privileged = {'root', 'sudo', 'wheel', 'admin', 'docker', 'lxd', 'incus', 'disk', 'shadow'}
+        if account.pw_uid == 0 or 0 in memberships or group.gr_gid == 0:
+            raise SystemExit('The gateway account and group must not use UID or GID 0')
+        if group.gr_gid not in memberships:
+            raise SystemExit('The gateway account must already belong to the configured group')
+        if any(grp.getgrgid(gid).gr_name in privileged for gid in memberships):
+            raise SystemExit('The gateway account must not belong to a privileged system group')
+      - "{{ scoring_ai_gateway_user }}"
+      - "{{ scoring_ai_gateway_group }}"
+  changed_when: false
+  check_mode: false
   when: scoring_ai_mode == 'gateway'
 
 - name: Select component state owner
   ansible.builtin.set_fact:
     scoring_ai_owner: "{{ scoring_ai_gateway_user if scoring_ai_mode == 'gateway' else 'root' }}"
+    scoring_ai_group: "{{ scoring_ai_gateway_group if scoring_ai_mode == 'gateway' else 'root' }}"
 
 - name: Create code and private runtime directories
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: directory
     owner: "{{ item.owner }}"
-    group: "{{ item.owner }}"
+    group: "{{ item.group }}"
     mode: "{{ item.mode }}"
   loop:
-    - {path: "{{ scoring_ai_install_root }}", owner: root, mode: '0755'}
-    - {path: "{{ scoring_ai_install_root }}/scoring_ai", owner: root, mode: '0755'}
-    - {path: "{{ scoring_ai_config_root }}", owner: "{{ scoring_ai_owner }}", mode: '0700'}
-    - {path: "{{ scoring_ai_state_root }}", owner: "{{ scoring_ai_owner }}", mode: '0700'}
-    - {path: "{{ scoring_ai_state_root }}/evidence", owner: "{{ scoring_ai_owner }}", mode: '0700'}
+    - {path: "{{ scoring_ai_install_root }}", owner: root, group: root, mode: '0755'}
+    - {path: "{{ scoring_ai_install_root }}/scoring_ai", owner: root, group: root, mode: '0755'}
+    - {path: "{{ scoring_ai_config_root }}", owner: "{{ scoring_ai_owner }}", group: "{{ scoring_ai_group }}", mode: '0700'}
+    - {path: "{{ scoring_ai_state_root }}", owner: "{{ scoring_ai_owner }}", group: "{{ scoring_ai_group }}", mode: '0700'}
+    - {path: "{{ scoring_ai_state_root }}/evidence", owner: "{{ scoring_ai_owner }}", group: "{{ scoring_ai_group }}", mode: '0700'}
 
 - name: Install dependency-free AI service source
   ansible.builtin.copy:
@@ -75,7 +100,7 @@
     content: "{{ scoring_ai_config | to_nice_json }}"
     dest: "{{ scoring_ai_config_root }}/config.json"
     owner: "{{ scoring_ai_owner }}"
-    group: "{{ scoring_ai_owner }}"
+    group: "{{ scoring_ai_group }}"
     mode: '0600'
   no_log: true
   notify: Restart the AI gateway
@@ -85,7 +110,7 @@
     content: "{{ scoring_ai_tokens | to_nice_json }}"
     dest: "{{ scoring_ai_config_root }}/tokens.json"
     owner: "{{ scoring_ai_owner }}"
-    group: "{{ scoring_ai_owner }}"
+    group: "{{ scoring_ai_group }}"
     mode: '0600'
   no_log: true
   when: scoring_ai_mode != 'probe'

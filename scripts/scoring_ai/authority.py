@@ -101,6 +101,8 @@ class Authority:
             value = read_json(self.path)
             if value.get("schema_version") != "scoring-identity/2.0":
                 raise Rejected("unsupported_identity_version", 503)
+            if value.get("historical", False) is not False:
+                raise Rejected("historical_identity", 503)
             integer(value["revision"], 1, 2**63 - 1)
             captured, expiry = timestamp(value["captured_at"]), timestamp(value["expires_at"])
             if not captured <= now < expiry or expiry - captured > 120:

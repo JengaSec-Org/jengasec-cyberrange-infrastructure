@@ -181,6 +181,7 @@ class AuthorityTests(Fixture):
     def test_tampered_and_duplicate_identity_fail_closed(self):
         for mutate, code in (
             (lambda s: s.update(expires_at=stamp(self.now)), "stale_identity"),
+            (lambda s: s.update(historical=True), "historical_identity"),
             (lambda s: s["targets"].append(copy.deepcopy(s["targets"][0])), "unresolved_or_ambiguous_identity"),
             (lambda s: s["allocations"].append(copy.deepcopy(s["allocations"][0])), "unresolved_or_ambiguous_identity"),
             (lambda s: s["scopes"].append(copy.deepcopy(s["scopes"][0])), "unresolved_or_ambiguous_identity"),

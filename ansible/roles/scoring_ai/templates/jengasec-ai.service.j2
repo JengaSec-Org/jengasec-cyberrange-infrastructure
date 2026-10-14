@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User={{ scoring_ai_gateway_user }}
-Group={{ scoring_ai_gateway_user }}
+Group={{ scoring_ai_gateway_group }}
 ExecStart={{ scoring_ai_python }} {{ scoring_ai_install_root }}/run-scoring-ai.py serve --config {{ scoring_ai_config_root }}/config.json
 Restart=on-failure
 RestartSec=5
