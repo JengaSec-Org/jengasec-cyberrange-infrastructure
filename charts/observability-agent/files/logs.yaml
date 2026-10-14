@@ -69,7 +69,7 @@ receivers:
         - action: keep
           source_labels:
           - __name__
-          regex: otelcol_(process_uptime|process_memory_rss|exporter_queue_size|exporter_queue_capacity|exporter_send_failed_metric_points|exporter_send_failed_log_records|exporter_sent_metric_points|exporter_sent_log_records|receiver_accepted_log_records|receiver_refused_log_records|processor_filter_logs_filtered|fileconsumer_.*|wal_.*).*
+          regex: otelcol_(process_uptime|process_memory_rss|exporter_queue_size|exporter_queue_capacity|exporter_send_failed_metric_points|exporter_send_failed_log_records|exporter_sent_metric_points|exporter_sent_log_records|receiver_accepted_log_records|receiver_refused_log_records|processor_filter_logs_filtered|fileconsumer_.*|exporter_prometheusremotewrite_wal_.*).*
 processors:
   memory_limiter:
     check_interval: 5s
@@ -196,6 +196,7 @@ exporters:
       storage: file_storage/logs
   prometheusremotewrite/obs:
     endpoint: ${env:OBS_PROMETHEUS_REMOTE_WRITE_URL}
+    max_batch_request_parallelism: 1
     resource_to_telemetry_conversion:
       enabled: true
     retry_on_failure:

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import socket
 import subprocess
@@ -46,6 +47,10 @@ class ChartTests(unittest.TestCase):
         self.assertEqual(exporter["tls"]["ca_file"], "/etc/otelcol-tls/ca.crt")
         self.assertEqual(exporter["wal"]["directory"], "/var/lib/otelcol/wal")
         self.assertEqual(exporter["remote_write_queue"]["num_consumers"], 1)
+        self.assertEqual(exporter["max_batch_request_parallelism"], 1)
+        scrape = collector["receivers"]["prometheus/collector"]["config"]["scrape_configs"][0]
+        self.assertTrue(re.fullmatch(scrape["metric_relabel_configs"][0]["regex"],
+                                     "otelcol_exporter_prometheusremotewrite_wal_lag"))
         deployment = next(item for item in manifests if item["kind"] == "Deployment")
         pod = deployment["spec"]["template"]["spec"]
         self.assertTrue(pod["securityContext"]["runAsNonRoot"])
@@ -147,6 +152,20 @@ class ProcessorTests(unittest.TestCase):
                         {"key": "filter", "value": {"stringValue": "filter/json_object"}},
                     ],
                 }]}}]}]}]}
+                state_points = [{"timeUnixNano": str(time.time_ns()), "asInt": str(int(state == "running")),
+                                 "attributes": [{"key": "k8s.container.status.state", "value": {"stringValue": state}}]}
+                                for state in ["running", "waiting", "terminated"]]
+                metric["resourceMetrics"][0]["scopeMetrics"][0]["metrics"].append({
+                    "name": "k8s.container.status.state", "gauge": {"dataPoints": state_points}})
+                metric["resourceMetrics"].append({"resource": {"attributes": [
+                    {"key": "k8s.namespace.name", "value": {"stringValue": "quota-namespace"}},
+                    {"key": "k8s.resourcequota.name", "value": {"stringValue": "namespace-quota"}},
+                    {"key": "k8s.resourcequota.uid", "value": {"stringValue": "quota-secret-sentinel"}},
+                ]}, "scopeMetrics": [{"metrics": [{"name": "k8s.resource_quota.used", "gauge": {"dataPoints": [
+                    {"timeUnixNano": str(time.time_ns()), "asInt": "2", "attributes": [
+                        {"key": "resource", "value": {"stringValue": resource}}]}
+                    for resource in ["requests.cpu", "requests.memory"]
+                ]}}]}]})
                 request = urllib.request.Request(f"http://127.0.0.1:{port}/v1/metrics", data=json.dumps(metric).encode(),
                                                  headers={"Content-Type": "application/json"})
                 deadline = time.monotonic() + 15
@@ -190,7 +209,7 @@ class ProcessorTests(unittest.TestCase):
             self.assertEqual(body["source_event_id"], hashlib.sha256(b"event-fixture:42").hexdigest())
             self.assertNotIn("note", body)
             resources = [resource for doc in documents for resource in doc.get("resourceMetrics", [])]
-            self.assertEqual(len(resources), 1)
+            self.assertEqual(len(resources), 2)
             attributes = {item["key"]: decode_value(item["value"]) for item in resources[0]["resource"]["attributes"]}
             self.assertEqual(attributes["environment"], "live")
             self.assertEqual(attributes["cluster"], "blue")
@@ -199,6 +218,16 @@ class ProcessorTests(unittest.TestCase):
             point = resources[0]["scopeMetrics"][0]["metrics"][0]["gauge"]["dataPoints"][0]
             labels = {item["key"]: decode_value(item["value"]) for item in point["attributes"]}
             self.assertEqual(labels, {"namespace": "kube-system", "filter": "filter/json_object"})
+            native_metrics = [item for resource in resources for scope in resource["scopeMetrics"] for item in scope["metrics"]]
+            states = next(item for item in native_metrics if item["name"] == "k8s.container.status.state")
+            states = [{item["key"]: decode_value(item["value"]) for item in point["attributes"]}
+                      for point in states["gauge"]["dataPoints"]]
+            self.assertEqual({point["state"] for point in states}, {"running", "waiting", "terminated"})
+            quota = next(item for item in native_metrics if item["name"] == "k8s.resource_quota.used")
+            quota = [{item["key"]: decode_value(item["value"]) for item in point["attributes"]}
+                     for point in quota["gauge"]["dataPoints"]]
+            self.assertEqual({point["quota_resource"] for point in quota}, {"requests.cpu", "requests.memory"})
+            self.assertTrue(all(point["workload"] == "namespace-quota" for point in quota))
 
 
 class HostLogTests(unittest.TestCase):
@@ -207,6 +236,10 @@ class HostLogTests(unittest.TestCase):
         self.assertNotIn("k8sattributes", config["processors"])
         self.assertFalse(any("/app/" in path for path in config["receivers"]["filelog/application"]["include"]))
         storage = config["extensions"]["file_storage/logs"]
+        self.assertEqual(config["exporters"]["prometheusremotewrite/obs"]["max_batch_request_parallelism"], 1)
+        scrape = config["receivers"]["prometheus/collector"]["config"]["scrape_configs"][0]
+        self.assertTrue(re.fullmatch(scrape["metric_relabel_configs"][0]["regex"],
+                                     "otelcol_exporter_prometheusremotewrite_wal_lag"))
         for path in [storage["directory"], storage["compaction"]["directory"],
                      config["exporters"]["prometheusremotewrite/obs"]["wal"]["directory"]]:
             self.assertTrue(Path(path).is_relative_to("/var/lib/jengasec-container-logs"))

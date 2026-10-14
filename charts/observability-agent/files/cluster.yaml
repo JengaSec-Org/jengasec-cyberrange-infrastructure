@@ -157,7 +157,7 @@ receivers:
         - action: keep
           source_labels:
           - __name__
-          regex: otelcol_(process_uptime|process_memory_rss|exporter_queue_size|exporter_queue_capacity|exporter_send_failed_metric_points|exporter_send_failed_log_records|exporter_sent_metric_points|exporter_sent_log_records|receiver_accepted_metric_points|receiver_refused_metric_points|receiver_accepted_log_records|receiver_refused_log_records|processor_refused_metric_points|processor_refused_log_records|wal_.*).*
+          regex: otelcol_(process_uptime|process_memory_rss|exporter_queue_size|exporter_queue_capacity|exporter_send_failed_metric_points|exporter_send_failed_log_records|exporter_sent_metric_points|exporter_sent_log_records|receiver_accepted_metric_points|receiver_refused_metric_points|receiver_accepted_log_records|receiver_refused_log_records|processor_refused_metric_points|processor_refused_log_records|exporter_prometheusremotewrite_wal_.*).*
 processors:
   memory_limiter:
     check_interval: 5s
@@ -230,9 +230,21 @@ processors:
         != nil
       - set(attributes["workload"], resource.attributes["k8s.replicaset.name"]) where resource.attributes["k8s.replicaset.name"]
         != nil
+      - set(attributes["workload"], resource.attributes["k8s.replicationcontroller.name"]) where resource.attributes["k8s.replicationcontroller.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.hpa.name"]) where resource.attributes["k8s.hpa.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.resourcequota.name"]) where resource.attributes["k8s.resourcequota.name"]
+        != nil
+      - set(attributes["state"], attributes["k8s.container.status.state"]) where attributes["k8s.container.status.state"]
+        != nil and IsMatch(attributes["k8s.container.status.state"], "^(running|waiting|terminated)$")
+      - set(attributes["reason"], attributes["k8s.container.status.reason"]) where attributes["k8s.container.status.reason"]
+        != nil and IsMatch(attributes["k8s.container.status.reason"], "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,63}$")
+      - set(attributes["quota_resource"], attributes["resource"]) where IsMatch(metric.name, "^k8s\\.resource_quota\\.")
+        and attributes["resource"] != nil and IsMatch(attributes["resource"], "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,252}$")
       - keep_keys(attributes, ["namespace", "pod", "container", "node", "workload", "condition", "state", "reason",
         "cpu", "mode", "direction", "interface", "receiver", "exporter", "processor", "filter", "transport", "code",
-        "status", "method", "enterprise", "application", "component"])
+        "status", "method", "enterprise", "application", "component", "quota_resource"])
   transform/metric_resources:
     error_mode: propagate
     metric_statements:
@@ -261,6 +273,7 @@ exporters:
       storage: file_storage/cluster
   prometheusremotewrite/obs:
     endpoint: ${env:OBS_PROMETHEUS_REMOTE_WRITE_URL}
+    max_batch_request_parallelism: 1
     resource_to_telemetry_conversion:
       enabled: true
     retry_on_failure:

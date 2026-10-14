@@ -24,6 +24,11 @@ export failures in addition to pod readiness. A full PVC or queue is a loss
 risk and requires operator attention. Retention in the central store remains
 seven days.
 
+Remote write sends requests serially. The receiver's bounded out-of-order
+window must cover the expected replay delay. Monitor WAL lag as well as the
+memory queue: an empty memory queue can still have a disk backlog. A local-path
+PVC request does not enforce a disk quota, so also monitor the node filesystem.
+
 Stage the OBS-only Ansible playbook with `obs_cluster_apply: false`. Review the
 rendered resources, current cluster health, and certificate paths before
 setting it to true. The role uses an atomic Helm upgrade and preserves the PVC.
