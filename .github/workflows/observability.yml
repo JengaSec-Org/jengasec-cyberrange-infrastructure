@@ -98,7 +98,9 @@ jobs:
             /tmp/jengasec-ansible-venv/bin/ansible-playbook -i localhost, "$playbook" --syntax-check
           done
       - name: Rehearse OBS VM deployment
-        run: PATH="/tmp/jengasec-ansible-venv/bin:$PATH" make obs-vm-validate
+        run: |
+          python3 observability/tests/test-vm-rehearsal-cleanup.py
+          PATH="/tmp/jengasec-ansible-venv/bin:$PATH" make obs-vm-validate
       - name: Verify configuration changes restart the stack
         run: |
           export PATH="/tmp/jengasec-ansible-venv/bin:$PATH"

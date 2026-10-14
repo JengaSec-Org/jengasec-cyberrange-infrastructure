@@ -11,7 +11,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REHEARSAL_ROOT="$(mktemp -d /tmp/jengasec-obs-vm.XXXXXX)"
 
 cleanup() {
-  exit_status=$?
+  local exit_status=$?
   if declare -p compose >/dev/null 2>&1; then
     if (( exit_status != 0 )); then
       vector_container="$("${compose[@]}" ps --quiet vector 2>/dev/null || true)"
@@ -23,8 +23,22 @@ cleanup() {
     "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
   fi
   if [[ -n "${REHEARSAL_ROOT:-}" && -d "$REHEARSAL_ROOT" ]]; then
-    rm -r -- "$REHEARSAL_ROOT"
+    # Container-owned queue directories can be private to a different UID.
+    # Privileged cleanup is confined to this caller's exact mktemp directory.
+    if [[ ! "$REHEARSAL_ROOT" =~ ^/tmp/jengasec-obs-vm\.[[:alnum:]]{6}$ ]] \
+      || [[ -L "$REHEARSAL_ROOT" ]] \
+      || [[ "$(realpath -e -- "$REHEARSAL_ROOT")" != "$REHEARSAL_ROOT" ]] \
+      || [[ "$(stat --format '%u' "$REHEARSAL_ROOT")" != "$(id -u)" ]]; then
+      printf 'Refusing cleanup outside the owned OBS rehearsal directory\n' >&2
+      if (( exit_status == 0 )); then exit_status=1; fi
+    elif ! rm -r --one-file-system -- "$REHEARSAL_ROOT" 2>/dev/null; then
+      if ! sudo -n rm -r --one-file-system -- "$REHEARSAL_ROOT"; then
+        printf 'Could not remove the OBS rehearsal directory\n' >&2
+        if (( exit_status == 0 )); then exit_status=1; fi
+      fi
+    fi
   fi
+  exit "$exit_status"
 }
 trap cleanup EXIT
 
