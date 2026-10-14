@@ -117,6 +117,17 @@ class DurableQueueTests(unittest.TestCase):
         self.assertEqual(self.queue.size()[0], 2)
         self.assertEqual(self.queue.get("dropped_total"), "1")
 
+    def test_delayed_canary_classification_uses_private_window_and_exact_tuple(self):
+        with self.queue.db:
+            self.queue.set("validation_windows", json.dumps([{"src_ip": "192.0.2.1", "dst_ip": "198.51.100.1", "start": "2026-10-14T08:59:00.000000Z", "end": "2026-10-14T09:01:00.000000Z"}]))
+        raw = {"src_addr": "192.0.2.1", "dst_addr": "198.51.100.1", "proto": "ICMP", "bytes": 100, "packets": 1, "time_flow_end_ns": 1791968400000000000}
+        value = mappings.map_flow(CONFIG, raw, "delayed-canary")
+        value["ts"] = "2026-10-14T09:00:00.000000Z"
+        self.assertEqual(agent.classify_validation(value, self.queue)["environment"], "validation")
+        value["environment"] = "live"
+        value["attributes"]["src_ip"] = "192.0.2.2"
+        self.assertEqual(agent.classify_validation(value, self.queue)["environment"], "live")
+
 
 if __name__ == "__main__":
     unittest.main()

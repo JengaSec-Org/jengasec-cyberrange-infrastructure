@@ -8,6 +8,7 @@ The queue commits journal cursors together with events. It never retains raw log
 import argparse
 import fcntl
 import json
+import ipaddress
 import os
 import pathlib
 import re
@@ -21,7 +22,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from infrastructure_events import canonical, digest, event, map_flow, map_ids, map_journal
+from infrastructure_events import canonical, digest, event, map_flow, map_ids, map_journal, utc
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -125,6 +126,19 @@ def collection_loss(config, queue, reason, identity):
     queue.append(event(config, "collector.loss", identity, None, {}, {"count": 1, "reason": reason}, severity="medium", outcome="error"))
 
 
+def classify_validation(value, queue):
+    """Only a private operator marker can classify delayed network canaries."""
+    if value["source"] not in {"network", "firewall", "ids"}:
+        return value
+    attrs = value["attributes"]
+    for window in json.loads(queue.get("validation_windows", "[]")):
+        if (attrs.get("src_ip") == window["src_ip"] and attrs.get("dst_ip") == window["dst_ip"]
+                and window["start"] <= value["ts"] <= window["end"]):
+            value["environment"] = "validation"
+            break
+    return value
+
+
 def collect_journal(config, queue):
     fields = "__CURSOR,__REALTIME_TIMESTAMP,_BOOT_ID,_COMM,_TRANSPORT,_SYSTEMD_UNIT,UNIT,MESSAGE,MESSAGE_ID"
     args = ["journalctl", "--output=json", "--no-pager", "--quiet", "--all", "--output-fields=" + fields]
@@ -150,7 +164,7 @@ def collect_journal(config, queue):
                 raw = json.loads(line)
                 value = map_journal(config, raw)
                 if value:
-                    queue.append(value)
+                    queue.append(classify_validation(value, queue))
                 if isinstance(raw.get("__CURSOR"), str):
                     queue.set("journal_cursor", raw["__CURSOR"])
                     queue.set("journal_timestamp_seconds", int(raw["__REALTIME_TIMESTAMP"]) // 1_000_000)
@@ -198,7 +212,7 @@ def collect_ids(config, queue):
                     queue.set("ids_last_stats_timestamp_seconds", int(time.time()))
                 value = map_ids(config, raw, marker + ":" + str(start))
                 if value:
-                    queue.append(value)
+                    queue.append(classify_validation(value, queue))
             except (ValueError, KeyError, TypeError):
                 queue.increment("rejected_total")
             offset = stream.tell()
@@ -279,7 +293,7 @@ def decode_flows(config, queue):
                     raise ValueError("oversized flow")
                 raw = json.loads(line)
                 identity = "flow:" + digest(canonical(raw))
-                queue.append(map_flow(config, raw, identity))
+                queue.append(classify_validation(map_flow(config, raw, identity), queue))
                 queue.set("flow_last_observed_timestamp_seconds", int(time.time()))
             except (ValueError, KeyError, TypeError):
                 queue.increment("rejected_total")
@@ -291,6 +305,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=pathlib.Path, required=True)
     parser.add_argument("--decode-flows", action="store_true")
+    parser.add_argument("--validation-source-ip")
+    parser.add_argument("--validation-destination-ip")
+    parser.add_argument("--validation-seconds", type=int)
     args = parser.parse_args()
     os.umask(0o077)
     config = load_config(args.config)
@@ -298,6 +315,18 @@ def main():
     state.mkdir(mode=0o700, parents=True, exist_ok=True)
     queue = Queue(state / "events.sqlite3")
     try:
+        if any((args.validation_source_ip, args.validation_destination_ip, args.validation_seconds)):
+            if not all((args.validation_source_ip, args.validation_destination_ip, args.validation_seconds)) or not 10 <= args.validation_seconds <= 300:
+                raise ValueError("validation requires a bounded source, destination and duration")
+            current = time.time()
+            window = {"src_ip": str(ipaddress.ip_address(args.validation_source_ip)),
+                      "dst_ip": str(ipaddress.ip_address(args.validation_destination_ip)),
+                      "start": utc(current), "end": utc(current + args.validation_seconds)}
+            with queue.db:
+                windows = json.loads(queue.get("validation_windows", "[]"))
+                queue.set("validation_windows", json.dumps((windows + [window])[-16:]))
+            print("validation window recorded")
+            return 0
         if args.decode_flows:
             decode_flows(config, queue)
             return 0
