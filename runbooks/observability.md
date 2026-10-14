@@ -151,6 +151,15 @@ identities must already exist in Grafana; only the development fixture creates
 synthetic users. Managed users are Viewers, stale memberships are removed, and
 staff/judge accounts receive the all-application view.
 
+The OBS role manages Grafana access by default. Set
+`obs_manage_grafana_access: false` to refresh canonical lookups and generated
+dashboard files without running membership convergence. For a manual refresh,
+pass `--manage-grafana-access false` to `refresh-observability-state.sh`; this
+mode does not require Grafana credentials. It preserves existing Grafana users,
+memberships, data sources and imported dashboards. Publish dashboard changes
+separately through the approved importer. A retained release must support the
+switch before it can be activated with access management disabled.
+
 This canonical interface is separate from the native read-only provisioning
 adapter in `observability/provisioning/README.md`. The native adapter cannot
 create Grafana memberships or treat provisioning rows as website signups.

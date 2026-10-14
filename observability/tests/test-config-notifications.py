@@ -269,7 +269,7 @@ class ConfigurationNotificationTests(unittest.TestCase):
             notifications = runtime / "notifications.txt"
             values = {"obs_website_feed_url": "https://receiver.example/api/feed", "obs_grafana_port": 3000}
 
-            def run():
+            def run(expected_error=None):
                 variables = base / "variables.json"
                 variables.write_text(json.dumps(values))
                 environment = dict(os.environ, ANSIBLE_NOCOLOR="1", ANSIBLE_STDOUT_CALLBACK="default")
@@ -277,6 +277,10 @@ class ConfigurationNotificationTests(unittest.TestCase):
                     [ansible, "--inventory", "localhost,", "--forks", "1", str(playbook),
                      "--extra-vars", "@" + str(variables)],
                     cwd=checkout, env=environment, text=True, capture_output=True, timeout=180)
+                if expected_error:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(expected_error, result.stdout + result.stderr)
+                    return None
                 self.assertEqual(result.returncode, 0, (result.stdout + result.stderr)[-6000:])
                 recap = re.search(r"localhost\s+:\s+ok=\d+\s+changed=(\d+)\s+unreachable=0\s+failed=0", result.stdout)
                 self.assertIsNotNone(recap, result.stdout[-1500:])
@@ -293,6 +297,8 @@ class ConfigurationNotificationTests(unittest.TestCase):
             initial_notifications = notification_count()
             self.assertGreater(initial_notifications, 0)
             fingerprint = (runtime / "opt/current/.source-sha256").read_bytes()
+            refresh_unit = runtime / "etc/units/jengasec-observability-refresh.service"
+            self.assertNotIn("--manage-grafana-access", refresh_unit.read_text())
 
             self.assertEqual(run(), 0, "identical configured deployment must be idempotent")
             self.assertEqual(notification_count(), initial_notifications)
@@ -316,6 +322,24 @@ class ConfigurationNotificationTests(unittest.TestCase):
             self.assertEqual(run(), 0, "identical environment deployment must be idempotent")
             self.assertEqual(notification_count(), initial_notifications + 2)
             self.assertFalse((runtime / "systemd").exists(), "test must not install host systemd units")
+
+            values["obs_manage_grafana_access"] = False
+            self.assertGreater(run(), 0)
+            self.assertIn("--manage-grafana-access false", refresh_unit.read_text())
+            self.assertEqual(notification_count(), initial_notifications + 2,
+                             "changing only refresh access must not restart the stack")
+            self.assertEqual((runtime / "opt/current/.source-sha256").read_bytes(), fingerprint)
+            self.assertEqual(run(), 0, "identical access settings must be idempotent")
+
+            current = (runtime / "opt/current").resolve()
+            retained = runtime / "opt/releases/older-refresh"
+            shutil.copytree(current, retained)
+            (retained / "scripts/refresh-observability-state.sh").write_text("#!/bin/sh\nexit 0\n")
+            values.update(obs_activate_existing_release=True, obs_release_id="older-refresh")
+            run("The selected release cannot disable Grafana access management")
+            self.assertEqual((runtime / "opt/current").resolve(), current)
+            self.assertIn("--manage-grafana-access false", refresh_unit.read_text())
+            self.assertEqual(notification_count(), initial_notifications + 2)
 
 
 if __name__ == "__main__":

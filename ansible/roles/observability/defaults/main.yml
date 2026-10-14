@@ -26,6 +26,7 @@ obs_infrastructure_scoring_certificate_sha1: ""
 obs_manage_packages: true
 obs_manage_systemd: true
 obs_manage_storage_ownership: true
+obs_manage_grafana_access: true
 obs_validate_runtime: true
 obs_validate_network: false
 obs_start: false
