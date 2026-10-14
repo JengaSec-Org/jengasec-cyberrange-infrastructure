@@ -4,6 +4,7 @@ Every area writes its own scripts here. Copy `_template.sh`, keep the header, an
 
 | Script | Owner | Does |
 |---|---|---|
+| `import_platform_exports.py` | Application Platform | Translates the website's `cells.yaml` and scope CSV exports into the infrastructure cell and scope contracts |
 | `provision-cells.sh` | Application Platform | Creates or updates enabled ENT-A/ENT-B application instances from `cells.yaml` |
 | `create-accounts.py` | Application Platform | Creates Gitea users, organisations and repositories from the allocation export |
 | `make-wg-configs.py` | Network & Access | One WireGuard key and config per person, plus the gateway peer file |
@@ -24,3 +25,26 @@ Every area writes its own scripts here. Copy `_template.sh`, keep the header, an
 | `wait-observability-stack.sh` | Observability | Wait for the production OBS containers to become ready |
 | `validate-observability-vm.sh` | Observability | Rehearse the OBS VM role twice in an isolated local directory |
 | `fingerprint-observability-release.py` | Observability | Prevent reuse of an immutable OBS VM release ID with different source |
+
+Import the competition platform's cell and scope exports before provisioning:
+
+```bash
+python3 scripts/import_platform_exports.py \
+  --cells /path/to/platform-cells.yaml \
+  --scope /path/to/platform-scope-assignments.csv \
+  --cells-output scripts/cells.yaml \
+  --scope-output contracts/scope-assignments.csv
+```
+
+Run `make contracts` after importing and review both generated files before
+provisioning. The importer rejects non-canonical namespaces or service
+addresses rather than silently renaming a cell that the website deploy agent
+targets directly.
+
+The platform's `--reset-day` operation calls `make-scope.py` with
+`JENGASEC_COMPETITION_ID` and `JENGASEC_DEPLOY_TOKEN`; the script fetches the
+current competition exports directly from the website API. Local import files
+remain useful for manual scope updates. Application day resets should be run
+through the platform's `make-cells.py --reset-day N` command, which restores
+the frozen digest and seed database before applying scope. Do not use the
+legacy Helm-revision `reset-cell.sh` path for competition day resets.
