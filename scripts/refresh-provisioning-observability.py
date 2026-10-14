@@ -248,14 +248,14 @@ def encode(document):
     return data
 
 
-def atomic_write(path, payload):
+def atomic_write(path, payload, *, mode=0o600):
     with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".provisioning-", delete=False) as handle:
         temporary = Path(handle.name)
         try:
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-            os.chmod(temporary, 0o600)
+            os.chmod(temporary, mode)
             os.replace(temporary, path)
             descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
             try:
