@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect and deliver JengaSec infrastructure events
+
+[Timer]
+OnBootSec=20s
+OnUnitInactiveSec=10s
+AccuracySec=1s
+Unit=jengasec-event-agent.service
+
+[Install]
+WantedBy=timers.target

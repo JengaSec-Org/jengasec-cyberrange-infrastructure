@@ -7,7 +7,7 @@ more than one of them.
 
 | Family | Contains | Authority | Storage |
 |---|---|---|---|
-| Telemetry | Application, ingress, network, IDS, Kubernetes and host observations | `telemetry-event.schema.json` | Loki and the OBS telemetry store |
+| Telemetry | Application-scoped observations and global infrastructure observations | `telemetry-event.schema.json` and `infrastructure-event.schema.json` | Loki and the OBS telemetry store |
 | Platform audit | Staff and automated changes to platform state | Competition Platform audit contract | Platform audit store; staff access only |
 | Competition | Findings, decisions, scores, appeals and published results | Scoring and AI contracts | Competition Platform database |
 

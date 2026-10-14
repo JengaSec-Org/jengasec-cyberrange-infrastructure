@@ -1,0 +1,23 @@
+[Unit]
+Description=JengaSec sanitized infrastructure event collection
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 {{ obs_events_install_root }}/collect-infrastructure-events.py --config {{ obs_events_config_root }}/config.json
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths={{ obs_events_state_dir }} {{ obs_events_metrics_file | dirname }}
+MemoryMax=256M
+TimeoutStartSec=90
+StandardOutput=null
+StandardError=journal

@@ -42,6 +42,7 @@ assert_invalid \
   contracts/fixtures/telemetry/invalid/extra-top-level-field.json
 
 python scripts/validate-contracts.py
+python observability/tests/test-infrastructure-events.py
 
 rendered="$(mktemp -d)"
 cleanup() {
