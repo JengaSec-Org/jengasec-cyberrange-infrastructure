@@ -401,19 +401,133 @@ it for older releases. Verify native Loki and Prometheus queries and a
 labelled validation event. Run the development smoke check in an isolated
 rehearsal. Retain backups and evidence through the appeal window.
 
-The website receiver and authentication remain website-owned. The AI network
-endpoint, transport and authentication remain AI-owned. Until those owners
-publish their interfaces, do not treat a rehearsal mock or the local AI spool
-as a live integration.
+The website receiver and authentication remain website-owned. The shared AI
+gateway uses the versioned AI API contract. A rehearsal mock or a local spool
+does not establish that either integration is deployed.
 
 ## Outbound integrations
 
 The development stack posts sanitized events to its mock `/api/feed` receiver.
-Set `JENGASEC_WEBSITE_FEED_URL` only after the website owner provides the live
-HTTPS receiver and authentication method. `make obs-smoke` proves a live event
-arrived without sensitive or attribution fields.
+Keep `JENGASEC_WEBSITE_FEED_URL` pointed at that event-consumer interface. The
+website scoring endpoint accepts calculated criterion revisions, so it must
+receive the separate scoring collector's `scoring-feed/2.0` envelope.
 
 Vector also writes normalized events to the `vector-ai-handoff` volume. A live
 deployment mounts that volume at `/var/lib/vector/ai-handoff/` with OBS-only
-write access. Do not add a network destination or credentials until the AI
-owner publishes that interface.
+write access. The AI gateway reads this bounded spool and applies fresh
+platform scope to each caller.
+
+## Scoring collector rollout and recovery
+
+Use the website owner's approved release and a designated competition. Apply
+its migrations and run `manage.py scoring_policy preflight --competition ID`
+before enrollment. Resolve baseline differences before freezing a future
+window with `scoring_policy enroll`. The website requires an explicit archive
+byte budget. Register verified frozen workloads, assignments, producers and
+scenario versions with `manage.py scoring_sources`. Confirm the deployed
+website release, acting identity and secret paths before starting collection.
+
+The deployment agent must run with `--verify-artifacts` during the competition.
+Its authenticated artifact heartbeat verifies deployed content independently
+of application health. A tag, an old freeze or a ready process is insufficient.
+AI workload owners must supply equivalent authenticated deployment receipts.
+An outage should reduce measured availability; missing content identity must
+hold scoring. Do not fill an identity gap retroactively.
+
+Prepare a private JSON configuration that validates against
+`contracts/scoring-collector.schema.json`. Set the exact HTTPS website origin,
+competition ID, UTC window, feed credential file, source-cache budget and
+private state directory. `producers` maps local aliases to platform-issued
+producer UUIDs and credential files. Each `probes` entry names its registered
+target, producer alias, health path, separate functional path and typed JSON
+assertions. A successful process-health response cannot satisfy a failed
+functional assertion. Set `metrics_file` to the existing node exporter's
+textfile directory. All credential files must be owner-only.
+
+For native proof, configure the existing private Loki endpoint and its staff
+headers file. List the infrastructure resources that the collector may cite.
+For AI receipts, configure `ai_gateway.url`, its operator credential file and
+an exact producer map from team, source ID and role to the platform producer
+UUID. The bridge retains complete native and embedded effect proof before
+queueing normalized receipts and acknowledging the gateway cursor. A missing
+mapping for an issued case holds that cursor. Unscheduled action audit records
+stay non-scoring records.
+
+Deploy with `ansible/scoring-observability.yml` and a private inventory selecting
+one existing OBS host. Supply `obs_scoring_policy_source` as the checked-out
+website source, `obs_scoring_config_source` as the private JSON file, and only
+the explicit `obs_scoring_credentials` files. The role uses the existing Python
+runtime with JSON Schema and YAML support. It creates no accounts and changes
+no SSH settings. `obs_scoring_start` defaults to false. Review the selected
+host, storage budget, credentials and rollback before enabling the service.
+
+The service keeps functional measurements on a separate schedule from slow
+publication. Its private `status.json` and `probes.json` distinguish delivery
+from probe progress. Existing node metrics expose pending rows, pending bytes,
+rejected rows and backpressure. At capacity or after a storage failure, restore
+capacity or repair the source before retrying. Preserve the delivery database,
+source cache and original IDs across restarts. Do not reset cursors to make a
+warning disappear. A missing source receipt or archive must remain a hold.
+
+Use `ansible/scoring-ai.yml` for the separately selected gateway, actuator or
+effect-probe role. The gateway requires an existing unprivileged account and
+group with the reviewed file access; the role does not create identities or
+change memberships. Include its location snippet in the existing TLS virtual
+host. Configure a fixed authenticated command to the actuator and a separate
+fixed command to the effect verifier.
+
+Deploy `ansible/scoring-ai-identity.yml` on each selected gateway and actuator
+host before enabling actions. Set the website's
+`DJANGO_SCORING_IDENTITY_TOKEN` and supply its matching private file as
+`scoring_ai_identity_token_source`. The `scoring_ai_identity_config` object
+requires `schema_version: scoring-ai-identity/1.0`, the HTTPS `origin`, the
+competition ID, `token_file` under the role's configuration directory, and
+`snapshot_file` under its state directory. An optional `ca_file` selects a
+root-owned CA bundle. The credential grants identity reads only.
+
+For a gateway, set the role's `scoring_ai_identity_reader_user` and
+`scoring_ai_identity_reader_group` to its existing service identity, and set
+the same `reader_group` in the JSON configuration. The publisher owns the
+snapshot and grants that group read access only. For a root actuator, omit
+the reader group. Set each runtime's `identity_file` to that host's published
+snapshot. Keep the credential outside all runtime-readable directories.
+Enable `scoring_ai_identity_start` during the approved rollout. Confirm a
+fresh snapshot can be read as the selected service account before starting
+the gateway. The timer refreshes every 30 seconds and invalidates the snapshot
+on a failed refresh; actions require current authority with at most 120
+seconds of validity.
+
+The actuator uses a dedicated drop-only
+nftables table and timed exact-target tuples. It requires fresh current scope,
+management-network exclusions, one active restriction per team and target,
+five new restrictions per minute, thirty per hour and leases of at most 60
+seconds. Expired authority, unsupported actions and unverified effects cannot
+be recorded as successful execution.
+
+The effect verifier must run from the approved source and independent control
+addresses. It checks actual service responses before, during and after the
+restriction. Runtime design, safety and decision assertions must come from the
+registered independent observer. Teams still supply their competition AI
+services; the shared gateway does not manufacture a competing agent or a
+successful runtime assertion.
+
+Before finalization, verify each role's source, timed identity, native proof,
+calculated facts, feed outcome, stored revision and authorized website view.
+Exercise a correction, duplicate retry, partial rejection, outage/restart,
+override, delayed board, evidence-access rejection and appeal hold. Verify
+actual effect, automatic expiry, explicit reversal and the kill switch on the
+approved network target. Have another reviewer reproduce the marks from the
+archived inputs. Local tests are not evidence of this live acceptance.
+
+Rollback starts by enabling the AI kill switch and verifying restoration of
+all active restrictions. Stop the scoring collector and gateway, disable their
+units, and restore their reviewed prior configuration or source release.
+Preserve queued rows, receipt cursors, website score history and held evidence.
+Do not flush shared firewall tables or delete scoring data. Resume with the
+same state only after source identity, policy and receiver compatibility pass.
+
+For isolated integration validation, install the website's test dependencies,
+set `JENGASEC_PLATFORM_SOURCE` to its compatible checkout, and run
+`make scoring-integration-check` with that Python environment. The check uses
+a disposable test database and local functional HTTP service. Run
+`make scoring-check` for collector and AI transport, proof and failure checks.

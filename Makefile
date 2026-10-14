@@ -1,4 +1,4 @@
-.PHONY: help lint contracts cells dev obs-validate obs-up obs-smoke obs-down obs-vm-validate
+.PHONY: help lint contracts cells dev obs-validate obs-up obs-smoke obs-down obs-vm-validate scoring-check scoring-integration-check
 help:
 	@echo "make lint          # the same checks CI runs"
 	@echo "make contracts     # validate shared contracts and fixtures"
@@ -9,6 +9,7 @@ help:
 	@echo "make obs-smoke     # prove telemetry inputs and metrics arrived"
 	@echo "make obs-down      # stop the stack and keep data"
 	@echo "make obs-vm-validate # rehearse OBS VM deployment without live changes"
+	@echo "make scoring-check # validate score delivery and scoped AI adapters"
 
 lint:
 	shellcheck -x -P scripts scripts/*.sh tools/*.sh observability/tests/*.sh
@@ -21,6 +22,7 @@ lint:
 		--set obs.prometheusRemoteWriteUrl=http://obs.example.invalid:9090/api/v1/write \
 		--set obs.tls.insecure=true > /dev/null
 	$(MAKE) contracts
+	$(MAKE) scoring-check
 
 contracts:
 	python3 scripts/validate-contracts.py
@@ -45,3 +47,10 @@ obs-down:
 
 obs-vm-validate:
 	./scripts/validate-observability-vm.sh
+
+scoring-check:
+	python3 observability/tests/test-scoring-collector.py
+	python3 observability/tests/test-scoring-ai.py
+
+scoring-integration-check:
+	python3 observability/tests/test-scoring-platform.py

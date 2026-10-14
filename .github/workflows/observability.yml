@@ -5,8 +5,10 @@ on:
     paths:
       - .github/workflows/observability.yml
       - ansible/observability*.yml
+      - ansible/scoring*.yml
       - ansible/requirements.txt
       - ansible/roles/observability*/**
+      - ansible/roles/scoring*/**
       - ansible/site.yml
       - Makefile
       - contracts/**
@@ -17,6 +19,8 @@ on:
       - scripts/*infrastructure*.py
       - scripts/*provisioning*.py
       - scripts/*gateway*.py
+      - scripts/run-scoring*.py
+      - scripts/scoring_*/**
       - scripts/*firewall*.py
       - scripts/render-grafana-dashboards.py
       - scripts/prepare-observability-runtime.py
@@ -41,8 +45,10 @@ on:
     paths:
       - .github/workflows/observability.yml
       - ansible/observability*.yml
+      - ansible/scoring*.yml
       - ansible/requirements.txt
       - ansible/roles/observability*/**
+      - ansible/roles/scoring*/**
       - ansible/site.yml
       - Makefile
       - contracts/**
@@ -53,6 +59,8 @@ on:
       - scripts/*infrastructure*.py
       - scripts/*provisioning*.py
       - scripts/*gateway*.py
+      - scripts/run-scoring*.py
+      - scripts/scoring_*/**
       - scripts/*firewall*.py
       - scripts/render-grafana-dashboards.py
       - scripts/prepare-observability-runtime.py
@@ -96,7 +104,7 @@ jobs:
         run: sudo bash observability/tests/test-storage.sh
       - name: Check the OBS-only deployment entrypoint
         run: |
-          for playbook in ansible/observability*.yml; do
+          for playbook in ansible/observability*.yml ansible/scoring*.yml; do
             /tmp/jengasec-ansible-venv/bin/ansible-playbook -i localhost, "$playbook" --syntax-check
           done
       - name: Rehearse OBS VM deployment

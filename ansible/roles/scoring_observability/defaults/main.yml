@@ -1,0 +1,10 @@
+---
+obs_scoring_start: false
+obs_scoring_python: /usr/bin/python3
+obs_scoring_install_root: /opt/jengasec-scoring
+obs_scoring_config_root: /etc/jengasec-scoring
+obs_scoring_state_root: /var/lib/jengasec-scoring
+obs_scoring_textfile_dir: /var/lib/jengasec-node-metrics
+obs_scoring_policy_source: ""
+obs_scoring_config_source: ""
+obs_scoring_credentials: []
