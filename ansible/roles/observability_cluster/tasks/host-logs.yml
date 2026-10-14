@@ -101,10 +101,25 @@
     mode: '0644'
   notify: Restart OBS host container reader
 
+- name: Apply pending host reader changes before checking readiness
+  ansible.builtin.meta: flush_handlers
+
 - name: Start the approved host reader
   ansible.builtin.systemd_service:
     name: jengasec-container-logs.service
     enabled: true
     state: started
     daemon_reload: true
+  when: obs_cluster_apply | bool
+
+- name: Verify the host reader started all pipelines
+  ansible.builtin.uri:
+    url: http://127.0.0.1:13134/
+    status_code: 200
+    return_content: false
+  register: obs_host_logs_health
+  retries: 15
+  delay: 2
+  until: obs_host_logs_health.status | default(0) == 200
+  changed_when: false
   when: obs_cluster_apply | bool

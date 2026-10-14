@@ -206,6 +206,10 @@ class HostLogTests(unittest.TestCase):
         config = yaml.safe_load((CHART / "files/logs.yaml").read_text())
         self.assertNotIn("k8sattributes", config["processors"])
         self.assertFalse(any("/app/" in path for path in config["receivers"]["filelog/application"]["include"]))
+        storage = config["extensions"]["file_storage/logs"]
+        for path in [storage["directory"], storage["compaction"]["directory"],
+                     config["exporters"]["prometheusremotewrite/obs"]["wal"]["directory"]]:
+            self.assertTrue(Path(path).is_relative_to("/var/lib/jengasec-container-logs"))
         with tempfile.TemporaryDirectory(prefix="jengasec-container-test-") as directory:
             root = Path(directory)
             app_dir = root / "pods/jengasec-ent-a-app01_fixture_11111111-1111-4111-8111-111111111111/payments-api"
@@ -243,7 +247,9 @@ class HostLogTests(unittest.TestCase):
             config["processors"].pop("transform/metric_identity")
             config["processors"].pop("transform/metric_resources")
             config["processors"]["batch"] = {"timeout": "100ms", "send_batch_size": 64, "send_batch_max_size": 64}
-            config["extensions"] = {"file_storage/logs": {"directory": str(root / "state"), "create_directory": True}}
+            storage["directory"] = str(root / "state")
+            storage["compaction"]["directory"] = str(root / "compaction")
+            config["extensions"] = {"file_storage/logs": storage}
             config["exporters"] = {"file": {"path": str(root / "output.jsonl"), "flush_interval": "100ms"}}
             config["service"]["extensions"] = ["file_storage/logs"]
             with socket.socket() as listener:
@@ -310,9 +316,12 @@ class HostLogTests(unittest.TestCase):
             receiver["include"] = [str(app_dir / "*.log")]
             receiver["start_at"] = "beginning"
             pipeline = base["service"]["pipelines"]["logs/application"]
+            storage = base["extensions"]["file_storage/logs"]
+            storage["directory"] = str(root / "state")
+            storage["compaction"]["directory"] = str(root / "compaction")
             sender_config = {
                 "receivers": {"filelog/application": receiver},
-                "extensions": {"file_storage/logs": {"directory": str(root / "state"), "create_directory": True}},
+                "extensions": {"file_storage/logs": storage},
                 "processors": {name: base["processors"][name] for name in pipeline["processors"]},
                 "exporters": {"otlp/obs": {"endpoint": f"127.0.0.1:{port}", "timeout": "1s", "tls": {"insecure": True},
                     "retry_on_failure": {"enabled": True, "initial_interval": "100ms", "max_interval": "1s", "max_elapsed_time": "0s"},

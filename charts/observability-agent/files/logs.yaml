@@ -7,6 +7,7 @@ extensions:
     timeout: 10s
     compaction:
       on_start: true
+      directory: /var/lib/jengasec-container-logs/queue/compaction
 receivers:
   filelog/application:
     start_at: end
