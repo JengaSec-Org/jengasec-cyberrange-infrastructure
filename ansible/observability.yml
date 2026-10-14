@@ -1,0 +1,21 @@
+---
+# OBS-only entrypoint. Host preparation needs a previously inspected storage plan.
+# This playbook does not include the common role or change users/SSH settings.
+- name: Prepare and deploy one observability VM
+  hosts: observability
+  become: true
+  serial: 1
+  pre_tasks:
+    - name: Require one explicitly selected OBS host
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+        fail_msg: Select exactly one observability host with the private inventory
+        quiet: true
+      tags: [always]
+  roles:
+    - role: observability_host
+      when: obs_prepare_host | default(false)
+      tags: [obs-host]
+    - role: observability
+      tags: [obs-release]

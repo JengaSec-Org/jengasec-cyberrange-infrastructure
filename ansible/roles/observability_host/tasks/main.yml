@@ -1,0 +1,186 @@
+---
+- name: Validate the dedicated OBS host preparation inputs
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Debian'
+      - ansible_facts.distribution_major_version == '12'
+      - ansible_facts.architecture == 'x86_64'
+      - obs_data_device is match('^/dev/[A-Za-z0-9]+$')
+      - obs_data_mount is match('^/srv/[A-Za-z0-9_-]+$')
+      - obs_state_root == obs_data_mount + '/state'
+      - obs_storage_plan_file | length > 0
+    fail_msg: Host preparation requires Debian 12 amd64 and an inspected dedicated data volume
+    quiet: true
+
+- name: Inspect the host preparation ownership marker
+  ansible.builtin.stat:
+    path: "{{ obs_config_root }}/host-managed"
+  register: obs_host_managed
+
+- name: Inspect existing container runtime configuration
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/bin/docker
+    - /etc/docker/daemon.json
+    - /etc/containerd/config.toml
+  register: obs_existing_runtime
+
+- name: Protect container runtimes outside this deployment
+  ansible.builtin.assert:
+    that:
+      - obs_host_managed.stat.exists or not item.stat.exists
+    fail_msg: Existing container runtime needs a reviewed migration before host preparation
+    quiet: true
+  loop: "{{ obs_existing_runtime.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Install storage and package repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - e2fsprogs
+      - gdisk
+      - util-linux
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create OBS host configuration directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ obs_config_root }}", mode: "0750"}
+    - {path: /usr/local/libexec/jengasec-observability, mode: "0755"}
+
+- name: Install the guarded OBS storage helper
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../scripts/prepare-observability-storage.py"
+    dest: /usr/local/libexec/jengasec-observability/prepare-storage.py
+    mode: "0755"
+
+- name: Copy the inspected private storage plan
+  ansible.builtin.copy:
+    src: "{{ obs_storage_plan_file }}"
+    dest: "{{ obs_config_root }}/storage-plan.json"
+    mode: "0600"
+
+- name: Prepare only the inspected unused disk space
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - /usr/local/libexec/jengasec-observability/prepare-storage.py
+      - --device
+      - "{{ obs_data_device }}"
+      - --mountpoint
+      - "{{ obs_data_mount }}"
+      - --backup-dir
+      - "{{ obs_storage_backup_dir }}"
+      - --apply
+      - "{{ obs_config_root }}/storage-plan.json"
+  register: obs_storage_result
+  changed_when: obs_storage_result.rc == 0 and (obs_storage_result.stdout | from_json).changed
+
+- name: Create container runtime configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/apt/keyrings
+    - /etc/docker
+    - /etc/containerd
+    - /etc/systemd/system/docker.service.d
+    - /etc/systemd/system/containerd.service.d
+
+- name: Install the Docker package signing key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/debian/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Configure the Docker stable package repository
+  ansible.builtin.copy:
+    content: >-
+      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/debian bookworm stable
+    dest: /etc/apt/sources.list.d/jengasec-docker.list
+    mode: "0644"
+  register: obs_docker_repository
+
+- name: Install Docker and Compose without starting on the OS disk
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: "{{ obs_docker_repository.changed }}"
+    policy_rc_d: 101
+
+- name: Store Docker data on the dedicated volume
+  ansible.builtin.copy:
+    content: |
+      {
+        "data-root": "{{ obs_data_mount }}/docker",
+        "log-driver": "local",
+        "log-opts": {"max-size": "20m", "max-file": "5"}
+      }
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+  notify: Restart OBS container runtime
+
+- name: Store containerd images on the dedicated volume
+  ansible.builtin.copy:
+    content: |
+      # Managed by the OBS-only host role.
+      version = 2
+      root = "{{ obs_data_mount }}/containerd"
+      state = "/run/containerd"
+    dest: /etc/containerd/config.toml
+    mode: "0644"
+  notify: Restart OBS container runtime
+
+- name: Require the data mount before starting container runtimes
+  ansible.builtin.copy:
+    content: |
+      [Unit]
+      RequiresMountsFor={{ obs_data_mount }}
+    dest: "/etc/systemd/system/{{ item }}.service.d/observability-data.conf"
+    mode: "0644"
+  loop:
+    - containerd
+    - docker
+  notify: Restart OBS container runtime
+
+- name: Record ownership of the dedicated container runtime
+  ansible.builtin.copy:
+    content: "Managed by ansible/observability.yml\n"
+    dest: "{{ obs_config_root }}/host-managed"
+    mode: "0600"
+
+- name: Apply the container runtime configuration
+  ansible.builtin.meta: flush_handlers
+
+- name: Keep Docker available for OBS
+  ansible.builtin.systemd:
+    name: docker.service
+    state: started
+    enabled: true
+
+- name: Verify the active Docker data directory
+  ansible.builtin.command:
+    argv:
+      - docker
+      - info
+      - --format
+      - "{{ '{{.DockerRootDir}}' }}"
+  changed_when: false
+  register: obs_docker_root
+  failed_when: obs_docker_root.stdout != obs_data_mount + '/docker'

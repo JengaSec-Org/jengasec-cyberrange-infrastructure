@@ -24,6 +24,7 @@ Every area writes its own scripts here. Copy `_template.sh`, keep the header, an
 | `refresh-observability-state.sh` | Observability | Refresh live attribution, dashboards and scoped Grafana access |
 | `wait-observability-stack.sh` | Observability | Wait for the production OBS containers to become ready |
 | `validate-observability-vm.sh` | Observability | Rehearse the OBS VM role twice in an isolated local directory |
+| `prepare-observability-storage.py` | Observability | Inspect unused GPT space and apply the exact reviewed plan for a dedicated OBS data mount |
 | `fingerprint-observability-release.py` | Observability | Prevent reuse of an immutable OBS VM release ID with different source |
 
 Import the competition platform's cell and scope exports before provisioning:

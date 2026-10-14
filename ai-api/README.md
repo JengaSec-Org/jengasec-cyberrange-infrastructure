@@ -4,6 +4,11 @@
 
 **Try it on a Debian 12 VM:** [`runbooks/ai-api-vm.md`](../runbooks/ai-api-vm.md). There, `make-bundle.sh`, then `install.sh`, then `smoke.sh`.
 
+`smoke.sh` and `tour.sh` are legacy shadow rehearsals. Both reject local
+scoring mode and check the selected server's mode header before any writes,
+including URL overrides. Failed or ambiguous checks stop the script. Older
+legacy APIs without the header remain supported.
+
 JengaSec hosts no AI. This service is the data side the AI teams' own agents connect to over WireGuard. There is one token per team (`scripts/ai-teams.yaml`) and two roles:
 
 | | AI Blue (AI-01 … AI-03) | AI Red (RI-01 … RI-06, two paired with each AI Blue) |

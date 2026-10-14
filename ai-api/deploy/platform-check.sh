@@ -71,17 +71,21 @@ local_checks() {
 
   head_ "Services on this VM"
   local c
-  c=$(code "$WEBSITE_LOCAL/healthz/"); [ "$c" = 200 ] && ok "website (gunicorn) answers on $WEBSITE_LOCAL" || bad "website on $WEBSITE_LOCAL answered $c (is gunicorn running?)"
-  c=$(code "https://127.0.0.1/healthz/"); [ "$c" = 200 ] && ok "nginx serves the website on 443" || warn "nginx on 443 answered $c (website docs/VENUE-HOSTING.md: nginx + TLS)"
-  c=$(code "https://127.0.0.1:8443/healthz"); [ "$c" = 200 ] && ok "AI API answers on 8443" || bad "AI API on 8443 answered $c (systemctl status jengasec-ai-api)"
-  c=$(code "http://127.0.0.1:11434/api/tags"); [ "$c" = 200 ] && ok "Ollama answers locally (proposal scoring)" || warn "Ollama not answering on 127.0.0.1:11434 (only needed for proposal scoring)"
+  c=$(code "$WEBSITE_LOCAL/healthz/")
+  if [ "$c" = 200 ]; then ok "website (gunicorn) answers on $WEBSITE_LOCAL"; else bad "website on $WEBSITE_LOCAL answered $c (is gunicorn running?)"; fi
+  c=$(code "https://127.0.0.1/healthz/")
+  if [ "$c" = 200 ]; then ok "nginx serves the website on 443"; else warn "nginx on 443 answered $c (website docs/VENUE-HOSTING.md: nginx + TLS)"; fi
+  c=$(code "https://127.0.0.1:8443/healthz")
+  if [ "$c" = 200 ]; then ok "AI API answers on 8443"; else bad "AI API on 8443 answered $c (systemctl status jengasec-ai-api)"; fi
+  c=$(code "http://127.0.0.1:11434/api/tags")
+  if [ "$c" = 200 ]; then ok "Ollama answers locally (proposal scoring)"; else warn "Ollama not answering on 127.0.0.1:11434 (only needed for proposal scoring)"; fi
 
   head_ "AI marks -> website (flow O5)"
   local feed tok
   feed=$(envval "$AI_ENV" WEBSITE_FEED_URL); tok=$(envval "$AI_ENV" WEBSITE_FEED_TOKEN)
   if [ -z "$feed" ]; then warn "WEBSITE_FEED_URL is empty in $AI_ENV: AI marks are not published"
   else
-    [ -n "$tok" ] && ok "feed URL and token are set ($feed)" || bad "WEBSITE_FEED_TOKEN is empty in $AI_ENV"
+    if [ -n "$tok" ]; then ok "feed URL and token are set ($feed)"; else bad "WEBSITE_FEED_TOKEN is empty in $AI_ENV"; fi
     c=$(code -X POST -H 'Content-Type: application/json' --data '{}' "$feed")
     case "$c" in
       403) ok "website feed exists and refuses a request without the token (as it should)" ;;
@@ -101,8 +105,8 @@ local_checks() {
     if kubectl --kubeconfig "$KUBECONFIG_WEBSITE" get ns >/dev/null 2>&1; then ok "website kubeconfig authenticates"; else bad "website kubeconfig rejected (website-access.sh rotate?)"; fi
   else warn "no $KUBECONFIG_WEBSITE or no kubectl: skipped the kubeconfig check"; fi
   if pg_ok "$PG_IP" 5432; then ok "O3 postgres-vm $PG_IP:5432 answers as PostgreSQL (NET pipeline database)"; else warn "O3 postgres-vm $PG_IP:5432 does not answer as PostgreSQL"; fi
-  ping -c1 -W2 "$OBS_IP" >/dev/null 2>&1 && ok "OBS VM $OBS_IP answers ping" || warn "OBS VM $OBS_IP does not answer ping"
-  ping -c1 -W2 "$WG_VM_IP" >/dev/null 2>&1 && ok "wireguard-vm $WG_VM_IP answers ping" || warn "wireguard-vm $WG_VM_IP does not answer ping"
+  if ping -c1 -W2 "$OBS_IP" >/dev/null 2>&1; then ok "OBS VM $OBS_IP answers ping"; else warn "OBS VM $OBS_IP does not answer ping"; fi
+  if ping -c1 -W2 "$WG_VM_IP" >/dev/null 2>&1; then ok "wireguard-vm $WG_VM_IP answers ping"; else warn "wireguard-vm $WG_VM_IP does not answer ping"; fi
 
   head_ "Participant network (VLAN 109)"
   if ip -4 addr show 2>/dev/null | grep -q "inet $VLAN109_IP/"; then
@@ -122,8 +126,13 @@ local_checks() {
     if ss -ltnH 2>/dev/null | awk '{print $4}' | grep -qE '^(0\.0\.0\.0|\*|\[::\]):8000$'; then
       bad "gunicorn listens on all addresses (:8000): bind it to 127.0.0.1:8000 so only nginx reaches it"
     else ok "gunicorn is not exposed beyond this VM"; fi
-    ss -ltnH 2>/dev/null | awk '{print $4}' | grep -qE ':11434$' && \
-      { ss -ltnH | awk '{print $4}' | grep -qE '^127\.0\.0\.1:11434$' && ok "Ollama only on 127.0.0.1" || bad "Ollama listens beyond 127.0.0.1"; }
+    if ss -ltnH 2>/dev/null | awk '{print $4}' | grep -qE ':11434$'; then
+      if ss -ltnH | awk '{print $4}' | grep -qE '^127\.0\.0\.1:11434$'; then
+        ok "Ollama only on 127.0.0.1"
+      else
+        bad "Ollama listens beyond 127.0.0.1"
+      fi
+    fi
   fi
   if command -v nft >/dev/null && [ "$(id -u)" = 0 ]; then
     if nft list ruleset 2>/dev/null | grep -q 'dport 8443'; then ok "host firewall loaded (8443 rule present)"; else warn "no host firewall rule for 8443 (docs/platform-vm.md section 5)"; fi

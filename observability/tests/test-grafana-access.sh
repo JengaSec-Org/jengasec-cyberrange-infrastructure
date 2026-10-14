@@ -29,13 +29,19 @@ python scripts/provision-grafana-access.py \
   --plan-output "$workspace/access-plan.json" \
   --dry-run
 
-python - "$workspace/access-plan.json" "$workspace/dashboards" <<'PY'
+python - "$workspace/access-plan.json" "$workspace/dashboards" \
+  observability/grafana/dashboards/jengasec-observability.json \
+  <<'PY'
 import json
+import importlib.util
 import pathlib
 import sys
 
 plan = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 dashboards = pathlib.Path(sys.argv[2])
+staff_dashboard = json.loads(
+    pathlib.Path(sys.argv[3]).read_text(encoding="utf-8")
+)
 assert len(plan["applications"]) == 18
 assert plan["staff"]["members"] == ["JS26-P-9001", "JS26-P-9002"]
 app01 = next(
@@ -57,6 +63,34 @@ assert dashboard["uid"] == "jengasec-ent-a-app01"
 assert all("jengasec-ent-a-app01" in target["expr"]
            for panel in dashboard["panels"]
            for target in panel["targets"])
+
+assert staff_dashboard["uid"] == "jengasec-observability"
+assert staff_dashboard["time"]["from"] == "now-1h"
+health = next(panel for panel in staff_dashboard["panels"] if panel["type"] == "row")
+assert health["collapsed"] is True
+panels = [p for p in staff_dashboard["panels"] if p["type"] != "row"] + health["panels"]
+assert len({panel["id"] for panel in panels}) == len(panels)
+assert not any("jengasec_test_" in target["expr"]
+               for panel in panels for target in panel.get("targets", []))
+variables = {v["name"]: v for v in staff_dashboard["templating"]["list"]}
+assert {"red-app", "blue-app", "red-ai", "blue-ai", "unknown", "unattributed"} <= {
+    option["value"] for option in variables["role"]["options"]
+}
+for name in ("team", "participant", "correlation", "event_id"):
+    assert variables[name]["type"] == "textbox"
+    assert variables[name]["current"]["value"] == ""
+
+spec = importlib.util.spec_from_file_location("access", "scripts/provision-grafana-access.py")
+access = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(access)
+staff_loki = access.loki_datasource("staff")
+assert staff_loki["secureJsonData"]["httpHeaderValue1"] == "staff"
+assert {field["matcherRegex"] for field in staff_loki["jsonData"]["derivedFields"]} == {
+    "^event_id$", "^request_id$", "^trace_id$"
+}
+app_loki = access.loki_datasource("jengasec-ent-a-app01")
+assert "derivedFields" not in app_loki["jsonData"]
+assert app_loki["secureJsonData"]["httpHeaderValue1"] == "application-jengasec-ent-a-app01"
 PY
 
 if python scripts/provision-grafana-access.py \

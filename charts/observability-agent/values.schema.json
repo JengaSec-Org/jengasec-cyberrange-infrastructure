@@ -1,34 +1,141 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["namespace", "image", "obs"],
+  "required": [
+    "namespace",
+    "image",
+    "obs",
+    "persistence"
+  ],
   "properties": {
     "namespace": {
       "const": "jengasec-observability"
     },
     "image": {
       "type": "object",
-      "required": ["repository", "tag"],
+      "required": [
+        "repository",
+        "tag"
+      ],
       "properties": {
-        "repository": {"type": "string", "minLength": 1},
-        "tag": {"const": "0.137.0"}
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "const": "0.137.0"
+        }
       }
     },
     "obs": {
       "type": "object",
-      "required": ["otlpEndpoint", "prometheusRemoteWriteUrl", "tls"],
+      "required": [
+        "environment",
+        "cluster",
+        "resourceId",
+        "eventsEnabled",
+        "prometheusRemoteWriteUrl",
+        "tls"
+      ],
       "properties": {
-        "otlpEndpoint": {"type": "string", "minLength": 1},
+        "environment": {
+          "enum": [
+            "live",
+            "validation",
+            "rehearsal"
+          ]
+        },
+        "cluster": {
+          "enum": [
+            "red",
+            "blue"
+          ]
+        },
+        "resourceId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,31}$"
+        },
+        "eventsEnabled": {
+          "type": "boolean"
+        },
+        "otlpEndpoint": {
+          "type": "string"
+        },
         "prometheusRemoteWriteUrl": {
           "type": "string",
-          "pattern": "^https?://.+/api/v1/write$"
+          "pattern": "^https?://[^/]+/api/v1/write$"
         },
         "tls": {
           "type": "object",
-          "required": ["insecure"],
+          "required": [
+            "insecure",
+            "secretName"
+          ],
           "properties": {
-            "insecure": {"type": "boolean"}
+            "insecure": {
+              "type": "boolean"
+            },
+            "secretName": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+            }
           }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "environment": {
+                "const": "live"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "tls": {
+                "properties": {
+                  "insecure": {
+                    "const": false
+                  }
+                }
+              },
+              "prometheusRemoteWriteUrl": {
+                "pattern": "^https://[^/]+/api/v1/write$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "eventsEnabled": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "otlpEndpoint": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "persistence": {
+      "type": "object",
+      "required": [
+        "size"
+      ],
+      "properties": {
+        "size": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*[GM]i$"
+        },
+        "storageClassName": {
+          "type": "string"
         }
       }
     }

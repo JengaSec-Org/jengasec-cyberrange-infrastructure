@@ -152,6 +152,8 @@ services:
       - /generated
       - --website-feed-url
       - ${JENGASEC_WEBSITE_FEED_URL:-http://website-feed-mock:8080/api/feed}
+      - --docker-source-project
+      - ${COMPOSE_PROJECT_NAME:-jengasec-observability}
     volumes:
       - ..:/workspace:ro
       - vector-catalogue:/generated
@@ -199,6 +201,8 @@ services:
 
   vector:
     image: timberio/vector:0.58.0-debian
+    environment:
+      JENGASEC_V2_TELEMETRY_ENVIRONMENT: rehearsal
     command:
       - --config
       - /etc/vector/generated/vector.yaml

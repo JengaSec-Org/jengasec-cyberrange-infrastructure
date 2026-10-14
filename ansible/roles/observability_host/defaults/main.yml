@@ -1,0 +1,6 @@
+---
+obs_prepare_host: false
+obs_data_device: ""
+obs_data_mount: /srv/jengasec-observability
+obs_storage_plan_file: ""
+obs_storage_backup_dir: /var/backups/jengasec-observability/storage

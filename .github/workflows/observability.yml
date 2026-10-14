@@ -4,17 +4,26 @@ on:
   pull_request:
     paths:
       - .github/workflows/observability.yml
-      - ansible/observability-rehearsal.yml
+      - ansible/observability*.yml
       - ansible/requirements.txt
-      - ansible/roles/observability/**
+      - ansible/roles/observability*/**
       - ansible/site.yml
       - Makefile
       - contracts/**
       - charts/observability-agent/**
       - observability/**
       - scripts/render-observability-lookups.py
+      - scripts/render-vector-catalogue.py
+      - scripts/*infrastructure*.py
+      - scripts/*provisioning*.py
+      - scripts/*gateway*.py
+      - scripts/*firewall*.py
       - scripts/render-grafana-dashboards.py
       - scripts/prepare-observability-runtime.py
+      - scripts/prepare-observability-storage.py
+      - scripts/maintain-observability-spools.py
+      - scripts/guard-observability-wal.py
+      - scripts/run-bounded-suricata.py
       - scripts/provision-grafana-access.py
       - scripts/smoke-observability.sh
       - scripts/start-observability.sh
@@ -31,17 +40,26 @@ on:
       - main
     paths:
       - .github/workflows/observability.yml
-      - ansible/observability-rehearsal.yml
+      - ansible/observability*.yml
       - ansible/requirements.txt
-      - ansible/roles/observability/**
+      - ansible/roles/observability*/**
       - ansible/site.yml
       - Makefile
       - contracts/**
       - charts/observability-agent/**
       - observability/**
       - scripts/render-observability-lookups.py
+      - scripts/render-vector-catalogue.py
+      - scripts/*infrastructure*.py
+      - scripts/*provisioning*.py
+      - scripts/*gateway*.py
+      - scripts/*firewall*.py
       - scripts/render-grafana-dashboards.py
       - scripts/prepare-observability-runtime.py
+      - scripts/prepare-observability-storage.py
+      - scripts/maintain-observability-spools.py
+      - scripts/guard-observability-wal.py
+      - scripts/run-bounded-suricata.py
       - scripts/provision-grafana-access.py
       - scripts/smoke-observability.sh
       - scripts/start-observability.sh
@@ -66,11 +84,31 @@ jobs:
       - name: Install smoke-check tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq gdisk fdisk e2fsprogs
           python3 -m venv /tmp/jengasec-ansible-venv
           /tmp/jengasec-ansible-venv/bin/pip install -r ansible/requirements.txt
+          curl --fail --silent --show-error --location --output /tmp/helm-v3.19.0-linux-amd64.tar.gz https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz
+          curl --fail --silent --show-error --location --output /tmp/helm-v3.19.0-linux-amd64.tar.gz.sha256sum https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz.sha256sum
+          (cd /tmp && sha256sum --check helm-v3.19.0-linux-amd64.tar.gz.sha256sum)
+          tar --extract --gzip --file /tmp/helm-v3.19.0-linux-amd64.tar.gz --directory /tmp linux-amd64/helm
+          sudo install --mode=0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+      - name: Verify guarded spare-disk provisioning
+        run: sudo bash observability/tests/test-storage.sh
+      - name: Check the OBS-only deployment entrypoint
+        run: |
+          for playbook in ansible/observability*.yml; do
+            /tmp/jengasec-ansible-venv/bin/ansible-playbook -i localhost, "$playbook" --syntax-check
+          done
       - name: Rehearse OBS VM deployment
-        run: PATH="/tmp/jengasec-ansible-venv/bin:$PATH" make obs-vm-validate
+        run: |
+          python3 observability/tests/test-vm-rehearsal-cleanup.py
+          PATH="/tmp/jengasec-ansible-venv/bin:$PATH" make obs-vm-validate
+      - name: Verify configuration changes restart the stack
+        run: |
+          export PATH="/tmp/jengasec-ansible-venv/bin:$PATH"
+          python observability/tests/test-config-notifications.py
+          python observability/tests/test-node-ufw.py
+          ANSIBLE_PLAYBOOK=/tmp/jengasec-ansible-venv/bin/ansible-playbook python charts/observability-agent/tests/test-wal-guard-role.py
       - name: Validate configs, builds and contracts
         run: make obs-validate
       - name: Start observability stack

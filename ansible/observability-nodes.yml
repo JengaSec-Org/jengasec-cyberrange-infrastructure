@@ -1,0 +1,8 @@
+---
+# OBS-only host collectors. Does not include common or change login policy.
+- name: Install observability node collectors
+  hosts: observability_nodes
+  become: true
+  serial: 2
+  roles:
+    - role: observability_node

@@ -1,0 +1,1132 @@
+{
+  "uid": "jengasec-kubernetes",
+  "id": null,
+  "title": "JengaSec \u00b7 Kubernetes",
+  "description": "Cluster and workload health with persistent collector queues. Red and blue clusters stay independently visible.",
+  "tags": [
+    "jengasec",
+    "staff",
+    "observability"
+  ],
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "timezone": "utc",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "link",
+      "title": "Overview",
+      "url": "/d/jengasec-overview",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Team Activity",
+      "url": "/d/jengasec-observability",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Infrastructure & Services",
+      "url": "/d/jengasec-infrastructure",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Kubernetes",
+      "url": "/d/jengasec-kubernetes",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Network & Security",
+      "url": "/d/jengasec-network",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Event Investigation & Evidence",
+      "url": "/d/jengasec-investigation",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Telemetry Health",
+      "url": "/d/jengasec-telemetry-health",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Environment",
+        "type": "custom",
+        "query": "live, validation, rehearsal, unclassified",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "live"
+          ],
+          "value": [
+            "live"
+          ]
+        },
+        "options": [
+          {
+            "text": "live",
+            "value": "live",
+            "selected": true
+          },
+          {
+            "text": "validation",
+            "value": "validation",
+            "selected": false
+          },
+          {
+            "text": "rehearsal",
+            "value": "rehearsal",
+            "selected": false
+          },
+          {
+            "text": "unclassified",
+            "value": "unclassified",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "cluster",
+        "label": "Cluster",
+        "type": "custom",
+        "query": "red, blue",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "text": "red",
+            "value": "red",
+            "selected": false
+          },
+          {
+            "text": "blue",
+            "value": "blue",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "resource",
+        "label": "Resource",
+        "type": "custom",
+        "query": "vm101, vm102, vm103, vm104, vm105, vm106",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "text": "vm101",
+            "value": "vm101",
+            "selected": false
+          },
+          {
+            "text": "vm102",
+            "value": "vm102",
+            "selected": false
+          },
+          {
+            "text": "vm103",
+            "value": "vm103",
+            "selected": false
+          },
+          {
+            "text": "vm104",
+            "value": "vm104",
+            "selected": false
+          },
+          {
+            "text": "vm105",
+            "value": "vm105",
+            "selected": false
+          },
+          {
+            "text": "vm106",
+            "value": "vm106",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Cluster coverage",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Both clusters should publish a fresh node readiness value and collector health. Namespace and workload labels describe infrastructure, not participant identity. A quiet event list is valid only when collection is healthy. Missing values mean collection is absent, stale or unconfigured."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Node readiness",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Not ready",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Ready",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "k8s_node_condition_ready{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} / {{node}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Metrics age",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Age of the newest node readiness sample per cluster. No sample is Missing signal.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 120
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - max by (cluster) (timestamp(k8s_node_condition_ready{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}))",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Node memory pressure",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Clear",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Pressure",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "k8s_node_condition_memory_pressure{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} / {{node}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Node disk pressure",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Clear",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Pressure",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "k8s_node_condition_disk_pressure{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} / {{node}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Desired / available deployment replicas",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Desired replicas compared with available replicas. Empty clusters may have no application deployments.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "k8s_deployment_desired{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} {{namespace}} / {{workload}} {{__name__}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "k8s_deployment_available{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} {{namespace}} / {{workload}} {{__name__}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "New container restarts",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Positive change in the restart gauge over the preceding five minutes. The window allows for collection and delivery intervals. A reset or a replacement pod does not count as new restarts. Missing samples remain unavailable.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (cluster,namespace,pod) (clamp_min(delta(k8s_container_restarts{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}[5m]), 0))",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} {{namespace}} / {{pod}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Pod phase",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Kubernetes reported phase. A Running pod may still be unready; compare availability and warnings.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Pending",
+                  "color": "orange",
+                  "index": 0
+                },
+                "2": {
+                  "text": "Running",
+                  "color": "green",
+                  "index": 1
+                },
+                "3": {
+                  "text": "Succeeded",
+                  "color": "blue",
+                  "index": 2
+                },
+                "4": {
+                  "text": "Failed",
+                  "color": "red",
+                  "index": 3
+                },
+                "5": {
+                  "text": "Unknown",
+                  "color": "gray",
+                  "index": 4
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "k8s_pod_phase{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} {{namespace}} / {{pod}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "resource_id",
+                "role",
+                "service",
+                "collector",
+                "cluster",
+                "namespace",
+                "namespace",
+                "pod",
+                "workload",
+                "container",
+                "node",
+                "component_id",
+                "Value"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Recent Kubernetes warnings and events",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Events from the selected cluster and resource. Expand a row and choose View event to open its exact record and integrity fields in Investigation.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",source=\"kubernetes\"} | json | __error__=\"\" | resource_cluster=~\"${cluster:regex}\" | line_format \"{{.resource_id}} \u00b7 {{.resource_cluster}} \u00b7 {{.resource_namespace}}/{{.resource_name}} \u00b7 {{.attributes_type}} \u00b7 {{.attributes_reason}} \u00b7 {{.outcome}}\"",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      }
+    },
+    {
+      "id": 10,
+      "title": "Workload CPU share of cluster capacity",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Container CPU use divided by allocatable CPU across the cluster. Sandbox and empty container series are excluded. Host CPU remains in Infrastructure & Services.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (cluster) (rate(container_cpu_usage_seconds_total{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\",container!=\"\",container!=\"POD\",pod!=\"\"}[$__rate_interval])) / sum by (cluster) (k8s_node_allocatable_cpu{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"})",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Workload memory working set",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Container working-set memory summed per cluster. Sandbox and empty container series are excluded.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (cluster) (container_memory_working_set_bytes{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\",container!=\"\",container!=\"POD\",pod!=\"\"})",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Collector queue usage",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Exporter queue depth as a share of its configured capacity. Missing series mean this exporter does not expose a queue or is not reporting.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * otelcol_exporter_queue_size{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"} / otelcol_exporter_queue_capacity{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} {{exporter}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Recent export failures",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Failed attempts in the current window. Retries may later succeed; sustained failure raises an alert.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (cluster,exporter) (increase(otelcol_exporter_send_failed_metric_points_total{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}[$__rate_interval]))",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} {{exporter}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Metrics waiting for delivery",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 24,
+        "h": 7
+      },
+      "description": "Records waiting in the collector remote-write WAL. The native metric name ends in ratio but reports backlog records. Read this with collection freshness and recent delivery failures.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "otelcol_exporter_prometheusremotewrite_wal_lag_ratio{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} / {{job}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

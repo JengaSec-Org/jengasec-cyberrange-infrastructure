@@ -1,0 +1,118 @@
+---
+- name: Validate event agent configuration
+  ansible.builtin.assert:
+    that:
+      - obs_events_resource_id is match('^[a-z][a-z0-9-]{0,31}$')
+      - obs_events_environment in ['live', 'validation', 'rehearsal']
+      - obs_events_endpoint is match('^https://[^/@?#]+/api/v1/infrastructure-events$')
+      - obs_events_services | length <= 32
+      - obs_events_tls_ca_file | length > 0
+      - obs_events_tls_client_cert_file | length > 0
+      - obs_events_tls_client_key_file | length > 0
+      - not obs_events_network or obs_events_interface is match('^[A-Za-z0-9][A-Za-z0-9_.-]{0,14}$')
+
+- name: Record account and SSH configuration checksums
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    checksum_algorithm: sha256
+  loop:
+    - /etc/passwd
+    - /etc/shadow
+    - /etc/ssh/sshd_config
+  register: obs_events_identity_before
+  no_log: true
+
+- name: Create event agent directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ obs_events_install_root }}", mode: '0755'}
+    - {path: "{{ obs_events_config_root }}", mode: '0700'}
+    - {path: "{{ obs_events_state_dir }}", mode: '0700'}
+    - {path: "{{ obs_events_metrics_file | dirname }}", mode: '0755'}
+
+- name: Install collector and sanitized event mappings
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../scripts/{{ item }}"
+    dest: "{{ obs_events_install_root }}/{{ item }}"
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - collect-infrastructure-events.py
+    - infrastructure_events.py
+
+- name: Install private event client TLS material
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "{{ obs_events_config_root }}/{{ item.name }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop:
+    - {source: "{{ obs_events_tls_ca_file }}", name: ca.crt}
+    - {source: "{{ obs_events_tls_client_cert_file }}", name: client.crt}
+    - {source: "{{ obs_events_tls_client_key_file }}", name: client.key}
+  no_log: true
+
+- name: Render bounded collector configuration
+  ansible.builtin.copy:
+    dest: "{{ obs_events_config_root }}/config.json"
+    owner: root
+    group: root
+    mode: '0600'
+    content: "{{ obs_events_configuration | to_nice_json }}\n"
+  vars:
+    obs_events_configuration:
+      resource_id: "{{ obs_events_resource_id }}"
+      environment: "{{ obs_events_environment }}"
+      services: "{{ obs_events_services }}"
+      endpoint: "{{ obs_events_endpoint }}"
+      tls_ca: "{{ obs_events_config_root }}/ca.crt"
+      tls_cert: "{{ obs_events_config_root }}/client.crt"
+      tls_key: "{{ obs_events_config_root }}/client.key"
+      state_dir: "{{ obs_events_state_dir }}"
+      metrics_file: "{{ obs_events_metrics_file }}"
+      network: "{{ obs_events_network | bool }}"
+      interface: "{{ obs_events_interface }}"
+
+- name: Install event collector service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - jengasec-event-agent.service
+    - jengasec-event-agent.timer
+  notify: Reload event agent units
+
+- name: Apply event agent unit changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable periodic infrastructure collection
+  ansible.builtin.systemd_service:
+    name: jengasec-event-agent.timer
+    state: started
+    enabled: true
+  when: obs_events_start
+
+- name: Verify account and SSH configuration checksums
+  ansible.builtin.stat:
+    path: "{{ item.item }}"
+    checksum_algorithm: sha256
+  loop: "{{ obs_events_identity_before.results }}"
+  register: obs_events_identity_after
+  no_log: true
+
+- name: Confirm event rollout preserved accounts and SSH configuration
+  ansible.builtin.assert:
+    that:
+      - item.stat.checksum == item.item.stat.checksum
+  loop: "{{ obs_events_identity_after.results }}"
+  no_log: true

@@ -36,3 +36,23 @@ owner-only permissions, retained through the appeal window, and accessible
 only to named judge and staff identities. The exporter rejects telemetry with
 forbidden keys or email-like values and removes those fields from external
 record families before writing them.
+
+## Global infrastructure exports
+
+`scripts/export-infrastructure-evidence.py` selects staff infrastructure records
+by resource IDs, a UTC time window, environment and optional exact event IDs.
+It verifies each record against `infrastructure-event.schema.json`, checks its
+content hash and stable ID, and rejects conflicting source content. Repeated
+delivery of the same source record is deduplicated after hash verification.
+
+The manifest uses `infrastructure-evidence/1.0` and validates against
+`infrastructure-evidence.schema.json`. Infrastructure records are written to
+`infrastructure-telemetry.ndjson`; the platform audit and competition files
+remain separate and empty. This export does not create a finding. An empty
+resource window is valid; a requested missing event ID fails the export.
+
+The exporter queries the staff tenant only. It keeps files owner-readable,
+uses atomic directory publication and preserves an identical existing pack.
+`SHA256SUMS` covers each evidence file and the manifest. The maximum query
+window is seven days and the maximum response is 100,000 records. Narrow the
+resource scope or time window if the limit is reached.

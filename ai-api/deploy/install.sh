@@ -38,6 +38,7 @@ SRC="$(cd "$(dirname "$0")/../.." && pwd)"
 for f in ai-api/app/main.py ai-api/requirements.txt contracts/telemetry-event.schema.json contracts/telemetry-event-catalogue.yaml scripts/cells.yaml scripts/ai-teams.yaml; do
   [ -e "$SRC/$f" ] || die "$SRC/$f missing: run this from the repository or the bundle"
 done
+# shellcheck source=/dev/null
 . /etc/os-release
 [ "${VERSION_ID:-}" = 12 ] || log "warning: built for Debian 12, this is ${PRETTY_NAME:-unknown}"
 
@@ -53,7 +54,7 @@ apt-get install -y -qq python3 python3-venv python3-pip openssl curl ca-certific
 
 log "service account and folders"
 id "$SVC_USER" >/dev/null 2>&1 || useradd --system --home-dir "$VAR" --shell /usr/sbin/nologin "$SVC_USER"
-install -d -m 755 "$APP"
+install -d -m 750 -o root -g "$SVC_USER" "$APP"
 install -d -m 750 -o root -g "$SVC_USER" "$ETC" "$ETC/tls"
 install -d -m 750 -o "$SVC_USER" -g "$SVC_USER" "$VAR"
 
@@ -66,12 +67,15 @@ cp "$SRC/scripts/cells.yaml" "$SRC/scripts/ai-teams.yaml" "$APP/repo.new/scripts
 find "$APP/repo.new/scenarios" -name answer-key.yaml -delete
 find "$APP/repo.new" \( -name __pycache__ -o -name '*.db' -o -name tokens.yaml -o -name .venv \) -prune -exec rm -rf {} +
 rm -rf "$APP/repo"; mv "$APP/repo.new" "$APP/repo"
-chmod -R a+rX "$APP/repo"
 
 log "python environment"
 [ -x "$APP/venv/bin/python" ] || python3 -m venv "$APP/venv"
 "$APP/venv/bin/pip" install -q --upgrade pip
 "$APP/venv/bin/pip" install -q -r "$APP/repo/ai-api/requirements.txt"
+# Keep code root-owned and readable/executable by only the existing service group.
+# Do not change ownership of external targets of venv interpreter symlinks.
+chown -hR root:"$SVC_USER" "$APP/repo" "$APP/venv"
+chmod -R u=rwX,g=rX,o= "$APP/repo" "$APP/venv"
 
 if [ ! -f "$ETC/ai-api.env" ]; then
   log "secrets -> $ETC/ai-api.env (new)"

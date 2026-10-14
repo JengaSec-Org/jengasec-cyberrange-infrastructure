@@ -1,0 +1,28 @@
+[Unit]
+Description=JengaSec local flow decoding and sanitized queue
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 {{ obs_network_install_root | dirname }}/run-gateway-flow-decoder.py --goflow2 {{ obs_network_install_root }}/goflow2 --config {{ obs_network_event_config }} --softflowctl {{ obs_network_install_root }}/vendor/usr/sbin/softflowctl --control-socket /run/jengasec-softflowd/control.sock
+Environment=LD_LIBRARY_PATH={{ obs_network_install_root }}/vendor/usr/lib/x86_64-linux-gnu:{{ obs_network_install_root }}/vendor/lib/x86_64-linux-gnu
+User=root
+Group=root
+UMask=0077
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths={{ obs_network_event_state }}
+MemoryMax=512M
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

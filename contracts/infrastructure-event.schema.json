@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jengasec.example/contracts/infrastructure-event.schema.json",
+  "title": "Normalized infrastructure telemetry event",
+  "allOf": [
+    {
+      "$ref": "infrastructure-source.schema.json#/$defs/record"
+    },
+    {
+      "required": [
+        "event_id",
+        "received_ts",
+        "integrity_hash",
+        "provenance"
+      ]
+    }
+  ]
+}

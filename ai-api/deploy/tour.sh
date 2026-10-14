@@ -14,12 +14,43 @@ ETC=/etc/jengasec-ai
 PAUSE=1
 [ "${1:-}" = --no-pause ] && { PAUSE=0; shift; }
 [ -r "$ETC/ai-api.env" ] || { echo "run as root on the AI API VM (sudo)" >&2; exit 1; }
-# shellcheck disable=SC1091
-set -a; . "$ETC/ai-api.env"; set +a
+set -a
+# shellcheck source=/dev/null
+. "$ETC/ai-api.env"
+set +a
+rehearsal_mode="${SCORING_MODE-0}"
+case "${rehearsal_mode,,}" in
+  0|false|no|off) ;;
+  *) printf '%s\n' 'Refusing shadow rehearsal: local SCORING_MODE is not disabled.' >&2; exit 2 ;;
+esac
 BASE="${1:-}"
 if [ -z "$BASE" ]; then
   if curl -fsk https://127.0.0.1:8443/healthz >/dev/null 2>&1; then BASE=https://127.0.0.1:8443; else BASE=http://127.0.0.1:8000; fi
 fi
+# Probe the selected target, including URL overrides, before loading tokens or writing.
+if ! rehearsal_headers=$(curl -q -fsk --connect-timeout 3 --max-time 5 --dump-header - --output /dev/null "$BASE/healthz"); then
+  printf '%s\n' 'Refusing shadow rehearsal: cannot confirm the target mode.' >&2
+  exit 2
+fi
+if ! printf '%s\n' "$rehearsal_headers" | awk '
+  /^HTTP\// { status = $2; sub(/\r$/, "", status); count = 0; mode = ""; next }
+  {
+    colon = index($0, ":")
+    if (!colon) next
+    name = tolower(substr($0, 1, colon - 1))
+    gsub(/[ \t]/, "", name)
+    if (name == "x-jengasec-scoring-mode") {
+      count++
+      mode = tolower(substr($0, colon + 1))
+      gsub(/^[ \t]+|[ \t\r]+$/, "", mode)
+    }
+  }
+  END { exit !(status == "200" && (count == 0 || (count == 1 && mode == "legacy-shadow"))) }
+'; then
+  printf '%s\n' 'Refusing shadow rehearsal: target mode is not confirmed legacy.' >&2
+  exit 2
+fi
+unset rehearsal_headers rehearsal_mode
 API="$BASE/api/v1"
 tok() { awk -v t="$1" '$1==t {print $3}' "$ETC/team-tokens.txt"; }
 BLUE=$(tok AI-01); RED=$(tok RI-01)

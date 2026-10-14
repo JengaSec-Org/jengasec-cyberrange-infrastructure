@@ -1,0 +1,21 @@
+[Unit]
+Description=JengaSec native provisioning {{ obs_provisioning_mode }} refresh
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 {{ obs_provisioning_install_root }}/scripts/provisioning-observability-service.py {{ 'capture' if obs_provisioning_mode == 'source' else 'pull' }} --output-dir {{ obs_provisioning_output_dir }} --metrics-file {{ obs_provisioning_textfile_dir }}/provisioning-{{ obs_provisioning_mode }}.prom --config {{ obs_provisioning_config_root }}/config.json --database {{ obs_provisioning_database }} --max-age-seconds {{ obs_provisioning_max_age_seconds }}
+{% if obs_provisioning_mode == 'cache' %}
+LoadCredential=ca.crt:{{ obs_provisioning_tls_ca_path }}
+LoadCredential=tls.crt:{{ obs_provisioning_tls_cert_path }}
+LoadCredential=tls.key:{{ obs_provisioning_tls_key_path }}
+{% endif %}
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths={{ obs_provisioning_output_dir }} {{ obs_provisioning_textfile_dir }}
+TimeoutStartSec=40s
+MemoryMax=192M
+TasksMax=16

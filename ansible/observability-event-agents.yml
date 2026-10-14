@@ -1,0 +1,7 @@
+---
+- name: Collect sanitized infrastructure events
+  hosts: observability_nodes
+  become: true
+  serial: 2
+  roles:
+    - observability_event_agent

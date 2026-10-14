@@ -243,6 +243,80 @@ def metrics() -> bytes:
     return "\n".join(lines).encode()
 
 
+def emit_staff_activity(marker: str) -> dict:
+    """Exercise dashboard attribution and correlation without real team actions."""
+    trace_id = hashlib.sha256(marker.encode()).hexdigest()[:32]
+    requests = {role: f"{marker}-{role}" for role in
+                ("red-app", "blue-app", "red-ai", "blue-ai", "unknown", "system")}
+    records = []
+
+    def application(role, source_ip, event, outcome, enterprise="ENT-A",
+                    app="APP01", status=None, detail=None):
+        record = {
+            "schema_version": "2.0", "ts": now(), "level": "info",
+            "enterprise": enterprise, "application": app,
+            "namespace": f"jengasec-{enterprise.lower()}-{app.lower()}",
+            "event": event, "outcome": outcome, "source_ip": source_ip,
+            "request_id": requests[role], "trace_id": trace_id,
+        }
+        if status is not None:
+            record.update(method="GET", path="/synthetic-activity", status=status)
+        if detail:
+            record["detail"] = detail
+        records.append(record)
+
+    application("red-app", "10.60.1.10", "request_completed", "success", status=200)
+    application("red-app", "10.60.1.10", "login_failure", "failure",
+                detail={"reason": "synthetic_invalid_login", "attempt": 1})
+    application("red-app", "10.60.1.10", "permission_denied", "denied",
+                detail={"required_role": "synthetic_operator"})
+    application("blue-app", "10.60.1.20", "request_completed", "success", status=200)
+    application("blue-app", "10.60.1.20", "session_revoked", "success",
+                detail={"reason": "synthetic_revocation"})
+    application("red-ai", "10.60.2.10", "request_completed", "error",
+                enterprise="ENT-B", app="APP03", status=503)
+    application("red-ai", "10.60.2.10", "role_granted", "success",
+                enterprise="ENT-B", app="APP03",
+                detail={"role": "synthetic_reader", "granted_by": "synthetic_actor"})
+    application("blue-ai", "10.60.2.20", "request_completed", "success",
+                enterprise="ENT-B", app="APP03", status=200)
+    application("blue-ai", "10.60.2.20", "record_exported", "success",
+                enterprise="ENT-B", app="APP03",
+                detail={"record_type": "synthetic_report", "count": 2})
+    application("unknown", "10.60.9.99", "request_completed", "success", status=200)
+
+    ingress = base_event("ingress", "ingress_request", requests["red-app"])
+    ingress.update(trace_id=trace_id, verdict="allowed", method="GET",
+                   path="/synthetic-activity", status=200)
+    send_syslog(ingress, "tcp")
+    firewall = base_event("network", "firewall_refused", requests["red-app"])
+    firewall.update(trace_id=trace_id, destination_ip="10.108.0.12",
+                    verdict="refused", outcome="denied", rule_id="synthetic_scope_deny")
+    send_syslog(firewall, "tcp")
+    ids = base_event("ids", "suricata_alert", requests["red-app"])
+    ids.update(trace_id=trace_id, signature_id="2100498", signature="Synthetic IDS signal",
+               category="Policy", ids_action="allowed")
+    send_syslog(ids, "tcp")
+    workload = base_event("kubernetes", "container_restart", requests["system"])
+    workload.pop("source_ip")
+    workload.update(trace_id=trace_id, enterprise="ENT-B", application="APP03",
+                    namespace="jengasec-ent-b-app03", destination_ip="10.108.0.23",
+                    asset="jengasec-ent-b-app03/synthetic-workload", outcome="unknown",
+                    reason="SyntheticRestart", kind="Pod", restart_count=1)
+    records.append(workload)
+    host = base_event("host", "host_alert", requests["system"])
+    host.update(trace_id=trace_id, source_ip="10.109.0.50", outcome="failure",
+                reason="synthetic_disk_pressure")
+    send_syslog(host, "tcp")
+    with open(OTLP_FIXTURE_FILE, "a", encoding="utf-8") as output:
+        for record in records:
+            output.write(json.dumps(record, separators=(",", ":")) + "\n")
+    return {"synthetic": True, "trace_id": trace_id, "requests": requests,
+            "events": 15, "participants": 4, "application_requests": 5,
+            "application_errors": 1, "refusals": 1, "ids_alerts": 1,
+            "security_events": 5}
+
+
 class Handler(BaseHTTPRequestHandler):
     def send_body(self, status: int, content_type: str, body: bytes) -> None:
         self.send_response(status)
@@ -261,12 +335,13 @@ class Handler(BaseHTTPRequestHandler):
             increment("metrics")
             self.send_body(200, "text/plain; version=0.0.4", metrics())
             return
-        if parsed.path == "/emit":
+        if parsed.path in ("/emit", "/emit-staff"):
             marker = urllib.parse.parse_qs(parsed.query).get("marker", [""])[0]
             if not marker or len(marker) > 96:
                 self.send_body(400, "text/plain", b"invalid marker\n")
                 return
-            body = json.dumps(emit(marker), separators=(",", ":")).encode()
+            emission = emit_staff_activity(marker) if parsed.path == "/emit-staff" else emit(marker)
+            body = json.dumps(emission, separators=(",", ":")).encode()
             self.send_body(200, "application/json", body)
             return
         self.send_body(404, "text/plain", b"not found\n")
@@ -276,4 +351,19 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    interval = int(os.environ.get("JENGASEC_STAFF_REHEARSAL_INTERVAL_SECONDS", "0"))
+    if interval:
+        if not 30 <= interval <= 3600:
+            raise ValueError("rehearsal interval must be 30 through 3600 seconds")
+
+        def rehearse():
+            while True:
+                time.sleep(interval)
+                try:
+                    emit_staff_activity(f"synthetic-{time.time_ns()}")
+                except OSError:
+                    # A stopped receiver can recover on the next bounded tick.
+                    continue
+
+        threading.Thread(target=rehearse, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", 8081), Handler).serve_forever()
