@@ -104,6 +104,7 @@ jobs:
           export PATH="/tmp/jengasec-ansible-venv/bin:$PATH"
           python observability/tests/test-config-notifications.py
           python observability/tests/test-node-ufw.py
+          ANSIBLE_PLAYBOOK=/tmp/jengasec-ansible-venv/bin/ansible-playbook python charts/observability-agent/tests/test-wal-guard-role.py
       - name: Validate configs, builds and contracts
         run: make obs-validate
       - name: Start observability stack
