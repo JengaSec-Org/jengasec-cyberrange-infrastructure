@@ -3,6 +3,7 @@
 
 import copy
 from datetime import timedelta
+import errno
 import fcntl
 import importlib.util
 import json
@@ -166,6 +167,47 @@ class ProvisioningServiceTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 SERVICE.pull_snapshot(self.cache, self.envelope, now=NOW)
         self.assertEqual(ADAPTER.read_current(self.cache, now=NOW)[1], "unavailable")
+
+    def test_fetch_and_status_write_failure_cannot_retain_usable_attribution(self):
+        SERVICE.pull_snapshot(self.cache, self.envelope, now=NOW)
+        before = (self.cache / "provisioning-snapshot.json").read_bytes()
+        updates = []
+        atomic_write = ADAPTER.atomic_write
+        def write(path, payload, **kwargs):
+            if path.name == "provisioning-status.json":
+                raise OSError(errno.ENOSPC, "full")
+            return atomic_write(path, payload, **kwargs)
+        def fetch():
+            raise OSError("source unavailable")
+        failed_at = NOW + timedelta(seconds=30)
+        with patch.object(ADAPTER, "atomic_write", side_effect=write):
+            with self.assertRaises(OSError) as failure:
+                SERVICE.pull_snapshot(self.cache, fetch, now=failed_at, publish=updates.append)
+        self.assertEqual(failure.exception.errno, errno.ENOSPC)
+        self.assertEqual((self.cache / "provisioning-snapshot.json").read_bytes(), before)
+        self.assertFalse((self.cache / "provisioning-status.json").exists())
+        self.assertEqual(ADAPTER.read_current(self.cache, now=failed_at), (None, "unavailable"))
+        resolved = ADAPTER.resolve_address(self.cache, "192.0.2.10", now=failed_at)
+        self.assertEqual(resolved["state"], "unavailable")
+        self.assertNotIn("participant_id", resolved)
+        self.assertEqual(resolved["authorization"], "none")
+        local = json.loads((self.cache / "infrastructure-attribution.json").read_text())
+        self.assertEqual(updates, [local])
+        self.assertEqual(local["state"], "unavailable")
+        self.assertEqual(local["allocations"], [])
+        self.assertEqual(local["authorization"], "none")
+        recovered_at = NOW + timedelta(seconds=32)
+        empty = FIXTURES.source()
+        empty["captured_at"] = ADAPTER.iso(recovered_at)
+        ADAPTER.refresh(self.source, lambda: empty, now=recovered_at)
+        SERVICE.pull_snapshot(self.cache, lambda: SERVICE.source_envelope(self.source, now=recovered_at),
+                              now=recovered_at, publish=updates.append)
+        snapshot, state = ADAPTER.read_current(self.cache, now=recovered_at)
+        self.assertEqual(state, "fresh")
+        self.assertTrue(all(count == 0 for count in snapshot["counts"].values()))
+        self.assertEqual(updates[-1]["state"], "fresh")
+        self.assertEqual(updates[-1]["allocations"], [])
+        self.assertEqual(ADAPTER.resolve_address(self.cache, "192.0.2.10", now=recovered_at)["state"], "unknown")
 
     def test_overlapping_cache_writers_preserve_previous_commit_marker(self):
         SERVICE.pull_snapshot(self.cache, self.envelope, now=NOW)
