@@ -16,6 +16,11 @@
         obs_retention_hours | int >=
         (obs_event_window_hours | int + obs_appeal_window_hours | int)
       - obs_refresh_seconds | int >= 30
+      - obs_spool_metrics_dir is match('^/[A-Za-z0-9_./-]+$')
+      - "'..' not in obs_spool_metrics_dir.split('/')"
+      - obs_spool_quarantine_max_bytes | int >= 1048576
+      - obs_spool_ai_handoff_max_bytes | int >= 1048576
+      - obs_spool_close_grace_seconds | int >= 120
       - >-
         obs_rehearsal_event_interval_seconds | int == 0 or
         (obs_rehearsal_mode and
@@ -143,6 +148,8 @@
     - {path: "{{ obs_state_root }}/lookups", mode: "0750"}
     - {path: "{{ obs_state_root }}/dashboards", mode: "0750"}
     - {path: "{{ obs_state_root }}/evidence", mode: "0700"}
+    - {path: "{{ obs_state_root }}/spool-maintenance", mode: "0700"}
+    - {path: "{{ obs_spool_metrics_dir }}", mode: "0755"}
   loop_control:
     label: "{{ item.path }}"
 
@@ -481,6 +488,8 @@
     - jengasec-observability.service
     - jengasec-observability-refresh.service
     - jengasec-observability-refresh.timer
+    - jengasec-observability-spools.service
+    - jengasec-observability-spools.timer
 
 - name: Install observability systemd units
   ansible.builtin.copy:
@@ -492,6 +501,8 @@
     - jengasec-observability.service
     - jengasec-observability-refresh.service
     - jengasec-observability-refresh.timer
+    - jengasec-observability-spools.service
+    - jengasec-observability-spools.timer
   notify: Reload observability systemd
   when: obs_manage_systemd
 
@@ -516,6 +527,15 @@
     - obs_manage_systemd
     - obs_start
     - obs_attribution_mode == 'platform'
+
+- name: Set the auxiliary spool maintenance timer
+  ansible.builtin.systemd:
+    name: jengasec-observability-spools.timer
+    state: "{{ 'started' if obs_spool_maintenance_enabled else 'stopped' }}"
+    enabled: "{{ obs_spool_maintenance_enabled }}"
+  when:
+    - obs_manage_systemd
+    - obs_start
 
 - name: Disable refresh when its authoritative source is unconfigured
   ansible.builtin.systemd:

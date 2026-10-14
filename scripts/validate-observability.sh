@@ -108,8 +108,17 @@ chmod 0755 "$validation_root/otelcol-contrib"
 log "running JSON Schema fixture tests"
 "${COMPOSE[@]}" run --rm --no-deps contract-tests
 
+log "testing native infrastructure event acceptance and rejection"
+"${COMPOSE[@]}" run --rm --no-deps --entrypoint python contract-tests \
+  observability/tests/render-infrastructure-vector-tests.py \
+  >"$validation_root/infrastructure-vector.yaml"
+"${COMPOSE[@]}" run --rm --no-deps \
+  --env JENGASEC_INFRASTRUCTURE_RESOURCE_IDS=test-host \
+  --volume "$validation_root/infrastructure-vector.yaml:/validation/infrastructure.yaml:ro" \
+  vector test /validation/infrastructure.yaml
+
 log "checking infrastructure metrics and optional integrations"
-for test_script in test-infrastructure-metrics.py test-optional-integrations.py test-release-archive.py test-infrastructure-dashboards.py test-provisioning-snapshot.py; do
+for test_script in test-infrastructure-metrics.py test-optional-integrations.py test-release-archive.py test-infrastructure-dashboards.py test-provisioning-snapshot.py test-provisioning-service.py test-gateway-observation.py; do
   "${COMPOSE[@]}" run --rm --no-deps \
     --entrypoint python \
     contract-tests \

@@ -12,6 +12,9 @@
       - obs_metrics_tls_key_file | length > 0
       - obs_ingest_tls_cert_file | length > 0
       - obs_ingest_tls_key_file | length > 0
+      - >-
+        obs_infrastructure_attribution_certificate_sha1 == '' or
+        obs_infrastructure_attribution_certificate_sha1 is match('^[a-fA-F0-9]{40}$')
     quiet: true
 
 - name: Validate each metrics resource

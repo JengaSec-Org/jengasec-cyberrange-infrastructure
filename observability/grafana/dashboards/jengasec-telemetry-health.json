@@ -1503,6 +1503,252 @@
           "sort": "desc"
         }
       }
+    },
+    {
+      "id": 23,
+      "title": "Auxiliary spool size",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 73,
+        "w": 12,
+        "h": 7
+      },
+      "description": "Completed quarantine and existing handoff segments have byte caps and seven-day retention. Active segments can temporarily exceed a cap; excess stays visible.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_auxiliary_spool_bytes{environment=~\"${environment:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{spool}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 24,
+      "title": "Auxiliary spool cap excess",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 73,
+        "w": 12,
+        "h": 7
+      },
+      "description": "Completed quarantine and existing handoff segments have byte caps and seven-day retention. Active segments can temporarily exceed a cap; excess stays visible.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_auxiliary_spool_excess_bytes{environment=~\"${environment:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{spool}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 25,
+      "title": "Spool cleanup age",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 80,
+        "w": 8,
+        "h": 4
+      },
+      "description": "Age of the last successful auxiliary spool sweep. Missing or stale maintenance cannot enforce completed-segment limits.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Missing",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 120
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - jengasec_auxiliary_spool_last_success_timestamp_seconds{environment=~\"${environment:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 26,
+      "title": "Auxiliary spool cleanup",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 8,
+        "y": 80,
+        "w": 16,
+        "h": 7
+      },
+      "description": "Bytes removed by the configured retention or capacity policy. These counters apply only to auxiliary files; collector queues and evidence packs remain separate.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (spool, reason) (increase(jengasec_auxiliary_spool_removed_bytes_total{environment=~\"${environment:regex}\"}[$__rate_interval]))",
+          "editorMode": "code",
+          "legendFormat": "{{spool}} / {{reason}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     }
   ]
 }

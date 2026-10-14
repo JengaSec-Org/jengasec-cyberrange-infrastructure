@@ -313,6 +313,17 @@ ingress certificate and key through the `obs_metrics_tls_*_file` and
 `obs_ingest_tls_*_file` controller paths. The server certificate must cover the
 configured receiver address. Private keys stay outside the release archive.
 
+For native provisioning attribution, configure the cache's
+`obs_provisioning_attribution_endpoint` and set
+`obs_infrastructure_attribution_certificate_sha1` to the exact cache client
+certificate's DER SHA-1 fingerprint. This runtime fingerprint selects the
+authenticated client; certificate trust and hostname verification remain
+required. `POST /api/v1/infrastructure-attribution` rejects other clients.
+Keep Vector's internal lookup receiver off host ports. An empty fingerprint
+disables publication. The cache invalidates the lookup before fetching and
+publishes only fresh native allocations, with no authorization or canonical
+identity mapping. See `observability/provisioning/README.md`.
+
 Configure `obs_metrics_targets` with each resource's `resource_id`, `address`
 and `role`. The collector installs bounded labels from this inventory. Vector
 keeps the validated source environment and resource labels so validation
@@ -343,6 +354,15 @@ secrets are below `/etc/jengasec-observability`. Loki, Prometheus, Grafana,
 Vector quarantine, the AI handoff and evidence packs are below `obs_state_root`
 (`/var/lib/jengasec-observability` by default, or the dedicated volume's
 `state` directory). The role does not delete an old release or data directory.
+
+`jengasec-observability-spools.timer` checks completed quarantine and existing
+AI handoff segments each minute. It applies the configured retention period
+and byte caps (256 MiB and 1 GiB by default), preserving active and recently
+written segments. Set `obs_spool_metrics_dir` to the node exporter's existing
+textfile directory to expose cleanup freshness, retained bytes, cap excess
+and removal counters. Active segments may temporarily exceed the cap; this
+is reported explicitly. The timer handles only these auxiliary spools and
+does not remove Loki, Prometheus or collector queue data.
 
 For an upgrade, retain the current private deployment variables, environment
 file and lookup configuration with the current release ID. Stage a new

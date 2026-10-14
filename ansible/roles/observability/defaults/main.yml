@@ -21,6 +21,7 @@ obs_metrics_tls_cert_file: ""
 obs_metrics_tls_key_file: ""
 obs_ingest_tls_cert_file: ""
 obs_ingest_tls_key_file: ""
+obs_infrastructure_attribution_certificate_sha1: ""
 obs_manage_packages: true
 obs_manage_systemd: true
 obs_manage_storage_ownership: true
@@ -40,6 +41,11 @@ obs_retention_hours: 168
 obs_event_window_hours: 72
 obs_appeal_window_hours: 96
 obs_refresh_seconds: 60
+obs_spool_maintenance_enabled: true
+obs_spool_metrics_dir: "{{ obs_state_root }}/metrics"
+obs_spool_quarantine_max_bytes: 268435456
+obs_spool_ai_handoff_max_bytes: 1073741824
+obs_spool_close_grace_seconds: 120
 obs_compose_minimum_version: 2.24.0
 obs_python_command: /usr/bin/python3
 

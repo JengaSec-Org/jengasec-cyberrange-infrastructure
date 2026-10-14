@@ -380,6 +380,34 @@
       "dashboard_uid": "jengasec-telemetry-health",
       "panel_id": 20,
       "summary": "The native provisioning snapshot is missing, failed or expired. Treat current attribution as unknown until source and cache recover."
+    },
+    {
+      "uid": "jengasec-spool-cleanup-stale",
+      "title": "Auxiliary spool cleanup unavailable",
+      "query": "((time() - jengasec_auxiliary_spool_last_success_timestamp_seconds{environment=\"live\",resource_id=\"vm104\"}) > bool 180) or absent(jengasec_auxiliary_spool_last_success_timestamp_seconds{environment=\"live\",resource_id=\"vm104\"})",
+      "datasource": "prometheus",
+      "threshold": 0,
+      "for": "3m",
+      "keep_firing_for": "1m",
+      "severity": "warning",
+      "no_data_state": "NoData",
+      "dashboard_uid": "jengasec-telemetry-health",
+      "panel_id": 25,
+      "summary": "Auxiliary spool maintenance is missing or stale. Inspect its timer and filesystem permissions."
+    },
+    {
+      "uid": "jengasec-spool-cap-excess",
+      "title": "Auxiliary spool cap exceeded",
+      "query": "jengasec_auxiliary_spool_excess_bytes{environment=\"live\"}",
+      "datasource": "prometheus",
+      "threshold": 0,
+      "for": "5m",
+      "keep_firing_for": "1m",
+      "severity": "warning",
+      "no_data_state": "NoData",
+      "dashboard_uid": "jengasec-telemetry-health",
+      "panel_id": 24,
+      "summary": "Auxiliary spool files remain above their configured byte cap. Inspect incoming rate and cleanup before disk pressure grows."
     }
   ]
 }
