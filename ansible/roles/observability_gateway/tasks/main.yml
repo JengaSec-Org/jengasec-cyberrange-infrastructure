@@ -1,0 +1,294 @@
+---
+- name: Require scoped passive capture approval and a named interface
+  ansible.builtin.assert:
+    that:
+      - obs_network_approved | bool
+      - ansible_distribution == 'Debian'
+      - ansible_architecture == 'x86_64'
+      - obs_network_interface is match('^[A-Za-z0-9][A-Za-z0-9_.-]{0,14}$')
+      - obs_network_debian_suite is match('^[a-z]+$')
+
+- name: Verify the existing VPN capture interface
+  ansible.builtin.command:
+    argv: [ip, link, show, dev, "{{ obs_network_interface }}"]
+  changed_when: false
+
+- name: Record account, SSH and gateway policy checksums
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    checksum_algorithm: sha256
+  loop:
+    - /etc/passwd
+    - /etc/shadow
+    - /etc/ssh/sshd_config
+  register: obs_network_identity_before
+  no_log: true
+
+- name: Read active nftables policy before sensor setup
+  ansible.builtin.command: nft -j list ruleset
+  register: obs_network_nft_before
+  changed_when: false
+  no_log: true
+
+- name: Create private package and sensor directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ obs_network_install_root }}"
+    - "{{ obs_network_install_root }}/apt"
+    - "{{ obs_network_install_root }}/apt/lists/partial"
+    - "{{ obs_network_install_root }}/apt/archives/partial"
+    - "{{ obs_network_install_root }}/vendor"
+    - "{{ obs_network_event_state }}/suricata"
+
+- name: Configure isolated signed package sources
+  ansible.builtin.copy:
+    dest: "{{ obs_network_install_root }}/apt/sources.list"
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] https://deb.debian.org/debian {{ obs_network_debian_suite }} main
+      deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] https://deb.debian.org/debian {{ obs_network_debian_suite }}-backports main
+
+- name: Fetch signed package indexes without changing system package sources
+  ansible.builtin.command:
+    argv:
+      - apt-get
+      - -o
+      - "Dir::Etc::sourcelist={{ obs_network_install_root }}/apt/sources.list"
+      - -o
+      - Dir::Etc::sourceparts=-
+      - -o
+      - "Dir::State::lists={{ obs_network_install_root }}/apt/lists"
+      - update
+  changed_when: false
+
+- name: Download sensor packages without installing packages or running account hooks
+  ansible.builtin.command:
+    argv:
+      - apt-get
+      - -o
+      - "Dir::Etc::sourcelist={{ obs_network_install_root }}/apt/sources.list"
+      - -o
+      - Dir::Etc::sourceparts=-
+      - -o
+      - "Dir::State::lists={{ obs_network_install_root }}/apt/lists"
+      - -o
+      - "Dir::Cache::archives={{ obs_network_install_root }}/apt/archives"
+      - --download-only
+      - --no-install-recommends
+      - --assume-yes
+      - install
+      - "suricata/{{ obs_network_debian_suite }}-backports"
+      - "libhtp2/{{ obs_network_debian_suite }}-backports"
+      - softflowd
+  changed_when: false
+
+- name: Extract only verified downloaded packages into the OBS tool directory
+  ansible.builtin.shell: |
+    set -eu
+    for package in "$OBS_SENSOR_ROOT"/apt/archives/*.deb; do
+      dpkg-deb --extract "$package" "$OBS_SENSOR_ROOT/vendor"
+    done
+  args:
+    executable: /bin/sh
+  environment:
+    OBS_SENSOR_ROOT: "{{ obs_network_install_root }}"
+  changed_when: false
+
+- name: Read GoFlow2 release metadata
+  ansible.builtin.uri:
+    url: "https://api.github.com/repos/netsampler/goflow2/releases/tags/v{{ obs_network_goflow_version }}"
+    return_content: true
+  register: obs_network_goflow_release
+
+- name: Select the versioned gateway decoder artifact
+  ansible.builtin.set_fact:
+    obs_network_goflow_asset: "{{ obs_network_goflow_release.json.assets | selectattr('name', 'equalto', 'goflow2-' ~ obs_network_goflow_version ~ '-linux-amd64') | first }}"
+
+- name: Require an integrity digest for the decoder artifact
+  ansible.builtin.assert:
+    that:
+      - obs_network_goflow_asset.digest is match('^sha256:[a-f0-9]{64}$')
+
+- name: Download the local decoder with integrity verification
+  ansible.builtin.get_url:
+    url: "{{ obs_network_goflow_asset.browser_download_url }}"
+    dest: "{{ obs_network_install_root }}/goflow2"
+    checksum: "{{ obs_network_goflow_asset.digest }}"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install the in-memory flow sanitizer pipeline
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../scripts/run-gateway-flow-decoder.py"
+    dest: "{{ obs_network_install_root | dirname }}/run-gateway-flow-decoder.py"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Read the package's Suricata defaults
+  ansible.builtin.slurp:
+    src: "{{ obs_network_install_root }}/vendor/etc/suricata/suricata.yaml"
+  register: obs_network_suricata_defaults
+
+- name: Fetch community IDS rules over verified TLS
+  ansible.builtin.get_url:
+    url: "{{ obs_network_rules_url }}"
+    dest: "{{ obs_network_install_root }}/emerging.rules.tar.gz"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Extract IDS signatures under the OBS tool directory
+  ansible.builtin.unarchive:
+    src: "{{ obs_network_install_root }}/emerging.rules.tar.gz"
+    dest: "{{ obs_network_install_root }}"
+    remote_src: true
+
+- name: Find installed community rules
+  ansible.builtin.find:
+    paths: "{{ obs_network_install_root }}/rules"
+    patterns: '*.rules'
+  register: obs_network_rules
+
+- name: Require a nonempty IDS signature set
+  ansible.builtin.assert:
+    that: obs_network_rules.matched | int > 0
+
+- name: Install the bounded passive IDS configuration
+  ansible.builtin.copy:
+    dest: "{{ obs_network_install_root }}/suricata.yaml"
+    owner: root
+    group: root
+    mode: '0644'
+    content: "%YAML 1.1\n---\n{{ (obs_network_suricata_defaults.content | b64decode | from_yaml) | combine(obs_network_suricata_overrides, recursive=True) | to_nice_yaml }}"
+  vars:
+    obs_network_suricata_overrides:
+      default-log-dir: "{{ obs_network_event_state }}/suricata"
+      default-rule-path: "{{ obs_network_install_root }}/vendor/var/lib/suricata/rules"
+      rule-files: "{{ (obs_network_rules.files | map(attribute='path') | sort) + [obs_network_install_root ~ '/canary.rules'] }}"
+      classification-file: "{{ obs_network_install_root }}/vendor/etc/suricata/classification.config"
+      reference-config-file: "{{ obs_network_install_root }}/vendor/etc/suricata/reference.config"
+      threshold-file: "{{ obs_network_install_root }}/vendor/etc/suricata/threshold.config"
+      stats: {enabled: true, interval: 10}
+      pcap:
+        - interface: "{{ obs_network_interface }}"
+          checksum-checks: auto
+          promisc: false
+          snaplen: 65535
+      flow: {memcap: 67108864}
+      stream:
+        memcap: 67108864
+        reassembly: {memcap: 67108864}
+      outputs:
+        - eve-log:
+            enabled: true
+            filetype: regular
+            filename: eve.json
+            community-id: false
+            types:
+              - alert:
+                  payload: false
+                  payload-printable: false
+                  packet: false
+                  http-body: false
+                  http-body-printable: false
+                  metadata: false
+                  tagged-packets: false
+              - stats: {totals: true, threads: false, deltas: false}
+      logging:
+        default-log-level: notice
+        outputs:
+          - console: {enabled: true}
+
+- name: Install a payload-free validation rule
+  ansible.builtin.copy:
+    dest: "{{ obs_network_install_root }}/canary.rules"
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      alert icmp any any -> any any (msg:"JengaSec sensor validation"; itype:8; icode:0; dsize:137; sid:9000001; rev:1;)
+
+- name: Validate passive IDS configuration before enabling it
+  ansible.builtin.command:
+    argv: ["{{ obs_network_install_root }}/vendor/usr/bin/suricata", -T, -c, "{{ obs_network_install_root }}/suricata.yaml"]
+  environment:
+    LD_LIBRARY_PATH: "{{ obs_network_install_root }}/vendor/usr/lib/x86_64-linux-gnu:{{ obs_network_install_root }}/vendor/lib/x86_64-linux-gnu"
+  changed_when: false
+
+- name: Install passive sensor units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - jengasec-softflowd.service
+    - jengasec-goflow2.service
+    - jengasec-suricata.service
+  notify: Reload passive sensor units
+
+- name: Apply passive sensor unit changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable approved passive capture
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop:
+    - jengasec-goflow2.service
+    - jengasec-softflowd.service
+    - jengasec-suricata.service
+  when: obs_network_start | bool
+
+- name: Read the installed gateway event configuration
+  ansible.builtin.slurp:
+    src: "{{ obs_network_event_config }}"
+  register: obs_network_event_configuration
+  when: obs_network_start | bool
+  no_log: true
+
+- name: Enable sanitized gateway event mappings
+  ansible.builtin.copy:
+    dest: "{{ obs_network_event_config }}"
+    owner: root
+    group: root
+    mode: '0600'
+    content: "{{ (obs_network_event_configuration.content | b64decode | from_json) | combine({'network': true, 'interface': obs_network_interface}) | to_nice_json }}\n"
+  when: obs_network_start | bool
+  no_log: true
+
+- name: Verify account and SSH configuration remain unchanged
+  ansible.builtin.stat:
+    path: "{{ item.item }}"
+    checksum_algorithm: sha256
+  loop: "{{ obs_network_identity_before.results }}"
+  register: obs_network_identity_after
+  no_log: true
+
+- name: Check account preservation
+  ansible.builtin.assert:
+    that: item.stat.checksum == item.item.stat.checksum
+  loop: "{{ obs_network_identity_after.results }}"
+  no_log: true
+
+- name: Read gateway policy after sensor setup
+  ansible.builtin.command: nft -j list ruleset
+  register: obs_network_nft_after
+  changed_when: false
+  no_log: true
+
+- name: Confirm passive collection did not change gateway rules
+  ansible.builtin.assert:
+    that: obs_network_nft_before.stdout == obs_network_nft_after.stdout
+  no_log: true

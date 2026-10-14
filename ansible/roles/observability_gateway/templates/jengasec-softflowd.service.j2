@@ -1,0 +1,29 @@
+[Unit]
+Description=JengaSec passive VPN flow export
+After=network-online.target jengasec-goflow2.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart={{ obs_network_install_root }}/vendor/usr/sbin/softflowd -d -i {{ obs_network_interface }} -n 127.0.0.1:2055 -v 9 -t maxlife=30 -p /run/jengasec-softflowd/softflowd.pid -c /run/jengasec-softflowd/control.sock
+Environment=LD_LIBRARY_PATH={{ obs_network_install_root }}/vendor/usr/lib/x86_64-linux-gnu:{{ obs_network_install_root }}/vendor/lib/x86_64-linux-gnu
+RuntimeDirectory=jengasec-softflowd
+RuntimeDirectoryMode=0750
+User=root
+Group=root
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+MemoryMax=256M
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

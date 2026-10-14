@@ -1,0 +1,7 @@
+---
+- name: Install passive gateway observation
+  hosts: observability_gateway
+  become: true
+  serial: 1
+  roles:
+    - observability_gateway
