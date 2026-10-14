@@ -5,10 +5,14 @@ import copy
 import contextlib
 import hashlib
 import http.client
+import grp
+import io
 import json
 import os
 import pathlib
 import socket
+import ssl
+import subprocess
 import sys
 import tempfile
 import threading
@@ -30,6 +34,7 @@ from scoring_ai.probe import FunctionalProbe
 from scoring_ai.platform_bridge import PlatformBridge, receipt_uuid
 from scoring_ai.store import Store
 from scoring_ai.telemetry import Cursors, Telemetry
+from scoring_ai import identity_sync
 
 
 NOW = 1791979200.0
@@ -843,6 +848,234 @@ class PlatformBridgeTests(Fixture):
         row = next(iter(self.queue.payloads.values()))
         self.assertEqual(row["kind"], "outcome")
         self.assertEqual(row["measurements"], {"runtime_checks": {"model": True}})
+
+
+class IdentityRefreshTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.certificate_directory = tempfile.TemporaryDirectory()
+        cls.certificate = pathlib.Path(cls.certificate_directory.name) / "certificate.pem"
+        cls.private_key = pathlib.Path(cls.certificate_directory.name) / "key.pem"
+        subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-sha256", "-days", "1",
+                        "-subj", "/CN=localhost", "-addext", "subjectAltName=IP:127.0.0.1",
+                        "-keyout", str(cls.private_key), "-out", str(cls.certificate)],
+                       check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.certificate_directory.cleanup()
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = pathlib.Path(self.directory.name)
+        self.published = self.root / "published"
+        self.published.mkdir(mode=0o750)
+        self.reader_gid = os.getegid() or next(group.gr_gid for group in grp.getgrall() if group.gr_gid != 0)
+        os.chown(self.published, os.geteuid(), self.reader_gid)
+        self.published.chmod(0o750)
+        self.snapshot = self.published / "identity.json"
+        self.token = self.root / "identity.token"
+        self.secret = "read-only-identity-fixture-" + "e" * 40
+        self.token.write_text(self.secret + "\n")
+        self.token.chmod(0o600)
+        # Exercise the same file-owner checks without changing host identities.
+        for name, value in (("OWNER_UID", os.geteuid()), ("OWNER_GID", os.getegid())):
+            replacement = patch.object(identity_sync, name, value)
+            replacement.start()
+            self.addCleanup(replacement.stop)
+        self.now = float(int(time.time()))
+        self.value, self.status, self.headers, self.requests = identity(self.now), 200, {}, []
+        self.reported_length = None
+        fixture = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                fixture.requests.append({"path": self.path, "identity": self.headers.get("X-Scoring-Identity-Token"),
+                                         "bearer": self.headers.get("Authorization"), "feed": self.headers.get("X-Feed-Token")})
+                raw = fixture.value if isinstance(fixture.value, bytes) else canonical(fixture.value)
+                self.send_response(fixture.status)
+                self.send_header("Content-Length", str(fixture.reported_length or len(raw)))
+                for name, value in fixture.headers.items():
+                    self.send_header(name, value)
+                self.end_headers()
+                try:
+                    self.wfile.write(raw)
+                except (BrokenPipeError, ssl.SSLError, ConnectionResetError):
+                    pass
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(self.certificate, self.private_key)
+        self.server.socket = context.wrap_socket(self.server.socket, server_side=True)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.addCleanup(self.close_server)
+        self.config = {"schema_version": "scoring-ai-identity/1.0", "origin": "https://127.0.0.1:" + str(self.server.server_port),
+                       "competition": 1, "token_file": str(self.token), "snapshot_file": str(self.snapshot),
+                       "reader_group": grp.getgrgid(self.reader_gid).gr_name, "ca_file": str(self.certificate)}
+
+    def close_server(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join()
+
+    def sync(self):
+        return identity_sync.IdentitySync(self.config, clock=lambda: self.now)
+
+    def expect_invalidation(self, operation=None):
+        write_json(self.snapshot, identity(self.now))
+        with self.assertRaises((Rejected, OSError, ValueError, http.client.HTTPException)):
+            (operation or self.sync().refresh)()
+        self.assertFalse(self.snapshot.exists())
+        self.assertFalse(list(self.published.glob(".identity-*")))
+
+    def test_real_https_current_snapshot_is_read_only_and_credential_stays_private(self):
+        self.assertEqual(self.sync().refresh()["identity"], "fresh")
+        self.assertEqual(json.loads(self.snapshot.read_text()), self.value)
+        self.assertEqual(self.snapshot.stat().st_mode & 0o777, 0o640)
+        self.assertEqual(self.snapshot.stat().st_gid, self.reader_gid)
+        self.assertEqual(self.published.stat().st_mode & 0o777, 0o750)
+        self.assertEqual(self.token.stat().st_mode & 0o777, 0o600)
+        self.assertNotIn(self.secret, self.snapshot.read_text())
+        self.assertEqual(self.requests, [{"path": "/api/scoring/identity/?competition=1", "identity": self.secret, "bearer": None, "feed": None}])
+        authority = Authority(self.snapshot, ["10.50.0.0/24", "10.60.0.0/24"], ["10.50.0.1/32"], [])
+        self.assertEqual(authority.load(self.now)["competition"]["id"], 1)
+
+    def test_actuator_snapshot_can_stay_root_only(self):
+        self.config.pop("reader_group")
+        self.published.chmod(0o700)
+        os.chown(self.published, os.geteuid(), os.getegid())
+        self.sync().refresh()
+        self.assertEqual(self.snapshot.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.snapshot.stat().st_gid, os.getegid())
+
+    def test_bad_authority_invalidates_previous_snapshot(self):
+        mutations = (
+            lambda value: value.update(historical=True),
+            lambda value: value.update(expires_at=stamp(self.now)),
+            lambda value: value.update(captured_at=stamp(self.now + 1)),
+            lambda value: value.update(expires_at=stamp(self.now + 121)),
+            lambda value: value["competition"].update(id=2),
+            lambda value: value["competition"].update(end=stamp(self.now)),
+            lambda value: value.update(revision=True),
+            lambda value: value.update(targets={}),
+        )
+        for change in mutations:
+            with self.subTest(change=mutations.index(change)):
+                self.value = identity(self.now)
+                change(self.value)
+                self.expect_invalidation()
+
+    def test_revocation_invalid_json_compression_and_oversized_body_invalidate(self):
+        for status, raw, headers in ((403, b"private diagnostic", {}), (500, b"unavailable", {}),
+                                     (200, b"{", {}), (200, b'{"revision":1,"revision":2}', {}),
+                                     (200, b"a" * (identity_sync.MAXIMUM + 1), {}),
+                                     (200, b"compressed", {"Content-Encoding": "gzip"})):
+            with self.subTest(status=status, size=len(raw)):
+                self.status, self.value, self.headers = status, raw, headers
+                self.expect_invalidation()
+
+    def test_redirect_is_not_followed_or_given_credentials(self):
+        received = []
+
+        class Other(BaseHTTPRequestHandler):
+            def do_GET(self):
+                received.append(self.headers.get("X-Scoring-Identity-Token"))
+                self.send_response(204)
+                self.end_headers()
+
+        other = ThreadingHTTPServer(("127.0.0.1", 0), Other)
+        thread = threading.Thread(target=other.serve_forever, daemon=True)
+        thread.start()
+        try:
+            self.status = 302
+            self.headers = {"Location": "http://127.0.0.1:" + str(other.server_port) + "/elsewhere"}
+            self.expect_invalidation()
+            self.assertEqual(received, [])
+        finally:
+            other.shutdown()
+            other.server_close()
+            thread.join()
+
+    def test_untrusted_tls_certificate_invalidates(self):
+        self.config.pop("ca_file")
+        self.expect_invalidation()
+
+    def test_token_permissions_empty_value_and_symlink_fail_closed(self):
+        self.token.chmod(0o644)
+        self.expect_invalidation()
+        self.token.chmod(0o600)
+        self.token.write_text("")
+        self.expect_invalidation()
+        self.token.unlink()
+        self.token.symlink_to(self.certificate)
+        self.expect_invalidation()
+        self.assertEqual(self.requests, [])
+
+    def test_publication_disk_failure_removes_previous_authority(self):
+        with patch.object(identity_sync.os, "replace", side_effect=OSError("private storage error")):
+            self.expect_invalidation()
+
+    def test_directory_sync_failure_revokes_just_published_authority(self):
+        original = os.fsync
+
+        def sync(fd):
+            import stat
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                raise OSError("private storage error")
+            return original(fd)
+
+        with patch.object(identity_sync.os, "fsync", side_effect=sync):
+            self.expect_invalidation()
+
+    def test_truncated_response_does_not_publish_even_a_valid_json_prefix(self):
+        self.reported_length = len(canonical(self.value)) + 10
+        self.expect_invalidation()
+
+    def test_request_deadline_invalidates_authority(self):
+        sync = self.sync()
+        sync.monotonic = iter((0, 9)).__next__
+        self.expect_invalidation(sync.refresh)
+
+    def test_concurrent_refresh_does_not_revoke_active_publisher(self):
+        import fcntl
+        write_json(self.snapshot, identity(self.now))
+        lock_path = self.published / ".refresh.lock"
+        lock_path.touch(mode=0o600)
+        with lock_path.open("w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaisesRegex(Rejected, "identity_refresh_busy"):
+                self.sync().refresh()
+        self.assertTrue(self.snapshot.exists())
+        self.assertEqual(self.requests, [])
+
+    def test_publication_requires_protected_directory_and_fixed_https_origin(self):
+        self.published.chmod(0o770)
+        with self.assertRaisesRegex(Rejected, "untrusted_identity_directory"):
+            self.sync().refresh()
+        self.published.chmod(0o750)
+        for origin in ("http://127.0.0.1", "https://user:secret@localhost", "https://localhost/extra",
+                       "https://localhost?token=secret", "https://localhost#fragment"):
+            with self.subTest(origin=origin), self.assertRaises(Rejected):
+                identity_sync.IdentitySync({**self.config, "origin": origin})
+        if os.geteuid() != 0:
+            with patch.object(identity_sync, "OWNER_UID", 0), self.assertRaisesRegex(Rejected, "identity_publisher_requires_root"):
+                self.sync().refresh()
+
+    def test_cli_never_prints_raw_refresh_errors(self):
+        import signal
+        config = self.root / "config.json"
+        write_json(config, self.config)
+        for number in (signal.SIGTERM, signal.SIGINT):
+            self.addCleanup(signal.signal, number, signal.getsignal(number))
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), patch.object(identity_sync.IdentitySync, "_fetch", side_effect=OSError(self.secret)):
+            self.assertEqual(identity_sync.main(["--config", str(config)]), 1)
+        self.assertEqual(output.getvalue(), '{"error":"identity_refresh_failed"}\n')
 
 
 if __name__ == "__main__":

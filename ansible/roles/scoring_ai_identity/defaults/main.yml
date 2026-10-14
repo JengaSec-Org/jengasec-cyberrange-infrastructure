@@ -1,0 +1,10 @@
+---
+scoring_ai_identity_start: false
+scoring_ai_identity_python: /usr/bin/python3
+scoring_ai_identity_install_root: /opt/jengasec-ai-identity
+scoring_ai_identity_config_root: /etc/jengasec-ai-identity
+scoring_ai_identity_state_root: /var/lib/jengasec-ai-identity
+scoring_ai_identity_reader_user: ''
+scoring_ai_identity_reader_group: ''
+scoring_ai_identity_token_source: ''
+scoring_ai_identity_config: {}

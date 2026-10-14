@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh JengaSec AI authority every 30 seconds
+
+[Timer]
+OnBootSec=5s
+OnUnitActiveSec=30s
+AccuracySec=1s
+Unit=jengasec-ai-identity.service
+
+[Install]
+WantedBy=timers.target
