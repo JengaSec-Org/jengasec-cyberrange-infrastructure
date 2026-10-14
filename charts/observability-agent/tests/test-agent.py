@@ -276,9 +276,6 @@ class HostLogTests(unittest.TestCase):
                 receiver["include"] = [str(path / "*.log")]
                 receiver.pop("exclude", None)
                 receiver["start_at"] = "beginning"
-            config["receivers"].pop("prometheus/collector")
-            config["processors"].pop("transform/metric_identity")
-            config["processors"].pop("transform/metric_resources")
             config["processors"]["batch"] = {"timeout": "100ms", "send_batch_size": 64, "send_batch_max_size": 64}
             storage["directory"] = str(root / "state")
             storage["compaction"]["directory"] = str(root / "compaction")
@@ -291,7 +288,9 @@ class HostLogTests(unittest.TestCase):
             config["service"]["telemetry"] = {"metrics": {"level": "normal", "readers": [
                 {"pull": {"exporter": {"prometheus": {"host": "127.0.0.1", "port": metrics_port}}}}
             ]}}
-            config["service"]["pipelines"].pop("metrics")
+            scrape["scrape_interval"] = "1s"
+            scrape["scrape_timeout"] = "800ms"
+            scrape["static_configs"][0]["targets"] = [f"127.0.0.1:{metrics_port}"]
             for pipeline in config["service"]["pipelines"].values():
                 pipeline["exporters"] = ["file"]
             (root / "config.json").write_text(json.dumps(config))
@@ -305,7 +304,8 @@ class HostLogTests(unittest.TestCase):
                         self.fail(process.communicate()[1])
                     if (root / "output.jsonl").exists():
                         output = (root / "output.jsonl").read_text()
-                        if "accepted-fixture" in output and "infrastructure/1.0" in output:
+                        if ("accepted-fixture" in output and "infrastructure/1.0" in output
+                                and "otelcol_processor_filter_logs.filtered" in output):
                             break
                     time.sleep(0.1)
                 with urllib.request.urlopen(f"http://127.0.0.1:{metrics_port}/metrics", timeout=2) as response:
@@ -321,7 +321,7 @@ class HostLogTests(unittest.TestCase):
             self.assertNotIn("platform_audit", output)
             self.assertNotIn("k8s.pod.uid", output)
             self.assertNotIn("log.file.path", output)
-            records = [record for line in output.splitlines() for resource in json.loads(line)["resourceLogs"]
+            records = [record for line in output.splitlines() for resource in json.loads(line).get("resourceLogs", [])
                        for scope in resource["scopeLogs"] for record in scope["logRecords"]]
             self.assertEqual(len(records), 2)
             body = next(decode_value(record["body"]) for record in records if decode_value(record["body"])["schema_version"] == "2.0")
@@ -330,6 +330,13 @@ class HostLogTests(unittest.TestCase):
             filtered = [line for line in metrics_text.splitlines() if line.startswith("otelcol_processor_filter_logs_filtered")]
             self.assertTrue(any("filter/json_object" in line and float(line.rsplit(" ", 1)[1]) > 0
                                 for line in filtered), filtered)
+            metrics = [metric for line in output.splitlines() for resource in json.loads(line).get("resourceMetrics", [])
+                       for scope in resource["scopeMetrics"] for metric in scope["metrics"]]
+            counter = next(metric for metric in metrics if metric["name"] == "otelcol_processor_filter_logs.filtered_total")
+            labels = [{item["key"]: decode_value(item["value"]) for item in point["attributes"]}
+                      for point in counter["sum"]["dataPoints"]]
+            self.assertTrue(any(label.get("filter") == "filter/json_object" for label in labels))
+            self.assertTrue(all(label["component"] == "container-log-reader" for label in labels))
 
 
     def test_persistent_queue_replays_once_after_receiver_outage_and_restart(self):

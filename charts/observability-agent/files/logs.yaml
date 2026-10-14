@@ -69,7 +69,7 @@ receivers:
         - action: keep
           source_labels:
           - __name__
-          regex: otelcol_(process_uptime|process_memory_rss|exporter_queue_size|exporter_queue_capacity|exporter_send_failed_metric_points|exporter_send_failed_log_records|exporter_sent_metric_points|exporter_sent_log_records|receiver_accepted_log_records|receiver_refused_log_records|processor_filter_logs_filtered|fileconsumer_.*|exporter_prometheusremotewrite_wal_.*).*
+          regex: otelcol_(process_uptime|process_memory_rss|exporter_queue_size|exporter_queue_capacity|exporter_send_failed_metric_points|exporter_send_failed_log_records|exporter_sent_metric_points|exporter_sent_log_records|receiver_accepted_log_records|receiver_refused_log_records|processor_filter_logs[._]filtered|fileconsumer_.*|exporter_prometheusremotewrite_wal_.*).*
 processors:
   memory_limiter:
     check_interval: 5s
