@@ -3,9 +3,11 @@
 
 import pathlib
 import importlib.util
+import signal
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "observability/network"))
@@ -14,6 +16,10 @@ from nft_verdict_logging import add_verdict_observation
 spec = importlib.util.spec_from_file_location("install_hook", ROOT / "scripts/install-firewall-observation.py")
 installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
+
+spec = importlib.util.spec_from_file_location("flow_runner", ROOT / "scripts/run-gateway-flow-decoder.py")
+runner = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(runner)
 
 
 def rules():
@@ -31,6 +37,23 @@ def rules():
 
 
 class GatewayObservationTests(unittest.TestCase):
+    def test_decoder_shutdown_is_clean_and_unexpected_failure_is_visible(self):
+        for requested_stop in (False, True):
+            with self.subTest(requested_stop=requested_stop):
+                handlers = {}
+                decoder, forwarder = Mock(), Mock()
+                decoder.poll.return_value = -15
+                forwarder.poll.return_value = -15
+                def wait():
+                    if requested_stop:
+                        handlers[signal.SIGTERM](signal.SIGTERM, None)
+                    return -15
+                forwarder.wait.side_effect = lambda **_kwargs: wait()
+                with patch.object(runner.subprocess, "Popen", side_effect=[decoder, forwarder]), \
+                     patch.object(runner.signal, "signal", side_effect=lambda kind, handler: handlers.update({kind: handler})), \
+                     patch.object(sys, "argv", ["decoder", "--goflow2", "/opt/obs/goflow2", "--config", "/etc/obs/config.json"]):
+                    self.assertEqual(runner.main(), 0 if requested_stop else -15)
+
     def test_verdicts_remain_unlimited_and_in_the_original_order(self):
         original = rules()
         result = add_verdict_observation(original, "test_guard")
