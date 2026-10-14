@@ -186,9 +186,9 @@ processors:
       - set(body["resource"]["name"], cache["event"]["regarding"]["name"])
       - set(body["attributes"], ParseJSON("{}"))
       - set(body["attributes"]["type"], cache["event"]["type"])
-      - set(body["attributes"]["reason"], cache["event"]["reason"]) where IsMatch(cache["event"]["reason"], "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,252}$")
+      - set(body["attributes"]["reason"], cache["event"]["reason"]) where IsMatch(cache["event"]["reason"], "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,63}$")
       - set(body["attributes"]["action"], cache["event"]["action"]) where cache["event"]["action"] != nil and IsMatch(cache["event"]["action"],
-        "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,252}$")
+        "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,63}$")
       - set(body["attributes"]["count"], 1)
       - set(body["attributes"]["count"], cache["event"]["deprecatedCount"]) where cache["event"]["deprecatedCount"]
         != nil and cache["event"]["deprecatedCount"] > 0

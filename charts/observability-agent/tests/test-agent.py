@@ -189,6 +189,171 @@ class ProcessorTests(unittest.TestCase):
             self.assertEqual(labels, {"namespace": "kube-system"})
 
 
+class HostLogTests(unittest.TestCase):
+    def test_arbitrary_container_names_and_path_scope_without_api_credentials(self):
+        config = yaml.safe_load((CHART / "files/logs.yaml").read_text())
+        self.assertNotIn("k8sattributes", config["processors"])
+        self.assertFalse(any("/app/" in path for path in config["receivers"]["filelog/application"]["include"]))
+        with tempfile.TemporaryDirectory(prefix="jengasec-container-test-") as directory:
+            root = Path(directory)
+            app_dir = root / "pods/jengasec-ent-a-app01_fixture_11111111-1111-4111-8111-111111111111/payments-api"
+            infra_dir = root / "pods/kube-system_fixture_22222222-2222-4222-8222-222222222222/controller"
+            for path in [app_dir, infra_dir]:
+                path.mkdir(parents=True)
+            app = {"schema_version": "2.0", "ts": "2026-10-10T09:00:00Z", "level": "info",
+                   "enterprise": "ENT-A", "application": "APP01", "namespace": "jengasec-ent-a-app01",
+                   "event": "request_completed", "outcome": "success", "request_id": "accepted-fixture",
+                   "detail": {"route": "fixture.read"}}
+            app_lines = [app, app | {"namespace": "jengasec-ent-a-app02", "request_id": "rejected-scope"},
+                         app | {"password": "secret-sentinel"},
+                         app | {"detail": {"route": {"password": "nested-secret-sentinel"}}},
+                         app | {"detail": {"route": [{"password": "array-secret-sentinel"}]}}]
+            infra = {"schema_version": "infrastructure/1.0", "record_family": "infrastructure_telemetry",
+                     "environment": "validation", "resource_id": "cluster-blue", "source": "kubernetes",
+                     "event_type": "kubernetes.event", "source_event_id": "a" * 64, "ts": "2026-10-10T09:00:00Z",
+                     "severity": "low", "outcome": "unknown",
+                     "resource": {"cluster": "blue", "namespace": "kube-system", "kind": "Pod", "name": "fixture"},
+                     "attributes": {"type": "Normal", "reason": "Started", "count": 1}}
+            infra_lines = [infra, infra | {"record_family": "platform_audit"},
+                           infra | {"attributes": {"type": "Normal", "reason": "Started", "count": 1,
+                                                    "authorization": "infra-secret-sentinel"}}]
+            for path, lines in [(app_dir, app_lines), (infra_dir, infra_lines)]:
+                content = "".join("2026-10-10T09:00:00Z stdout F " + json.dumps(line) + "\n" for line in lines)
+                content += "2026-10-10T09:00:00Z stdout F unstructured-secret-sentinel\n"
+                (path / "0.log").write_text(content)
+            for name, path in [("application", app_dir), ("infrastructure", infra_dir)]:
+                receiver = config["receivers"]["filelog/" + name]
+                receiver["include"] = [str(path / "*.log")]
+                receiver.pop("exclude", None)
+                receiver["start_at"] = "beginning"
+            config["receivers"].pop("prometheus/collector")
+            config["processors"].pop("transform/metric_identity")
+            config["processors"].pop("transform/metric_resources")
+            config["processors"]["batch"] = {"timeout": "100ms", "send_batch_size": 64, "send_batch_max_size": 64}
+            config["extensions"] = {"file_storage/logs": {"directory": str(root / "state"), "create_directory": True}}
+            config["exporters"] = {"file": {"path": str(root / "output.jsonl"), "flush_interval": "100ms"}}
+            config["service"]["extensions"] = ["file_storage/logs"]
+            config["service"]["telemetry"] = {"metrics": {"level": "none"}}
+            config["service"]["pipelines"].pop("metrics")
+            for pipeline in config["service"]["pipelines"].values():
+                pipeline["exporters"] = ["file"]
+            (root / "config.json").write_text(json.dumps(config))
+            environment = os.environ | {"OBS_ENVIRONMENT": "validation", "OBS_CLUSTER": "blue", "OBS_RESOURCE_ID": "cluster-blue"}
+            process = subprocess.Popen([COLLECTOR, "--config=" + str(root / "config.json")], stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, text=True, env=environment)
+            try:
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline:
+                    if process.poll() is not None:
+                        self.fail(process.communicate()[1])
+                    if (root / "output.jsonl").exists():
+                        output = (root / "output.jsonl").read_text()
+                        if "accepted-fixture" in output and "infrastructure/1.0" in output:
+                            break
+                    time.sleep(0.1)
+            finally:
+                process.terminate()
+                stdout, stderr = process.communicate(timeout=15)
+            self.assertEqual(process.returncode, 0, stderr)
+            output = (root / "output.jsonl").read_text()
+            self.assertNotIn("secret-sentinel", output)
+            self.assertNotIn("secret-sentinel", stderr)
+            self.assertNotIn("rejected-scope", output)
+            self.assertNotIn("platform_audit", output)
+            self.assertNotIn("k8s.pod.uid", output)
+            self.assertNotIn("log.file.path", output)
+            records = [record for line in output.splitlines() for resource in json.loads(line)["resourceLogs"]
+                       for scope in resource["scopeLogs"] for record in scope["logRecords"]]
+            self.assertEqual(len(records), 2)
+            body = next(decode_value(record["body"]) for record in records if decode_value(record["body"])["schema_version"] == "2.0")
+            self.assertEqual(body, app)
+            self.assertIn("payments-api", output)
+
+
+    def test_persistent_queue_replays_once_after_receiver_outage_and_restart(self):
+        with tempfile.TemporaryDirectory(prefix="jengasec-queue-test-") as directory:
+            root = Path(directory)
+            app_dir = root / "pods/jengasec-ent-a-app01_fixture_33333333-3333-4333-8333-333333333333/arbitrary-container"
+            app_dir.mkdir(parents=True)
+            event = {"schema_version": "2.0", "ts": "2026-10-10T09:00:00Z", "level": "info",
+                     "enterprise": "ENT-A", "application": "APP01", "namespace": "jengasec-ent-a-app01",
+                     "event": "request_completed", "outcome": "success", "request_id": "queued-fixture"}
+            (app_dir / "0.log").write_text("2026-10-10T09:00:00Z stdout F " + json.dumps(event) + "\n")
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                port = listener.getsockname()[1]
+            base = yaml.safe_load((CHART / "files/logs.yaml").read_text())
+            receiver = base["receivers"]["filelog/application"]
+            receiver["include"] = [str(app_dir / "*.log")]
+            receiver["start_at"] = "beginning"
+            pipeline = base["service"]["pipelines"]["logs/application"]
+            sender_config = {
+                "receivers": {"filelog/application": receiver},
+                "extensions": {"file_storage/logs": {"directory": str(root / "state"), "create_directory": True}},
+                "processors": {name: base["processors"][name] for name in pipeline["processors"]},
+                "exporters": {"otlp/obs": {"endpoint": f"127.0.0.1:{port}", "timeout": "1s", "tls": {"insecure": True},
+                    "retry_on_failure": {"enabled": True, "initial_interval": "100ms", "max_interval": "1s", "max_elapsed_time": "0s"},
+                    "sending_queue": {"enabled": True, "queue_size": 16, "num_consumers": 1, "storage": "file_storage/logs"}}},
+                "service": {"extensions": ["file_storage/logs"], "telemetry": {"metrics": {"level": "none"}},
+                            "pipelines": {"logs": pipeline}},
+            }
+            sender_config["processors"]["batch"] = {"timeout": "100ms", "send_batch_size": 64, "send_batch_max_size": 64}
+            receiver_config = {
+                "receivers": {"otlp": {"protocols": {"grpc": {"endpoint": f"127.0.0.1:{port}"}}}},
+                "exporters": {"file": {"path": str(root / "delivered.jsonl"), "flush_interval": "100ms"}},
+                "service": {"telemetry": {"metrics": {"level": "none"}},
+                            "pipelines": {"logs": {"receivers": ["otlp"], "exporters": ["file"]}}},
+            }
+            for name, config in [("sender", sender_config), ("receiver", receiver_config)]:
+                (root / (name + ".json")).write_text(json.dumps(config))
+            environment = os.environ | {"OBS_ENVIRONMENT": "validation", "OBS_CLUSTER": "blue", "OBS_RESOURCE_ID": "cluster-blue"}
+            processes = []
+            with (root / "sender.log").open("w+") as sender_log, (root / "receiver.log").open("w+") as receiver_log:
+                def start(name, logfile):
+                    process = subprocess.Popen([COLLECTOR, "--config=" + str(root / (name + ".json"))],
+                                               stdout=logfile, stderr=logfile, text=True, env=environment)
+                    processes.append(process)
+                    return process
+
+                def stop(process):
+                    process.terminate()
+                    process.wait(timeout=15)
+
+                try:
+                    first = start("sender", sender_log)
+                    deadline = time.monotonic() + 15
+                    while time.monotonic() < deadline:
+                        if first.poll() is not None:
+                            self.fail((root / "sender.log").read_text())
+                        if "Exporting failed" in (root / "sender.log").read_text():
+                            break
+                        time.sleep(0.1)
+                    self.assertIn("Exporting failed", (root / "sender.log").read_text())
+                    stop(first)
+                    self.assertTrue(any((root / "state").iterdir()))
+                    destination = start("receiver", receiver_log)
+                    second = start("sender", sender_log)
+                    deadline = time.monotonic() + 15
+                    while time.monotonic() < deadline:
+                        if second.poll() is not None or destination.poll() is not None:
+                            self.fail((root / "sender.log").read_text() + (root / "receiver.log").read_text())
+                        if (root / "delivered.jsonl").exists() and "queued-fixture" in (root / "delivered.jsonl").read_text():
+                            break
+                        time.sleep(0.1)
+                    stop(second)
+                    stop(destination)
+                finally:
+                    for process in processes:
+                        if process.poll() is None:
+                            process.terminate()
+                            process.wait(timeout=15)
+            output = (root / "delivered.jsonl").read_text()
+            records = [record for line in output.splitlines() for resource in json.loads(line)["resourceLogs"]
+                       for scope in resource["scopeLogs"] for record in scope["logRecords"]]
+            self.assertEqual(len(records), 1)
+            self.assertEqual(decode_value(records[0]["body"]), event)
+
+
 if __name__ == "__main__":
     for binary in [HELM, COLLECTOR]:
         if not shutil.which(binary):

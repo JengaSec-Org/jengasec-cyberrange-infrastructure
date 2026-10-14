@@ -1,0 +1,41 @@
+[Unit]
+Description=JengaSec OBS container log collector
+After=network-online.target k3s.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile={{ obs_cluster_root }}/host-logs.env
+ExecStart={{ obs_cluster_root }}/otelcol/otelcol-contrib --config={{ obs_cluster_root }}/host-logs.yaml
+LoadCredential=ca.crt:{{ obs_cluster_root }}/tls/ca.crt
+LoadCredential=tls.crt:{{ obs_cluster_root }}/tls/tls.crt
+LoadCredential=tls.key:{{ obs_cluster_root }}/tls/tls.key
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=60s
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/var/log/pods
+ReadWritePaths=/var/lib/jengasec-container-logs
+InaccessiblePaths=-/etc/ssh -/etc/rancher -/var/lib/rancher
+MemoryMax=640M
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target

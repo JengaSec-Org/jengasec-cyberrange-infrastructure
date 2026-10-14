@@ -15,3 +15,5 @@ obs_cluster_helm_version: 3.19.0
 obs_cluster_root: /opt/jengasec-cluster-observability
 obs_cluster_storage_class: ""
 obs_cluster_storage_size: 2Gi
+obs_cluster_host_logs_enabled: false
+obs_cluster_otel_version: 0.137.0

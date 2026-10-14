@@ -1,0 +1,110 @@
+---
+- name: Require the verified collector version and central log endpoint
+  ansible.builtin.assert:
+    that:
+      - obs_cluster_otel_version == '0.137.0'
+      - obs_cluster_otlp_endpoint | length > 0
+
+- name: Inspect the owned host reader unit
+  ansible.builtin.stat:
+    path: /etc/systemd/system/jengasec-container-logs.service
+  register: obs_host_logs_unit
+
+- name: Check host reader listener ownership
+  ansible.builtin.command:
+    argv: [ss, -H, -lnt, 'sport = :13134 or sport = :8889']
+  register: obs_host_logs_listeners
+  changed_when: false
+
+- name: Refuse to replace another service listener
+  ansible.builtin.assert:
+    that:
+      - obs_host_logs_unit.stat.exists or obs_host_logs_listeners.stdout | length == 0
+
+- name: Create private host reader configuration and persistent queue directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  loop:
+    - "{{ obs_cluster_root }}/tls"
+    - "{{ obs_cluster_root }}/otelcol"
+    - /var/lib/jengasec-container-logs
+    - /var/lib/jengasec-container-logs/queue
+    - /var/lib/jengasec-container-logs/wal
+
+- name: Download the pinned collector with its published checksum
+  ansible.builtin.get_url:
+    url: "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v{{ obs_cluster_otel_version }}/otelcol-contrib_{{ obs_cluster_otel_version }}_linux_amd64.tar.gz"
+    checksum: "sha256:https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v{{ obs_cluster_otel_version }}/opentelemetry-collector-releases_otelcol-contrib_checksums.txt"
+    dest: "{{ obs_cluster_root }}/otelcol.tar.gz"
+    mode: '0600'
+
+- name: Extract the host reader executable
+  ansible.builtin.unarchive:
+    src: "{{ obs_cluster_root }}/otelcol.tar.gz"
+    dest: "{{ obs_cluster_root }}/otelcol"
+    remote_src: true
+    creates: "{{ obs_cluster_root }}/otelcol/otelcol-contrib"
+
+- name: Install only the collector's private TLS material
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "{{ obs_cluster_root }}/tls/{{ item.name }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop:
+    - {name: ca.crt, source: "{{ obs_cluster_tls_ca_file }}"}
+    - {name: tls.crt, source: "{{ obs_cluster_tls_cert_file }}"}
+    - {name: tls.key, source: "{{ obs_cluster_tls_key_file }}"}
+  no_log: true
+  notify: Restart OBS host container reader
+
+- name: Render the host reader with verified TLS and no Kubernetes API credentials
+  ansible.builtin.copy:
+    content: >-
+      {{ (lookup('ansible.builtin.file', role_path + '/../../../charts/observability-agent/files/logs.yaml') | from_yaml)
+         | combine({'exporters': {'otlp/obs': {'tls': obs_host_logs_tls},
+                                  'prometheusremotewrite/obs': {'tls': obs_host_logs_tls}}}, recursive=true)
+         | to_nice_yaml(indent=2, width=110) }}
+    dest: "{{ obs_cluster_root }}/host-logs.yaml"
+    owner: root
+    group: root
+    mode: '0600'
+  vars:
+    obs_host_logs_tls:
+      insecure: false
+      ca_file: /run/credentials/jengasec-container-logs.service/ca.crt
+      cert_file: /run/credentials/jengasec-container-logs.service/tls.crt
+      key_file: /run/credentials/jengasec-container-logs.service/tls.key
+      min_version: '1.2'
+  notify: Restart OBS host container reader
+
+- name: Render the private host reader environment
+  ansible.builtin.template:
+    src: host-logs.env.j2
+    dest: "{{ obs_cluster_root }}/host-logs.env"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Restart OBS host container reader
+
+- name: Install the scoped OBS host reader unit
+  ansible.builtin.template:
+    src: jengasec-container-logs.service.j2
+    dest: /etc/systemd/system/jengasec-container-logs.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart OBS host container reader
+
+- name: Start the approved host reader
+  ansible.builtin.systemd_service:
+    name: jengasec-container-logs.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: obs_cluster_apply | bool

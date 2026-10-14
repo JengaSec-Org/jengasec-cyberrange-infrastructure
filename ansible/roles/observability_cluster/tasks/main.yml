@@ -6,7 +6,7 @@
       - ansible_facts.architecture == 'x86_64'
       - obs_cluster_name in ['red', 'blue']
       - obs_cluster_environment in ['live', 'validation', 'rehearsal']
-      - obs_cluster_resource_id is match('^[a-z][a-z0-9-]{0,62}$')
+      - obs_cluster_resource_id is match('^[a-z][a-z0-9-]{0,31}$')
       - obs_cluster_metrics_url is match('^https://[^/]+/api/v1/write$')
       - not obs_cluster_events_enabled or obs_cluster_otlp_endpoint | length > 0
       - obs_cluster_tls_ca_file | length > 0
@@ -140,3 +140,7 @@
   changed_when: true
   environment:
     KUBECONFIG: "{{ obs_cluster_kubeconfig }}"
+
+- name: Configure the optional OBS host container reader
+  ansible.builtin.include_tasks: host-logs.yml
+  when: obs_cluster_host_logs_enabled | bool

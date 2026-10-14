@@ -30,6 +30,26 @@ jengasec-observability --wait` on the collector's cluster. On the first install,
 remove only this Helm release; retain its PVC and TLS Secret for recovery.
 
 Pod Security remains enabled. The chart does not mount host container logs.
+Set `obs_cluster_host_logs_enabled: true` in the same OBS-only playbook to run
+the optional host reader. It reads CRI files under `/var/log/pods`, uses no
+Kubernetes API credentials, and writes only its private queue directory. Its
+TLS keys are systemd credentials. It cannot read the host's Kubernetes or SSH
+configuration.
+
+The host reader accepts application JSON from any container name in a
+contracted application namespace. The file path must match the event namespace.
+Other namespaces may emit the infrastructure contract. Plain text, unknown
+fields, nested objects outside the contract, wrong scopes, and other record
+families are dropped before buffering. The central receiver still validates
+each event against its complete contract. Filter and exporter counters expose
+rejections and delivery failures. This reader does not turn unstructured
+component output into Kubernetes API events.
+
+The host queue holds at most 128 batches of 64 records; each source record is
+limited to 64 KiB. Its checkpoints and queue survive service restarts. The
+collector's localhost health endpoint does not prove delivery: verify central
+log queries and exporter counters after changes. To stop the host reader,
+disable only `jengasec-container-logs.service`; keep its state for replay.
 
 Run `tests/test-agent.py` with `HELM_BIN` and `OTELCOL_BIN` pointing to Helm and
 OpenTelemetry Collector Contrib 0.137.0. It verifies rendering boundaries and

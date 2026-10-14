@@ -1,35 +1,181 @@
 extensions:
   health_check:
-    endpoint: 0.0.0.0:13133
-
+    endpoint: 127.0.0.1:13134
+  file_storage/logs:
+    directory: /var/lib/jengasec-container-logs/queue
+    create_directory: true
+    timeout: 10s
+    compaction:
+      on_start: true
 receivers:
   filelog/application:
-    include:
-      - /var/log/pods/jengasec-ent-a-app0[1-9]_*/app/*.log
-      - /var/log/pods/jengasec-ent-b-app0[1-9]_*/app/*.log
     start_at: end
     include_file_path: true
+    max_log_size: 64KiB
+    max_concurrent_files: 128
+    storage: file_storage/logs
+    retry_on_failure:
+      enabled: true
+      max_elapsed_time: 0s
     operators:
-      - id: container-parser
-        type: container
-
+    - id: container-parser
+      type: container
+      max_log_size: 65536
+      on_error: drop_quiet
+    - id: json-only
+      type: filter
+      expr: body not matches "^\\s*\\{"
+    - id: parse-json
+      type: json_parser
+      parse_to: body
+      on_error: drop_quiet
+    include:
+    - /var/log/pods/jengasec-ent-a-app0[1-9]_*/*/*.log
+    - /var/log/pods/jengasec-ent-b-app0[1-9]_*/*/*.log
+  filelog/infrastructure:
+    start_at: end
+    include_file_path: true
+    max_log_size: 64KiB
+    max_concurrent_files: 128
+    storage: file_storage/logs
+    retry_on_failure:
+      enabled: true
+      max_elapsed_time: 0s
+    operators:
+    - id: container-parser
+      type: container
+      max_log_size: 65536
+      on_error: drop_quiet
+    - id: json-only
+      type: filter
+      expr: body not matches "^\\s*\\{"
+    - id: parse-json
+      type: json_parser
+      parse_to: body
+      on_error: drop_quiet
+    include:
+    - /var/log/pods/*/*/*.log
+    exclude:
+    - /var/log/pods/jengasec-ent-a-app0[1-9]_*/*/*.log
+    - /var/log/pods/jengasec-ent-b-app0[1-9]_*/*/*.log
+    - /var/log/pods/jengasec-observability_*/*/*.log
+  prometheus/collector:
+    config:
+      scrape_configs:
+      - job_name: jengasec-cluster-collector
+        scrape_interval: 30s
+        scrape_timeout: 5s
+        static_configs:
+        - targets:
+          - 127.0.0.1:8889
+          labels:
+            component: container-log-reader
+        metric_relabel_configs:
+        - action: keep
+          source_labels:
+          - __name__
+          regex: otelcol_(process_uptime|process_memory_rss|exporter_queue_size|exporter_queue_capacity|exporter_send_failed_metric_points|exporter_send_failed_log_records|exporter_sent_metric_points|exporter_sent_log_records|receiver_accepted_log_records|receiver_refused_log_records|processor_filter_logs_filtered|fileconsumer_.*|wal_.*).*
 processors:
   memory_limiter:
     check_interval: 5s
     limit_mib: 400
     spike_limit_mib: 100
-  k8sattributes:
-    auth_type: serviceAccount
-    filter:
-      node_from_env_var: K8S_NODE_NAME
-    extract:
-      metadata:
-        - k8s.namespace.name
-        - k8s.pod.name
-        - k8s.container.name
+  filter/application_contract:
+    error_mode: propagate
+    logs:
+      log_record:
+      - not IsMap(body)
+      - body["schema_version"] != "2.0"
+      - body["namespace"] != resource.attributes["k8s.namespace.name"]
+      - not IsMatch(resource.attributes["k8s.namespace.name"], "^jengasec-ent-(a|b)-app0[1-9]$")
+      - attributes["invalid_shape"] == true
+  filter/infrastructure_contract:
+    error_mode: propagate
+    logs:
+      log_record:
+      - not IsMap(body)
+      - body["schema_version"] != "infrastructure/1.0"
+      - body["record_family"] != "infrastructure_telemetry"
+      - body["resource_id"] != "${env:OBS_RESOURCE_ID:-cluster-red}"
+      - body["environment"] != "${env:OBS_ENVIRONMENT:-rehearsal}"
+      - body["resource"]["namespace"] != resource.attributes["k8s.namespace.name"]
+      - body["resource"]["cluster"] != "${env:OBS_CLUSTER:-red}"
+      - attributes["invalid_shape"] == true
+  transform/log_identity:
+    error_mode: propagate
+    log_statements:
+    - context: log
+      statements:
+      - keep_keys(attributes, [])
+    - context: resource
+      statements:
+      - keep_keys(attributes, ["k8s.namespace.name", "k8s.pod.name", "k8s.container.name"])
+      - set(attributes["environment"], "${env:OBS_ENVIRONMENT:-rehearsal}")
+      - set(attributes["cluster"], "${env:OBS_CLUSTER:-red}")
+      - set(attributes["resource_id"], "${env:OBS_RESOURCE_ID:-cluster-red}")
+  transform/metric_identity:
+    error_mode: propagate
+    metric_statements:
+    - context: datapoint
+      statements:
+      - set(attributes["namespace"], resource.attributes["k8s.namespace.name"]) where resource.attributes["k8s.namespace.name"]
+        != nil
+      - set(attributes["pod"], resource.attributes["k8s.pod.name"]) where resource.attributes["k8s.pod.name"] !=
+        nil
+      - set(attributes["container"], resource.attributes["k8s.container.name"]) where resource.attributes["k8s.container.name"]
+        != nil
+      - set(attributes["node"], resource.attributes["k8s.node.name"]) where resource.attributes["k8s.node.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.deployment.name"]) where resource.attributes["k8s.deployment.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.statefulset.name"]) where resource.attributes["k8s.statefulset.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.daemonset.name"]) where resource.attributes["k8s.daemonset.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.job.name"]) where resource.attributes["k8s.job.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.cronjob.name"]) where resource.attributes["k8s.cronjob.name"]
+        != nil
+      - set(attributes["workload"], resource.attributes["k8s.replicaset.name"]) where resource.attributes["k8s.replicaset.name"]
+        != nil
+      - keep_keys(attributes, ["namespace", "pod", "container", "node", "workload", "condition", "state", "reason",
+        "cpu", "mode", "direction", "interface", "receiver", "exporter", "transport", "code", "status", "method",
+        "enterprise", "application", "component"])
+  transform/metric_resources:
+    error_mode: propagate
+    metric_statements:
+    - context: resource
+      statements:
+      - keep_keys(attributes, [])
+      - set(attributes["environment"], "${env:OBS_ENVIRONMENT:-rehearsal}")
+      - set(attributes["cluster"], "${env:OBS_CLUSTER:-red}")
+      - set(attributes["resource_id"], "${env:OBS_RESOURCE_ID:-cluster-red}")
+      - set(attributes["service.name"], "jengasec-container-logs")
+      - set(attributes["service.instance.id"], "${env:OBS_RESOURCE_ID:-cluster-red}")
   batch:
-    timeout: 1s
-
+    timeout: 5s
+    send_batch_size: 64
+    send_batch_max_size: 64
+  transform/application_shape:
+    error_mode: propagate
+    log_statements:
+    - context: log
+      statements:
+      - set(cache["shape"], body)
+      - flatten(cache["shape"])
+      - set(attributes["shape_fields"], Len(cache["shape"]))
+      - keep_matching_keys(cache["shape"], "^(action|application|enterprise|event|level|method|namespace|outcome|path|request_id|schema_version|severity|source_ip|status|target_id|trace_id|ts|user_id|detail\\.(account|agent|amount_kes|approver|attempt|beneficiary_bank|category|change|channel|client_id|count|currency|customer|device_type|doc_type|endpoint|factor|failed_attempts|field|fields_changed|from|granted_by|method|mime_type|new_limit_kes|old_limit_kes|period|product|reason|record_type|required_role|resolution|result|role|route|rule|score|setting|size_kb|template|to)(\\.[0-9]+)?)$")
+      - set(attributes["invalid_shape"], true) where Len(cache["shape"]) != attributes["shape_fields"]
+  transform/infrastructure_shape:
+    error_mode: propagate
+    log_statements:
+    - context: log
+      statements:
+      - set(cache["shape"], body)
+      - flatten(cache["shape"])
+      - set(attributes["shape_fields"], Len(cache["shape"]))
+      - keep_matching_keys(cache["shape"], "^(environment|event_type|outcome|record_family|resource_id|schema_version|severity|source|source_event_id|ts|resource\\.(cluster|interface|kind|name|namespace|service)|attributes\\.(action|bytes|category|collection_errors_total|count|delivered_total|dropped_total|dst_ip|dst_port|ids_action|journal_lag_seconds|mechanism|packets|peer_ip|protocol|queue_bytes|queue_events|reason|rejected_total|rule_id|sampling_rate|signature_id|signature_revision|src_ip|src_port|state|type|verdict))$")
+      - set(attributes["invalid_shape"], true) where Len(cache["shape"]) != attributes["shape_fields"]
 exporters:
   otlp/obs:
     endpoint: ${env:OBS_OTLP_ENDPOINT}
@@ -37,14 +183,74 @@ exporters:
       insecure: ${env:OBS_OTLP_INSECURE}
     retry_on_failure:
       enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 0s
     sending_queue:
       enabled: true
-      queue_size: 2048
-
+      num_consumers: 2
+      queue_size: 128
+      storage: file_storage/logs
+  prometheusremotewrite/obs:
+    endpoint: ${env:OBS_PROMETHEUS_REMOTE_WRITE_URL}
+    resource_to_telemetry_conversion:
+      enabled: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 0s
+    remote_write_queue:
+      enabled: true
+      queue_size: 256
+      num_consumers: 1
+    wal:
+      directory: /var/lib/jengasec-container-logs/wal
+      buffer_size: 100
+      truncate_frequency: 45s
 service:
-  extensions: [health_check]
+  extensions:
+  - health_check
+  - file_storage/logs
+  telemetry:
+    metrics:
+      level: normal
+      readers:
+      - pull:
+          exporter:
+            prometheus:
+              host: 127.0.0.1
+              port: 8889
   pipelines:
-    logs:
-      receivers: [filelog/application]
-      processors: [memory_limiter, k8sattributes, batch]
-      exporters: [otlp/obs]
+    logs/application:
+      receivers:
+      - filelog/application
+      processors:
+      - memory_limiter
+      - transform/application_shape
+      - filter/application_contract
+      - transform/log_identity
+      - batch
+      exporters:
+      - otlp/obs
+    logs/infrastructure:
+      receivers:
+      - filelog/infrastructure
+      processors:
+      - memory_limiter
+      - transform/infrastructure_shape
+      - filter/infrastructure_contract
+      - transform/log_identity
+      - batch
+      exporters:
+      - otlp/obs
+    metrics:
+      receivers:
+      - prometheus/collector
+      processors:
+      - memory_limiter
+      - transform/metric_identity
+      - transform/metric_resources
+      - batch
+      exporters:
+      - prometheusremotewrite/obs
