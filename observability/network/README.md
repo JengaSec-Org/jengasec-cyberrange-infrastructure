@@ -78,8 +78,10 @@ line remains unread and requires the following explicit recovery.
    cannot be reconstructed; the reader reports the unconsumed tail as input
    rotation loss when it sees the new file.
 3. Run `systemctl reset-failed jengasec-suricata.service`, then
-   `systemctl start jengasec-suricata.service` and restart the event-agent
-   timer. Confirm the process file-size limit, fresh IDS statistics, successful
+   `systemctl start jengasec-suricata.service`. Run
+   `systemctl start jengasec-event-agent.service` once before restarting its
+   timer, so the timer has a fresh service completion after a long pause.
+   Confirm the process file-size limit, fresh IDS statistics, successful
    delivery, and recovery of the expected-service alert.
 
 Private recovery exports need their own evidence retention; they are outside
