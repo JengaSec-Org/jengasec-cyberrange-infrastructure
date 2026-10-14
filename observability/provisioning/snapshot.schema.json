@@ -1,0 +1,473 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Native provisioning observations without authorization",
+  "$defs": {
+    "native_id": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,18}$",
+      "maxLength": 19
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$",
+      "maxLength": 40
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "identity_source",
+    "mapping_state",
+    "authorization",
+    "read_only",
+    "source_transport",
+    "captured_at",
+    "generated_at",
+    "expires_at",
+    "records",
+    "counts"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "provisioning/1.0"
+    },
+    "identity_source": {
+      "const": "jengasec_provisioning"
+    },
+    "mapping_state": {
+      "const": "native_only"
+    },
+    "authorization": {
+      "const": "none"
+    },
+    "read_only": {
+      "const": true
+    },
+    "source_transport": {
+      "enum": [
+        "local_peer",
+        "tls"
+      ]
+    },
+    "captured_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "generated_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "expires_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "records": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "participants",
+        "teams",
+        "allocations",
+        "targets",
+        "assignments",
+        "event_windows"
+      ],
+      "properties": {
+        "participants": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "participant_id",
+              "team_id",
+              "role",
+              "eligible",
+              "status",
+              "created_at",
+              "updated_at"
+            ],
+            "properties": {
+              "participant_id": {
+                "$ref": "#/$defs/native_id"
+              },
+              "team_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/native_id"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "role": {
+                "enum": [
+                  "blue_participant",
+                  "red_participant",
+                  "judge",
+                  "infrastructure_staff",
+                  "unknown"
+                ]
+              },
+              "eligible": {
+                "type": "boolean"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "active",
+                  "revoked",
+                  "expired",
+                  "unknown"
+                ]
+              },
+              "created_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "updated_at": {
+                "$ref": "#/$defs/timestamp"
+              }
+            }
+          }
+        },
+        "teams": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "team_id",
+              "category",
+              "side",
+              "created_at"
+            ],
+            "properties": {
+              "team_id": {
+                "$ref": "#/$defs/native_id"
+              },
+              "category": {
+                "enum": [
+                  "application",
+                  "ai",
+                  "unknown"
+                ]
+              },
+              "side": {
+                "enum": [
+                  "blue",
+                  "red",
+                  "unknown"
+                ]
+              },
+              "created_at": {
+                "$ref": "#/$defs/timestamp"
+              }
+            }
+          }
+        },
+        "allocations": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "allocation_id",
+              "participant_id",
+              "vpn_address",
+              "interface_name",
+              "status",
+              "allocated_at",
+              "last_changed_at",
+              "effective_state"
+            ],
+            "properties": {
+              "allocation_id": {
+                "$ref": "#/$defs/native_id"
+              },
+              "participant_id": {
+                "$ref": "#/$defs/native_id"
+              },
+              "vpn_address": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "ipv4"
+                  },
+                  {
+                    "type": "string",
+                    "format": "ipv6"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "interface_name": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,14}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "status": {
+                "enum": [
+                  "reserved",
+                  "active",
+                  "revoked",
+                  "expired",
+                  "unknown"
+                ]
+              },
+              "allocated_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "last_changed_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "effective_state": {
+                "enum": [
+                  "active",
+                  "revoked",
+                  "expired",
+                  "inactive",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        },
+        "targets": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "target_id",
+              "owner_team_id",
+              "category",
+              "namespace",
+              "endpoint_ip",
+              "protocol",
+              "ports",
+              "enabled"
+            ],
+            "properties": {
+              "target_id": {
+                "$ref": "#/$defs/native_id"
+              },
+              "owner_team_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/native_id"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "category": {
+                "enum": [
+                  "application",
+                  "ai",
+                  "infrastructure",
+                  "unknown"
+                ]
+              },
+              "namespace": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                    "maxLength": 63
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "endpoint_ip": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "ipv4"
+                  },
+                  {
+                    "type": "string",
+                    "format": "ipv6"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "protocol": {
+                "enum": [
+                  "tcp",
+                  "udp",
+                  "icmp",
+                  "icmpv6",
+                  "sctp",
+                  "any",
+                  "unknown"
+                ]
+              },
+              "ports": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "maxItems": 64,
+                "uniqueItems": true
+              },
+              "enabled": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "assignments": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "assignment_id",
+              "red_team_id",
+              "target_id",
+              "starts_at",
+              "ends_at",
+              "window_state"
+            ],
+            "properties": {
+              "assignment_id": {
+                "$ref": "#/$defs/native_id"
+              },
+              "red_team_id": {
+                "$ref": "#/$defs/native_id"
+              },
+              "target_id": {
+                "$ref": "#/$defs/native_id"
+              },
+              "starts_at": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "ends_at": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "window_state": {
+                "enum": [
+                  "active",
+                  "pending",
+                  "expired",
+                  "unknown",
+                  "disabled"
+                ]
+              }
+            }
+          }
+        },
+        "event_windows": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "event_id",
+              "starts_at",
+              "ends_at",
+              "window_state"
+            ],
+            "properties": {
+              "event_id": {
+                "$ref": "#/$defs/native_id"
+              },
+              "starts_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "ends_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "window_state": {
+                "enum": [
+                  "active",
+                  "pending",
+                  "expired"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "participants",
+        "teams",
+        "allocations",
+        "targets",
+        "assignments",
+        "event_windows"
+      ],
+      "properties": {
+        "participants": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "teams": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "allocations": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "targets": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "assignments": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "event_windows": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      }
+    }
+  }
+}

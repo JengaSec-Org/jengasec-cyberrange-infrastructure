@@ -1,0 +1,22 @@
+{
+  "schema_version": "infrastructure/1.0",
+  "record_family": "infrastructure_telemetry",
+  "environment": "validation",
+  "source": "firewall",
+  "resource_id": "test-host",
+  "event_type": "firewall.decision",
+  "source_event_id": "a3863c5d7ce546d24186581bcba0b0a157db9d318d9174d46d0db3f3f38cc1a6",
+  "ts": "2026-10-14T09:00:00Z",
+  "severity": "low",
+  "outcome": "unknown",
+  "resource": {
+    "interface": "wg0"
+  },
+  "attributes": {
+    "verdict": "refused",
+    "rule_id": "default_deny",
+    "src_ip": "192.0.2.10",
+    "dst_ip": "198.51.100.2",
+    "protocol": "TCP"
+  }
+}

@@ -1,0 +1,10 @@
+--- a/services/provision_worker.py
++++ b/services/provision_worker.py
+@@ -134,6 +134,8 @@ def apply_firewall(cur):
+     # Any unmatched packet from a JengaSec participant address is denied. Other WG peers retain existing chain behavior.
+     lines.append(f'add rule inet {NFT_TABLE} forward_guard iifname "{IFACE}" ip saddr {{ {scope_expr} }} drop comment "JengaSec default deny"')
++    from nft_verdict_logging import add_verdict_observation
++    lines = add_verdict_observation(lines, table=NFT_TABLE)
+     content='\n'.join(lines)+'\n'
+     run(['nft','-c','-f','-'],content)
+     run(['nft','-f','-'],content)

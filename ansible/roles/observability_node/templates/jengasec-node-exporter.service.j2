@@ -1,0 +1,27 @@
+[Unit]
+Description=JengaSec authenticated host metrics
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+DynamicUser=yes
+ExecStart={{ obs_node_install_root }}/node_exporter-{{ obs_node_exporter_version }}.linux-amd64/node_exporter --web.listen-address={{ obs_node_address }}:{{ obs_node_port }} --web.config.file={{ obs_node_config_root }}/web.yml --collector.textfile.directory={{ obs_node_textfile_dir }}
+LoadCredential=ca.crt:{{ obs_node_config_root }}/tls/ca.crt
+LoadCredential=server.crt:{{ obs_node_config_root }}/tls/server.crt
+LoadCredential=server.key:{{ obs_node_config_root }}/tls/server.key
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryMax=192M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

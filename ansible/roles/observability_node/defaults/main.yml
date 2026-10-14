@@ -1,0 +1,16 @@
+---
+obs_node_exporter_version: 1.12.1
+obs_node_address: ""
+obs_node_port: 9100
+obs_node_manage_ufw: false
+obs_node_ufw_source_address: ""
+obs_node_ufw_interface: ""
+obs_node_services: []
+obs_node_wireguard_interface: ""
+obs_node_postgresql: false
+obs_node_tls_ca_file: ""
+obs_node_tls_cert_file: ""
+obs_node_tls_key_file: ""
+obs_node_install_root: /opt/jengasec-observability-tools
+obs_node_config_root: /etc/jengasec-node-exporter
+obs_node_textfile_dir: /var/lib/jengasec-node-metrics

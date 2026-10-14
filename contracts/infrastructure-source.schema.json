@@ -1,0 +1,916 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jengasec.example/contracts/infrastructure-source.schema.json",
+  "title": "Sanitized infrastructure source record",
+  "description": "Global infrastructure observations only. No platform audit, competition findings, or invented application scope.",
+  "allOf": [
+    {
+      "$ref": "#/$defs/record"
+    },
+    {
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "event_id"
+            ]
+          },
+          {
+            "required": [
+              "received_ts"
+            ]
+          },
+          {
+            "required": [
+              "integrity_hash"
+            ]
+          },
+          {
+            "required": [
+              "provenance"
+            ]
+          },
+          {
+            "required": [
+              "attribution"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "record_family",
+        "environment",
+        "source",
+        "resource_id",
+        "event_type",
+        "source_event_id",
+        "ts",
+        "severity",
+        "outcome",
+        "resource",
+        "attributes"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "infrastructure/1.0"
+        },
+        "record_family": {
+          "const": "infrastructure_telemetry"
+        },
+        "environment": {
+          "enum": [
+            "live",
+            "validation",
+            "rehearsal"
+          ]
+        },
+        "source": {
+          "enum": [
+            "collector",
+            "firewall",
+            "host",
+            "ids",
+            "kubernetes",
+            "network"
+          ]
+        },
+        "resource_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,31}$"
+        },
+        "event_type": {
+          "enum": [
+            "host.service_state",
+            "host.auth_success",
+            "host.auth_failure",
+            "host.boot",
+            "kubernetes.event",
+            "network.flow",
+            "firewall.decision",
+            "ids.alert",
+            "collector.health",
+            "collector.loss"
+          ]
+        },
+        "source_event_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "ts": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "severity": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "success",
+            "failure",
+            "denied",
+            "error",
+            "unknown"
+          ]
+        },
+        "resource": {
+          "type": "object",
+          "additionalProperties": false,
+          "maxProperties": 6,
+          "properties": {
+            "service": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}$"
+            },
+            "cluster": {
+              "enum": [
+                "red",
+                "blue"
+              ]
+            },
+            "namespace": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,252}$"
+            },
+            "kind": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,63}$"
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,252}$"
+            },
+            "interface": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,63}$"
+            }
+          }
+        },
+        "attributes": {
+          "type": "object"
+        },
+        "event_id": {
+          "type": "string",
+          "pattern": "^infra_[a-f0-9]{64}$"
+        },
+        "received_ts": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "integrity_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "collector",
+            "transport"
+          ],
+          "properties": {
+            "collector": {
+              "enum": [
+                "jengasec-event-agent/1.0",
+                "otel-kubernetes/1.0"
+              ]
+            },
+            "transport": {
+              "enum": [
+                "https",
+                "otlp"
+              ]
+            }
+          }
+        },
+        "attribution": {
+          "$ref": "#/$defs/native_attribution"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "host.service_state"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "const": "host"
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "enum": [
+                      "active",
+                      "inactive",
+                      "failed",
+                      "activating",
+                      "deactivating",
+                      "reloading",
+                      "unknown"
+                    ]
+                  },
+                  "reason": {
+                    "enum": [
+                      "started",
+                      "stopped",
+                      "failed",
+                      "changed",
+                      "reloaded"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "host.auth_success"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "const": "host"
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "mechanism"
+                ],
+                "properties": {
+                  "mechanism": {
+                    "enum": [
+                      "password",
+                      "publickey",
+                      "pam",
+                      "sudo",
+                      "unknown"
+                    ]
+                  },
+                  "peer_ip": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "format": "ipv4"
+                      },
+                      {
+                        "type": "string",
+                        "format": "ipv6"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "host.auth_failure"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "const": "host"
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "mechanism"
+                ],
+                "properties": {
+                  "mechanism": {
+                    "enum": [
+                      "password",
+                      "publickey",
+                      "pam",
+                      "sudo",
+                      "unknown"
+                    ]
+                  },
+                  "peer_ip": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "format": "ipv4"
+                      },
+                      {
+                        "type": "string",
+                        "format": "ipv6"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "host.boot"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "const": "host"
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {}
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "kubernetes.event"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "const": "kubernetes"
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "reason",
+                  "count",
+                  "type"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,63}$"
+                  },
+                  "action": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,63}$"
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "type": {
+                    "enum": [
+                      "Normal",
+                      "Warning"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "network.flow"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "const": "network"
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "src_ip",
+                  "dst_ip",
+                  "protocol",
+                  "bytes",
+                  "packets"
+                ],
+                "properties": {
+                  "src_ip": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "format": "ipv4"
+                      },
+                      {
+                        "type": "string",
+                        "format": "ipv6"
+                      }
+                    ]
+                  },
+                  "dst_ip": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "format": "ipv4"
+                      },
+                      {
+                        "type": "string",
+                        "format": "ipv6"
+                      }
+                    ]
+                  },
+                  "src_port": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535
+                  },
+                  "dst_port": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535
+                  },
+                  "protocol": {
+                    "enum": [
+                      "TCP",
+                      "UDP",
+                      "ICMP",
+                      "ICMPV6",
+                      "SCTP",
+                      "GRE",
+                      "ESP",
+                      "AH",
+                      "OTHER"
+                    ]
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "packets": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "sampling_rate": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "firewall.decision"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "const": "firewall"
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "verdict",
+                  "rule_id"
+                ],
+                "properties": {
+                  "src_ip": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "format": "ipv4"
+                      },
+                      {
+                        "type": "string",
+                        "format": "ipv6"
+                      }
+                    ]
+                  },
+                  "dst_ip": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "format": "ipv4"
+                      },
+                      {
+                        "type": "string",
+                        "format": "ipv6"
+                      }
+                    ]
+                  },
+                  "src_port": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535
+                  },
+                  "dst_port": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535
+                  },
+                  "protocol": {
+                    "enum": [
+                      "TCP",
+                      "UDP",
+                      "ICMP",
+                      "ICMPV6",
+                      "SCTP",
+                      "GRE",
+                      "ESP",
+                      "AH",
+                      "OTHER"
+                    ]
+                  },
+                  "verdict": {
+                    "enum": [
+                      "allowed",
+                      "refused"
+                    ]
+                  },
+                  "rule_id": {
+                    "enum": [
+                      "invalid",
+                      "peer_isolation",
+                      "protected_destination",
+                      "inbound_unsolicited",
+                      "allowed_assignment",
+                      "established_return",
+                      "default_deny",
+                      "assigned_policy"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "ids.alert"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "const": "ids"
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "signature_id",
+                  "ids_action"
+                ],
+                "properties": {
+                  "src_ip": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "format": "ipv4"
+                      },
+                      {
+                        "type": "string",
+                        "format": "ipv6"
+                      }
+                    ]
+                  },
+                  "dst_ip": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "format": "ipv4"
+                      },
+                      {
+                        "type": "string",
+                        "format": "ipv6"
+                      }
+                    ]
+                  },
+                  "src_port": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535
+                  },
+                  "dst_port": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535
+                  },
+                  "protocol": {
+                    "enum": [
+                      "TCP",
+                      "UDP",
+                      "ICMP",
+                      "ICMPV6",
+                      "SCTP",
+                      "GRE",
+                      "ESP",
+                      "AH",
+                      "OTHER"
+                    ]
+                  },
+                  "signature_id": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "signature_revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "category": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,63}$"
+                  },
+                  "ids_action": {
+                    "enum": [
+                      "allowed",
+                      "blocked"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "collector.health"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "const": "collector"
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "queue_events",
+                  "queue_bytes",
+                  "dropped_total",
+                  "delivered_total",
+                  "rejected_total",
+                  "collection_errors_total"
+                ],
+                "properties": {
+                  "queue_events": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "queue_bytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "dropped_total": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "delivered_total": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "rejected_total": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "collection_errors_total": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "journal_lag_seconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "const": "collector.loss"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "const": "collector"
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "count",
+                  "reason"
+                ],
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "reason": {
+                    "enum": [
+                      "queue_full",
+                      "journal_cursor_lost",
+                      "input_rotated",
+                      "oversized_record",
+                      "invalid_record"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "native_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "participant_id",
+        "role"
+      ],
+      "properties": {
+        "participant_id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,18}$"
+        },
+        "team_id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,18}$"
+        },
+        "role": {
+          "enum": [
+            "blue_participant",
+            "red_participant",
+            "judge",
+            "infrastructure_staff"
+          ]
+        }
+      }
+    },
+    "native_attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity_source",
+        "mapping_state",
+        "authorization",
+        "state"
+      ],
+      "properties": {
+        "identity_source": {
+          "const": "jengasec_provisioning"
+        },
+        "mapping_state": {
+          "const": "native_only"
+        },
+        "authorization": {
+          "const": "none"
+        },
+        "state": {
+          "enum": [
+            "known",
+            "unknown",
+            "unavailable",
+            "stale",
+            "expired",
+            "outside_window",
+            "not_applicable"
+          ]
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "snapshot_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "source": {
+          "$ref": "#/$defs/native_identity"
+        },
+        "destination": {
+          "$ref": "#/$defs/native_identity"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "known"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "captured_at",
+              "expires_at",
+              "snapshot_hash"
+            ],
+            "anyOf": [
+              {
+                "required": [
+                  "source"
+                ]
+              },
+              {
+                "required": [
+                  "destination"
+                ]
+              }
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "source"
+                  ]
+                },
+                {
+                  "required": [
+                    "destination"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

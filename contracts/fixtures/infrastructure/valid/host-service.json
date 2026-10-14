@@ -1,0 +1,19 @@
+{
+  "schema_version": "infrastructure/1.0",
+  "record_family": "infrastructure_telemetry",
+  "environment": "validation",
+  "source": "host",
+  "resource_id": "test-host",
+  "event_type": "host.service_state",
+  "source_event_id": "6b48414ce53dd9a2bd0b59aadcab1836ef13c2f4a22add802d52e115a7484da5",
+  "ts": "2026-10-14T09:00:00Z",
+  "severity": "low",
+  "outcome": "unknown",
+  "resource": {
+    "service": "sample.service"
+  },
+  "attributes": {
+    "state": "active",
+    "reason": "started"
+  }
+}

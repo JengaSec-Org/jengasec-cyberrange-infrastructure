@@ -1,0 +1,17 @@
+[Unit]
+Description=Maintain bounded JengaSec observability auxiliary spools
+After=jengasec-observability.service
+ConditionPathExists={{ obs_install_root }}/current/scripts/maintain-observability-spools.py
+
+[Service]
+Type=oneshot
+ExecStart={{ obs_python_command }} {{ obs_install_root }}/current/scripts/maintain-observability-spools.py --quarantine-dir {{ obs_state_root }}/data/vector/quarantine --ai-handoff-dir {{ obs_state_root }}/data/vector/ai-handoff --state-dir {{ obs_state_root }}/spool-maintenance --metrics-file {{ obs_spool_metrics_dir }}/observability-spools.prom --retention-hours {{ obs_retention_hours }} --quarantine-max-bytes {{ obs_spool_quarantine_max_bytes }} --ai-handoff-max-bytes {{ obs_spool_ai_handoff_max_bytes }} --close-grace-seconds {{ obs_spool_close_grace_seconds }}
+TimeoutStartSec=45
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths={{ obs_state_root }}/data/vector/quarantine {{ obs_state_root }}/data/vector/ai-handoff {{ obs_state_root }}/spool-maintenance {{ obs_spool_metrics_dir }}
+Nice=10
+IOSchedulingClass=idle

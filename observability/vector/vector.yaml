@@ -1,8 +1,18 @@
+data_dir: /var/lib/vector
+
 api:
   enabled: true
   address: 0.0.0.0:8686
 
 enrichment_tables:
+  infrastructure_attribution:
+    type: memory
+    inputs:
+      - infrastructure_attribution_updates
+    ttl: 300
+    scan_interval: 1
+    max_byte_size: 16777216
+
   event_catalogue:
     type: file
     file:
@@ -32,10 +42,19 @@ enrichment_tables:
         type: csv
 
 sources:
+  infrastructure_attribution_http:
+    type: http_server
+    address: 0.0.0.0:8688
+    path: /
+    acknowledgements: true
+    decoding:
+      codec: bytes
+
   application_logs:
     type: docker_logs
     include_labels:
       - jengasec.observability.source=application
+      - com.docker.compose.project=__DOCKER_SOURCE_PROJECT__
 
   cluster_otlp:
     type: opentelemetry
@@ -52,6 +71,7 @@ sources:
     type: docker_logs
     include_labels:
       - jengasec.observability.source=netflow
+      - com.docker.compose.project=__DOCKER_SOURCE_PROJECT__
 
   gateway_syslog_tcp:
     type: syslog
@@ -63,6 +83,17 @@ sources:
     address: 0.0.0.0:514
     mode: udp
 
+  infrastructure_http:
+    type: http_server
+    address: 0.0.0.0:8687
+    path: /
+    decoding:
+      codec: bytes
+    framing:
+      method: newline_delimited
+    acknowledgements:
+      enabled: true
+
   vector_metrics:
     type: internal_metrics
 
@@ -72,9 +103,12 @@ transforms:
     inputs:
       - application_logs
     source: |
+      environment = get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "unclassified"
+      if !includes(["live", "validation", "rehearsal"], environment) { environment = "unclassified" }
       . = {
         "input_kind": "application",
         "source_hint": "application",
+        "ingress_environment": environment,
         "raw_message": string!(.message)
       }
 
@@ -89,11 +123,35 @@ transforms:
         encode_json(object!(.message))
       }
       decoded = parse_json(raw_message) ?? {}
-      input_kind = if exists(decoded.source) { "source" } else { "application" }
+      input_kind = if decoded.schema_version == "infrastructure/1.0" {
+        "infrastructure"
+      } else if exists(decoded.source) { "source" } else { "application" }
+      environment = if input_kind == "infrastructure" {
+        string(decoded.environment) ?? "unclassified"
+      } else if decoded.schema_version == "2.0" {
+        get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "unclassified"
+      } else { "unclassified" }
+      if !includes(["live", "validation", "rehearsal"], environment) { environment = "unclassified" }
       . = {
         "input_kind": input_kind,
         "source_hint": "otlp",
+        "ingress_environment": environment,
         "raw_message": raw_message
+      }
+
+  prepare_infrastructure_http:
+    type: remap
+    inputs:
+      - infrastructure_http
+    source: |
+      decoded = parse_json(string!(.message)) ?? {}
+      environment = string(decoded.environment) ?? "unclassified"
+      if !includes(["live", "validation", "rehearsal"], environment) { environment = "unclassified" }
+      . = {
+        "input_kind": "infrastructure",
+        "source_hint": "https",
+        "ingress_environment": environment,
+        "raw_message": string!(.message)
       }
 
   prepare_syslog:
@@ -102,9 +160,12 @@ transforms:
       - gateway_syslog_tcp
       - gateway_syslog_udp
     source: |
+      environment = get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "unclassified"
+      if !includes(["live", "validation", "rehearsal"], environment) { environment = "unclassified" }
       . = {
         "input_kind": "source",
         "source_hint": "syslog",
+        "ingress_environment": environment,
         "raw_message": string!(.message)
       }
 
@@ -120,9 +181,12 @@ transforms:
       - netflow_json
     source: |
       observed_ts = .timestamp
+      environment = get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "unclassified"
+      if !includes(["live", "validation", "rehearsal"], environment) { environment = "unclassified" }
       . = {
         "input_kind": "source",
         "source_hint": "netflow",
+        "ingress_environment": environment,
         "observed_ts": observed_ts,
         "raw_message": string!(.message)
       }
@@ -134,6 +198,7 @@ transforms:
       - prepare_cluster
       - prepare_netflow
       - prepare_syslog
+      - prepare_infrastructure_http
     drop_on_error: true
     reroute_dropped: true
     source: |
@@ -150,6 +215,7 @@ transforms:
     route:
       application: .input_kind == "application"
       source: .input_kind == "source"
+      infrastructure: .input_kind == "infrastructure"
 
   normalized_application:
     type: remap
@@ -218,6 +284,8 @@ transforms:
       actor = {}
       metadata = detail
       metadata.level = level
+      metadata.environment = get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "rehearsal"
+      assert!(includes(["live", "validation", "rehearsal"], metadata.environment))
       verdict = "not_applicable"
       if exists(original.source_ip) {
         actor_ip = string!(original.source_ip)
@@ -405,6 +473,8 @@ transforms:
 
       actor = {}
       metadata = {"transport": source_hint}
+      metadata.environment = get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "rehearsal"
+      assert!(includes(["live", "validation", "rehearsal"], metadata.environment))
       if exists(original.source_ip) {
         actor_ip = string!(original.source_ip)
         actor.ip = actor_ip
@@ -530,6 +600,327 @@ transforms:
       )
       . = normalized
 
+  infrastructure_attribution_updates:
+    type: remap
+    inputs:
+      - infrastructure_attribution_http
+    drop_on_error: true
+    drop_on_abort: true
+    source: |
+      raw = string!(.message)
+      assert!(length(raw) <= 8388608)
+      update = object!(parse_json!(raw))
+      for_each(keys(update)) -> |_index, key| {
+        assert!(includes(["contract_version", "identity_source", "mapping_state", "authorization", "state", "allocations", "captured_at", "expires_at", "snapshot_hash"], key))
+      }
+      assert_eq!(string!(update.contract_version), "infrastructure-attribution/1.0")
+      assert_eq!(string!(update.identity_source), "jengasec_provisioning")
+      assert_eq!(string!(update.mapping_state), "native_only")
+      assert_eq!(string!(update.authorization), "none")
+      state = string!(update.state)
+      assert!(includes(["fresh", "unavailable", "stale"], state))
+      allocations = array!(update.allocations)
+      assert!(length(allocations) <= 10000)
+      status = {"state": state}
+      entries = {}
+      if state == "fresh" {
+        captured = parse_timestamp!(string!(update.captured_at), format: "%+")
+        expires = parse_timestamp!(string!(update.expires_at), format: "%+")
+        assert!(captured <= now() && now() < expires)
+        assert!(to_unix_timestamp(expires) - to_unix_timestamp(captured) <= 300)
+        hash = string!(update.snapshot_hash)
+        assert!(match(hash, r'^sha256:[a-f0-9]{64}$'))
+        status.captured_at = string!(update.captured_at)
+        status.expires_at = string!(update.expires_at)
+        status.snapshot_hash = hash
+        for_each(allocations) -> |_index, value| {
+          row = object!(value)
+          for_each(keys(row)) -> |_i, key| { assert!(includes(["ip_address", "participant_id", "team_id", "role"], key)) }
+          address = string!(row.ip_address)
+          assert!(is_ipv4(address) || is_ipv6(address))
+          assert!(is_null(get!(entries, [address])), "duplicate native allocation")
+          assert!(match(string!(row.participant_id), r'^[1-9][0-9]{0,18}$'))
+          assert!(includes(["blue_participant", "red_participant", "judge", "infrastructure_staff"], string!(row.role)))
+          identity = {"participant_id": string!(row.participant_id), "role": string!(row.role), "snapshot_hash": hash}
+          if exists(row.team_id) {
+            assert!(match(string!(row.team_id), r'^[1-9][0-9]{0,18}$'))
+            identity.team_id = string!(row.team_id)
+          }
+          entries = set!(entries, [address], identity)
+        }
+      } else {
+        assert_eq!(length(allocations), 0)
+      }
+      . = set!(entries, ["__status__"], status)
+
+  normalized_infrastructure:
+    type: remap
+    inputs:
+      - split_inputs.infrastructure
+    drop_on_error: true
+    drop_on_abort: true
+    reroute_dropped: true
+    source: |
+      original = object!(parse_json!(string!(.raw_message)))
+      assert!(length(string!(.raw_message)) <= 16384, "oversized infrastructure event")
+      allowed = ["schema_version", "record_family", "environment", "source", "resource_id", "event_type", "source_event_id", "ts", "severity", "outcome", "resource", "attributes"]
+      for_each(keys(original)) -> |_index, key| {
+        assert!(includes(allowed, key), "unrecognized infrastructure field")
+      }
+      for_each(allowed) -> |_index, key| {
+        value = get!(original, [key])
+        assert!(!is_null(value), "missing infrastructure field")
+      }
+      assert_eq!(string!(original.schema_version), "infrastructure/1.0")
+      assert_eq!(string!(original.record_family), "infrastructure_telemetry")
+      assert!(includes(["live", "validation", "rehearsal"], string!(original.environment)))
+      assert!(includes(["low", "medium", "high", "critical"], string!(original.severity)))
+      assert!(includes(["success", "failure", "denied", "error", "unknown"], string!(original.outcome)))
+      resource_id = string!(original.resource_id)
+      assert!(match(resource_id, r'^[a-z][a-z0-9-]{0,31}$'))
+      resource_ids = split(get_env_var("JENGASEC_INFRASTRUCTURE_RESOURCE_IDS") ?? "test-host", ",")
+      assert!(includes(resource_ids, resource_id), "unregistered infrastructure resource")
+      assert!(match(string!(original.source_event_id), r'^[a-f0-9]{64}$'))
+      assert!(ends_with(string!(original.ts), "Z"), "infrastructure time must be UTC")
+      parsed_ts = parse_timestamp!(string!(original.ts), format: "%+")
+      resource = object!(original.resource)
+      for_each(keys(resource)) -> |_index, key| {
+        assert!(includes(["service", "cluster", "namespace", "kind", "name", "interface"], key))
+        value = string!(get!(resource, [key]))
+        if key == "service" {
+          assert!(match(value, r'^[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}$'))
+        } else {
+          assert!(match(value, r'^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,252}$'))
+        }
+        if includes(["kind", "interface"], key) { assert!(length(value) <= 64) }
+        if key == "cluster" { assert!(includes(["red", "blue"], value)) }
+      }
+      event_type = string!(original.event_type)
+      source = string!(original.source)
+      attributes = object!(original.attributes)
+      if event_type == "host.service_state" {
+        assert_eq!(source, "host")
+        allowed_attributes = ["state", "reason"]
+        for_each(keys(attributes)) -> |_index, key| { assert!(includes(allowed_attributes, key)) }
+          assert!(includes(["active", "inactive", "failed", "activating", "deactivating", "reloading", "unknown"], string!(attributes.state)))
+        if exists(attributes.reason) {
+          assert!(includes(["started", "stopped", "failed", "changed", "reloaded"], string!(attributes.reason)))
+        }
+      } else if event_type == "host.auth_success" {
+        assert_eq!(source, "host")
+        allowed_attributes = ["mechanism", "peer_ip"]
+        for_each(keys(attributes)) -> |_index, key| { assert!(includes(allowed_attributes, key)) }
+          assert!(includes(["password", "publickey", "pam", "sudo", "unknown"], string!(attributes.mechanism)))
+        if exists(attributes.peer_ip) {
+          assert!(is_ipv4(string!(attributes.peer_ip)) || is_ipv6(string!(attributes.peer_ip)))
+        }
+      } else if event_type == "host.auth_failure" {
+        assert_eq!(source, "host")
+        allowed_attributes = ["mechanism", "peer_ip"]
+        for_each(keys(attributes)) -> |_index, key| { assert!(includes(allowed_attributes, key)) }
+          assert!(includes(["password", "publickey", "pam", "sudo", "unknown"], string!(attributes.mechanism)))
+        if exists(attributes.peer_ip) {
+          assert!(is_ipv4(string!(attributes.peer_ip)) || is_ipv6(string!(attributes.peer_ip)))
+        }
+      } else if event_type == "host.boot" {
+        assert_eq!(source, "host")
+        allowed_attributes = []
+        for_each(keys(attributes)) -> |_index, key| { assert!(includes(allowed_attributes, key)) }
+      } else if event_type == "kubernetes.event" {
+        assert_eq!(source, "kubernetes")
+        allowed_attributes = ["reason", "action", "count", "type"]
+        for_each(keys(attributes)) -> |_index, key| { assert!(includes(allowed_attributes, key)) }
+          assert!(match(string!(attributes.reason), r'^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,63}$'))
+        if exists(attributes.action) {
+          assert!(match(string!(attributes.action), r'^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,63}$'))
+        }
+          value = int!(attributes.count)
+          assert!(value >= 0 && value <= 9007199254740991)
+          assert!(includes(["Normal", "Warning"], string!(attributes.type)))
+      } else if event_type == "network.flow" {
+        assert_eq!(source, "network")
+        allowed_attributes = ["src_ip", "dst_ip", "src_port", "dst_port", "protocol", "bytes", "packets", "sampling_rate"]
+        for_each(keys(attributes)) -> |_index, key| { assert!(includes(allowed_attributes, key)) }
+          assert!(is_ipv4(string!(attributes.src_ip)) || is_ipv6(string!(attributes.src_ip)))
+          assert!(is_ipv4(string!(attributes.dst_ip)) || is_ipv6(string!(attributes.dst_ip)))
+        if exists(attributes.src_port) {
+          value = int!(attributes.src_port)
+          assert!(value >= 0 && value <= 65535)
+        }
+        if exists(attributes.dst_port) {
+          value = int!(attributes.dst_port)
+          assert!(value >= 0 && value <= 65535)
+        }
+          assert!(includes(["TCP", "UDP", "ICMP", "ICMPV6", "SCTP", "GRE", "ESP", "AH", "OTHER"], string!(attributes.protocol)))
+          value = int!(attributes.bytes)
+          assert!(value >= 0 && value <= 9007199254740991)
+          value = int!(attributes.packets)
+          assert!(value >= 0 && value <= 9007199254740991)
+        if exists(attributes.sampling_rate) {
+          value = int!(attributes.sampling_rate)
+          assert!(value >= 1 && value <= 65535)
+        }
+      } else if event_type == "firewall.decision" {
+        assert_eq!(source, "firewall")
+        allowed_attributes = ["src_ip", "dst_ip", "src_port", "dst_port", "protocol", "verdict", "rule_id"]
+        for_each(keys(attributes)) -> |_index, key| { assert!(includes(allowed_attributes, key)) }
+        if exists(attributes.src_ip) {
+          assert!(is_ipv4(string!(attributes.src_ip)) || is_ipv6(string!(attributes.src_ip)))
+        }
+        if exists(attributes.dst_ip) {
+          assert!(is_ipv4(string!(attributes.dst_ip)) || is_ipv6(string!(attributes.dst_ip)))
+        }
+        if exists(attributes.src_port) {
+          value = int!(attributes.src_port)
+          assert!(value >= 0 && value <= 65535)
+        }
+        if exists(attributes.dst_port) {
+          value = int!(attributes.dst_port)
+          assert!(value >= 0 && value <= 65535)
+        }
+        if exists(attributes.protocol) {
+          assert!(includes(["TCP", "UDP", "ICMP", "ICMPV6", "SCTP", "GRE", "ESP", "AH", "OTHER"], string!(attributes.protocol)))
+        }
+          assert!(includes(["allowed", "refused"], string!(attributes.verdict)))
+          assert!(includes(["invalid", "peer_isolation", "protected_destination", "inbound_unsolicited", "allowed_assignment", "established_return", "default_deny", "assigned_policy"], string!(attributes.rule_id)))
+      } else if event_type == "ids.alert" {
+        assert_eq!(source, "ids")
+        allowed_attributes = ["src_ip", "dst_ip", "src_port", "dst_port", "protocol", "signature_id", "signature_revision", "category", "ids_action"]
+        for_each(keys(attributes)) -> |_index, key| { assert!(includes(allowed_attributes, key)) }
+        if exists(attributes.src_ip) {
+          assert!(is_ipv4(string!(attributes.src_ip)) || is_ipv6(string!(attributes.src_ip)))
+        }
+        if exists(attributes.dst_ip) {
+          assert!(is_ipv4(string!(attributes.dst_ip)) || is_ipv6(string!(attributes.dst_ip)))
+        }
+        if exists(attributes.src_port) {
+          value = int!(attributes.src_port)
+          assert!(value >= 0 && value <= 65535)
+        }
+        if exists(attributes.dst_port) {
+          value = int!(attributes.dst_port)
+          assert!(value >= 0 && value <= 65535)
+        }
+        if exists(attributes.protocol) {
+          assert!(includes(["TCP", "UDP", "ICMP", "ICMPV6", "SCTP", "GRE", "ESP", "AH", "OTHER"], string!(attributes.protocol)))
+        }
+          value = int!(attributes.signature_id)
+          assert!(value >= 0 && value <= 9007199254740991)
+        if exists(attributes.signature_revision) {
+          value = int!(attributes.signature_revision)
+          assert!(value >= 0 && value <= 9007199254740991)
+        }
+        if exists(attributes.category) {
+          assert!(match(string!(attributes.category), r'^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,63}$'))
+        }
+          assert!(includes(["allowed", "blocked"], string!(attributes.ids_action)))
+      } else if event_type == "collector.health" {
+        assert_eq!(source, "collector")
+        allowed_attributes = ["queue_events", "queue_bytes", "dropped_total", "delivered_total", "rejected_total", "collection_errors_total", "journal_lag_seconds"]
+        for_each(keys(attributes)) -> |_index, key| { assert!(includes(allowed_attributes, key)) }
+          value = int!(attributes.queue_events)
+          assert!(value >= 0 && value <= 9007199254740991)
+          value = int!(attributes.queue_bytes)
+          assert!(value >= 0 && value <= 9007199254740991)
+          value = int!(attributes.dropped_total)
+          assert!(value >= 0 && value <= 9007199254740991)
+          value = int!(attributes.delivered_total)
+          assert!(value >= 0 && value <= 9007199254740991)
+          value = int!(attributes.rejected_total)
+          assert!(value >= 0 && value <= 9007199254740991)
+          value = int!(attributes.collection_errors_total)
+          assert!(value >= 0 && value <= 9007199254740991)
+        if exists(attributes.journal_lag_seconds) {
+          value = int!(attributes.journal_lag_seconds)
+          assert!(value >= 0 && value <= 9007199254740991)
+        }
+      } else if event_type == "collector.loss" {
+        assert_eq!(source, "collector")
+        allowed_attributes = ["count", "reason"]
+        for_each(keys(attributes)) -> |_index, key| { assert!(includes(allowed_attributes, key)) }
+          value = int!(attributes.count)
+          assert!(value >= 0 && value <= 9007199254740991)
+          assert!(includes(["queue_full", "journal_cursor_lost", "input_rotated", "oversized_record", "invalid_record"], string!(attributes.reason)))
+      } else { abort }
+      normalized = original
+      normalized.ts = format_timestamp!(parsed_ts, format: "%Y-%m-%dT%H:%M:%S%.6fZ")
+      normalized.received_ts = format_timestamp!(now(), format: "%Y-%m-%dT%H:%M:%S%.6fZ")
+      normalized.event_id = "infra_" + sha2(resource_id + "\n" + string!(original.source_event_id), variant: "SHA-256")
+      collector = if source == "kubernetes" { "otel-kubernetes/1.0" } else { "jengasec-event-agent/1.0" }
+      transport = if string!(.source_hint) == "otlp" { "otlp" } else { "https" }
+      normalized.provenance = {"collector": collector, "transport": transport}
+      attribution = {"identity_source": "jengasec_provisioning", "mapping_state": "native_only", "authorization": "none", "state": "not_applicable"}
+      if string!(original.environment) == "live" && (exists(attributes.src_ip) || exists(attributes.dst_ip)) {
+        attribution.state = "unavailable"
+        current, current_error = get_enrichment_table_record("infrastructure_attribution", {"key": "__status__"})
+        if current_error == null {
+          status = object(current.value) ?? {}
+          if status.state == "stale" { attribution.state = "stale" }
+          if status.state == "fresh" {
+            captured = parse_timestamp(to_string(status.captured_at) ?? "", format: "%+") ?? now()
+            expires = parse_timestamp(to_string(status.expires_at) ?? "", format: "%+") ?? now()
+            if now() >= expires {
+              attribution.state = "expired"
+            } else if parsed_ts < captured || parsed_ts >= expires {
+              attribution.state = "outside_window"
+            } else {
+              attribution.state = "unknown"
+              attribution.captured_at = status.captured_at
+              attribution.expires_at = status.expires_at
+              attribution.snapshot_hash = status.snapshot_hash
+              for_each({"source": to_string(attributes.src_ip) ?? "", "destination": to_string(attributes.dst_ip) ?? ""}) -> |endpoint, address| {
+                native, native_error = get_enrichment_table_record("infrastructure_attribution", {"key": address})
+                if native_error == null && native.value.snapshot_hash == status.snapshot_hash {
+                  identity = object(native.value) ?? {}
+                  del(identity.snapshot_hash)
+                  attribution = set!(attribution, [endpoint], identity)
+                  attribution.state = "known"
+                }
+              }
+            }
+          }
+        }
+      }
+      normalized.attribution = attribution
+      normalized.integrity_hash = "sha256:" + sha2(encode_json(normalized), variant: "SHA-256")
+      . = normalized
+
+  infrastructure_loki:
+    type: remap
+    inputs:
+      - normalized_infrastructure
+    source: |
+      .timestamp = parse_timestamp!(string!(.ts), format: "%+")
+
+  infrastructure_metric_fields:
+    type: remap
+    inputs:
+      - normalized_infrastructure
+    source: |
+      .received_seconds = to_unix_timestamp(parse_timestamp!(string!(.received_ts), format: "%+"))
+
+  infrastructure_metrics:
+    type: log_to_metric
+    inputs:
+      - infrastructure_metric_fields
+    metrics:
+      - type: counter
+        field: event_type
+        name: jengasec_infrastructure_events_total
+        increment_by_value: false
+        kind: incremental
+        tags:
+          source: "{{ source }}"
+          event_type: "{{ event_type }}"
+          environment: "{{ environment }}"
+      - type: gauge
+        field: received_seconds
+        name: jengasec_infrastructure_last_event_timestamp_seconds
+        tags:
+          source: "{{ source }}"
+          resource_id: "{{ resource_id }}"
+          environment: "{{ environment }}"
+
   attribution_metrics:
     type: log_to_metric
     inputs:
@@ -542,6 +933,7 @@ transforms:
         increment_by_value: false
         kind: incremental
         tags:
+          environment: "{{ metadata.environment }}"
           source: "{{ source }}"
           status: "{{ metadata.attribution_status }}"
       - type: counter
@@ -550,6 +942,7 @@ transforms:
         increment_by_value: false
         kind: incremental
         tags:
+          environment: "{{ metadata.environment }}"
           source: "{{ source }}"
           status: "{{ metadata.scope_status }}"
 
@@ -565,6 +958,7 @@ transforms:
         increment_by_value: false
         kind: incremental
         tags:
+          environment: "{{ environment }}"
           reason: "{{ reason }}"
           source: "{{ source }}"
 
@@ -594,6 +988,7 @@ transforms:
       raw_message = to_string(.raw_message) ?? ""
       . = {
         "ts": now(),
+        "environment": string(.ingress_environment) ?? "unclassified",
         "source": to_string(.source_hint) ?? "unknown",
         "reason": "sensitive_field",
         "payload_hash": "sha256:" + sha2(raw_message, variant: "SHA-256")
@@ -604,11 +999,13 @@ transforms:
     inputs:
       - normalized_application.dropped
       - normalized_sources.dropped
+      - normalized_infrastructure.dropped
       - split_inputs._unmatched
     source: |
       raw_message = to_string(.raw_message) ?? ""
       . = {
         "ts": now(),
+        "environment": string(.ingress_environment) ?? "unclassified",
         "source": to_string(.source_hint) ?? "unknown",
         "reason": "contract_or_catalogue_rejected",
         "payload_hash": "sha256:" + sha2(raw_message, variant: "SHA-256")
@@ -625,6 +1022,7 @@ sinks:
     healthcheck:
       enabled: false
     labels:
+      environment: "{{ metadata.environment }}"
       enterprise: "{{ enterprise }}"
       application: "{{ application }}"
       namespace: "{{ namespace }}"
@@ -646,6 +1044,7 @@ sinks:
     healthcheck:
       enabled: false
     labels:
+      environment: "{{ metadata.environment }}"
       enterprise: "{{ enterprise }}"
       application: "{{ application }}"
       namespace: "{{ namespace }}"
@@ -657,12 +1056,39 @@ sinks:
     batch:
       timeout_secs: 1
 
+  loki_infrastructure:
+    type: loki
+    inputs:
+      - infrastructure_loki
+    endpoint: http://loki:3100
+    tenant_id: staff
+    healthcheck:
+      enabled: false
+    labels:
+      record_family: "{{ record_family }}"
+      environment: "{{ environment }}"
+      source: "{{ source }}"
+      resource_id: "{{ resource_id }}"
+      event_type: "{{ event_type }}"
+      severity: "{{ severity }}"
+    encoding:
+      codec: json
+      except_fields:
+        - timestamp
+    batch:
+      timeout_secs: 1
+    buffer:
+      type: disk
+      max_size: 536870912
+      when_full: block
+
   quarantine:
     type: file
     inputs:
       - quarantine_sensitive
       - quarantine_invalid
-    path: /var/lib/vector/quarantine/events.jsonl
+    path: /var/lib/vector/quarantine/events-%Y-%m-%d-%H-%M.jsonl
+    idle_timeout_secs: 10
     encoding:
       codec: json
     framing:
@@ -674,6 +1100,7 @@ sinks:
       - vector_metrics
       - attribution_metrics
       - quarantine_metrics
+      - infrastructure_metrics
     address: 0.0.0.0:9598
 
   website_feed_publisher:
@@ -701,7 +1128,8 @@ sinks:
     inputs:
       - normalized_application
       - normalized_sources
-    path: /var/lib/vector/ai-handoff/telemetry-%Y-%m-%d.ndjson
+    path: /var/lib/vector/ai-handoff/telemetry-%Y-%m-%d-%H-%M.ndjson
+    idle_timeout_secs: 10
     encoding:
       codec: json
     framing:

@@ -11,7 +11,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REHEARSAL_ROOT="$(mktemp -d /tmp/jengasec-obs-vm.XXXXXX)"
 
 cleanup() {
-  exit_status=$?
+  local exit_status=$?
   if declare -p compose >/dev/null 2>&1; then
     if (( exit_status != 0 )); then
       vector_container="$("${compose[@]}" ps --quiet vector 2>/dev/null || true)"
@@ -23,8 +23,22 @@ cleanup() {
     "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
   fi
   if [[ -n "${REHEARSAL_ROOT:-}" && -d "$REHEARSAL_ROOT" ]]; then
-    rm -r -- "$REHEARSAL_ROOT"
+    # Container-owned queue directories can be private to a different UID.
+    # Privileged cleanup is confined to this caller's exact mktemp directory.
+    if [[ ! "$REHEARSAL_ROOT" =~ ^/tmp/jengasec-obs-vm\.[[:alnum:]]{6}$ ]] \
+      || [[ -L "$REHEARSAL_ROOT" ]] \
+      || [[ "$(realpath -e -- "$REHEARSAL_ROOT")" != "$REHEARSAL_ROOT" ]] \
+      || [[ "$(stat --format '%u' "$REHEARSAL_ROOT")" != "$(id -u)" ]]; then
+      printf 'Refusing cleanup outside the owned OBS rehearsal directory\n' >&2
+      if (( exit_status == 0 )); then exit_status=1; fi
+    elif ! rm -r --one-file-system -- "$REHEARSAL_ROOT" 2>/dev/null; then
+      if ! sudo -n rm -r --one-file-system -- "$REHEARSAL_ROOT"; then
+        printf 'Could not remove the OBS rehearsal directory\n' >&2
+        if (( exit_status == 0 )); then exit_status=1; fi
+      fi
+    fi
   fi
+  exit "$exit_status"
 }
 trap cleanup EXIT
 
@@ -82,7 +96,8 @@ compose=(
   --compose-file "$current/observability/compose.production.yaml" \
   --env-file "$REHEARSAL_ROOT/etc/observability.env" \
   --project-name jengasec-observability-rehearsal
-curl --fail --silent --output /dev/null http://127.0.0.1:3000/api/health
+rehearsal_bind="${JENGASEC_OBS_REHEARSAL_BIND:-127.0.0.1}"
+curl --noproxy '*' --fail --silent --output /dev/null "http://${rehearsal_bind}:3000/api/health"
 
 # Exercise the deployed bind mounts and service UIDs, not just container health.
 "${compose[@]}" exec -T source-fixture python - <<'PY'
@@ -112,8 +127,8 @@ assert {record.get("actor", {}).get("team_label", "unattributed") for record in 
 }
 print("VM rehearsal emitted and stored all four roles and system records")
 PY
-[[ "$(curl --silent --output /dev/null --write-out '%{http_code}' \
-  http://127.0.0.1:9090/)" == "404" ]] \
+[[ "$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' \
+  "http://${rehearsal_bind}:9090/")" == "404" ]] \
   || die "Prometheus write proxy exposed an unexpected path"
 "${compose[@]}" down --remove-orphans
 "${compose[@]}" down --remove-orphans

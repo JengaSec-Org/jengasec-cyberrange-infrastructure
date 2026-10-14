@@ -66,11 +66,14 @@ def main():
     parser.add_argument("--cells", type=pathlib.Path, required=True)
     parser.add_argument("--template", type=pathlib.Path, required=True)
     parser.add_argument("--output-dir", type=pathlib.Path, required=True)
-    parser.add_argument("--website-feed-url", required=True)
+    parser.add_argument("--website-feed-url", default="")
+    parser.add_argument("--docker-source-project", default=os.environ.get("JENGASEC_DOCKER_SOURCE_PROJECT", "jengasec-observability"))
     args = parser.parse_args()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,127}", args.docker_source_project):
+        raise SystemExit("Docker source project must be a bounded Compose project name")
 
     website_feed_url = urllib.parse.urlsplit(args.website_feed_url)
-    if (
+    if args.website_feed_url and (
         website_feed_url.scheme not in {"http", "https"}
         or not website_feed_url.hostname
         or website_feed_url.username
@@ -146,6 +149,17 @@ def main():
     )
     if rendered_with_feed == rendered:
         raise SystemExit("Vector template has no website-feed placeholder")
+    rendered_project = rendered_with_feed.replace("__DOCKER_SOURCE_PROJECT__", args.docker_source_project)
+    if rendered_project == rendered_with_feed:
+        raise SystemExit("Vector template has no Docker source project placeholder")
+    rendered_with_feed = rendered_project
+    if not args.website_feed_url:
+        # An unconfigured optional receiver must not block local collection or
+        # silently send records to a rehearsal endpoint.
+        config = yaml.safe_load(rendered_with_feed)
+        config["transforms"].pop("sanitized_website_feed")
+        config["sinks"].pop("website_feed_publisher")
+        rendered_with_feed = yaml.safe_dump(config, sort_keys=False)
 
     config_path = args.output_dir / "vector.yaml"
     write_atomic(config_path, lambda handle: handle.write(rendered_with_feed))

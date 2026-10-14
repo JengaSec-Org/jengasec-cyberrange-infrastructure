@@ -15,7 +15,18 @@ RUNTIME_DIR="$REPO_ROOT/observability/.runtime"
 need docker
 need jq
 need python3
+need helm
 docker info >/dev/null 2>&1 || die "Docker is not running"
+
+validation_root="$(mktemp -d /tmp/jengasec-collector-validation.XXXXXX)"
+collector_container=""
+cleanup() {
+  if [[ -n "$collector_container" ]]; then
+    docker rm "$collector_container" >/dev/null 2>&1 || true
+  fi
+  rm -r -- "$validation_root"
+}
+trap cleanup EXIT
 
 python3 "$REPO_ROOT/scripts/prepare-observability-runtime.py" \
   --runtime-dir "$RUNTIME_DIR" \
@@ -72,13 +83,49 @@ for collector_config in logs.yaml cluster.yaml; do
     --env OBS_OTLP_ENDPOINT=obs.example.invalid:4317 \
     --env OBS_OTLP_INSECURE=true \
     --env OBS_PROMETHEUS_REMOTE_WRITE_URL=http://obs.example.invalid:9090/api/v1/write \
+    --env OBS_KUBE_TOKEN_FILE=/dev/null \
+    --env OBS_KUBE_CA_FILE=/validation-ca.crt \
+    --volume /etc/ssl/certs/ca-certificates.crt:/validation-ca.crt:ro \
     --volume "$REPO_ROOT/charts/observability-agent/files:/validation:ro" \
     otel-collector \
     validate --config="/validation/$collector_config"
 done
 
+log "testing native Kubernetes collectors and persistent replay"
+project_name="$("${COMPOSE[@]}" config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
+collector_container="$(docker create "${project_name}-otel-collector")"
+docker cp "$collector_container:/otelcol-contrib" "$validation_root/otelcol-contrib"
+chmod 0755 "$validation_root/otelcol-contrib"
+"${COMPOSE[@]}" run --rm --no-deps \
+  --entrypoint python \
+  --env HELM_BIN=/validation-tools/helm \
+  --env OTELCOL_BIN=/validation-tools/otelcol-contrib \
+  --volume "$(command -v helm):/validation-tools/helm:ro" \
+  --volume "$validation_root/otelcol-contrib:/validation-tools/otelcol-contrib:ro" \
+  contract-tests \
+  charts/observability-agent/tests/test-agent.py
+
 log "running JSON Schema fixture tests"
 "${COMPOSE[@]}" run --rm --no-deps contract-tests
+
+log "testing native infrastructure event acceptance and rejection"
+"${COMPOSE[@]}" run --rm --no-deps --entrypoint python contract-tests \
+  observability/tests/render-infrastructure-vector-tests.py \
+  >"$validation_root/infrastructure-vector.yaml"
+"${COMPOSE[@]}" run --rm --no-deps \
+  --env JENGASEC_INFRASTRUCTURE_RESOURCE_IDS=test-host \
+  --volume "$validation_root/infrastructure-vector.yaml:/validation/infrastructure.yaml:ro" \
+  vector test /validation/infrastructure.yaml
+
+log "checking infrastructure metrics and optional integrations"
+"${COMPOSE[@]}" run --rm --no-deps --entrypoint python contract-tests \
+  charts/observability-agent/tests/test-wal-guard.py
+for test_script in test-infrastructure-metrics.py test-optional-integrations.py test-release-archive.py test-infrastructure-dashboards.py test-provisioning-snapshot.py test-provisioning-service.py test-gateway-observation.py test-suricata-file-cap.py; do
+  "${COMPOSE[@]}" run --rm --no-deps \
+    --entrypoint python \
+    contract-tests \
+    "observability/tests/$test_script"
+done
 
 log "running attribution snapshot fixture tests"
 "${COMPOSE[@]}" run --rm --no-deps \

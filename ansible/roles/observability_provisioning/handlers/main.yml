@@ -1,0 +1,7 @@
+---
+- name: Restart provisioning snapshot endpoint
+  ansible.builtin.systemd:
+    name: jengasec-provisioning-endpoint.service
+    state: restarted
+    daemon_reload: true
+  when: obs_provisioning_mode == 'source' and obs_provisioning_endpoint_enabled

@@ -7,6 +7,8 @@
       - obs_state_root is match('^/[A-Za-z0-9_./-]+$')
       - obs_config_root is match('^/[A-Za-z0-9_./-]+$')
       - obs_function_bind | length > 0
+      - obs_attribution_mode in ['platform', 'rehearsal', 'disabled']
+      - obs_rehearsal_mode or obs_attribution_mode != 'rehearsal'
       - obs_retention_hours | int > 0
       - obs_event_window_hours | int > 0
       - obs_appeal_window_hours | int > 0
@@ -14,6 +16,11 @@
         obs_retention_hours | int >=
         (obs_event_window_hours | int + obs_appeal_window_hours | int)
       - obs_refresh_seconds | int >= 30
+      - obs_spool_metrics_dir is match('^/[A-Za-z0-9_./-]+$')
+      - "'..' not in obs_spool_metrics_dir.split('/')"
+      - obs_spool_quarantine_max_bytes | int >= 1048576
+      - obs_spool_ai_handoff_max_bytes | int >= 1048576
+      - obs_spool_close_grace_seconds | int >= 120
       - >-
         obs_rehearsal_event_interval_seconds | int == 0 or
         (obs_rehearsal_mode and
@@ -34,10 +41,10 @@
       - obs_grafana_admin_password | length >= 24
       - obs_grafana_admin_password != 'CHANGE_ME'
       - >-
-        obs_rehearsal_mode or
+        obs_attribution_mode != 'platform' or
         (obs_postgresql_service_content | length > 0 and
          obs_postgresql_service_content != 'CHANGE_ME')
-      - obs_effective_website_feed_url is match('^https?://[^@]+/api/feed$')
+      - obs_effective_website_feed_url == '' or obs_effective_website_feed_url is match('^https?://[^@]+/api/feed$')
     fail_msg: Required observability secrets or integration settings are missing
     quiet: true
   no_log: true
@@ -46,11 +53,11 @@
   ansible.builtin.assert:
     that:
       - obs_live_operation_approved
-      - obs_website_feed_interface_approved
+      - obs_effective_website_feed_url == '' or obs_website_feed_interface_approved
       - obs_validate_network
     fail_msg: >-
-      Live startup needs separate approval, an approved website interface,
-      and network validation
+      Live startup needs approval and network validation; an enabled website
+      publisher also needs its approved interface
     quiet: true
   when:
     - obs_start
@@ -141,6 +148,8 @@
     - {path: "{{ obs_state_root }}/lookups", mode: "0750"}
     - {path: "{{ obs_state_root }}/dashboards", mode: "0750"}
     - {path: "{{ obs_state_root }}/evidence", mode: "0700"}
+    - {path: "{{ obs_state_root }}/spool-maintenance", mode: "0700"}
+    - {path: "{{ obs_spool_metrics_dir }}", mode: "0755"}
   loop_control:
     label: "{{ item.path }}"
 
@@ -160,11 +169,24 @@
     quiet: true
   when: obs_activate_existing_release
 
-- name: Calculate the observability release fingerprint
+- name: Allocate a private source archive on the controller
+  ansible.builtin.tempfile:
+    state: file
+    prefix: jengasec-observability-release-
+    suffix: .tar.gz
+  delegate_to: localhost
+  become: false
+  register: obs_release_archive
+  changed_when: false
+  when: not obs_activate_existing_release
+
+- name: Package and fingerprint the observability release
   ansible.builtin.command:
     argv:
       - "{{ obs_python_command }}"
       - "{{ playbook_dir }}/../scripts/fingerprint-observability-release.py"
+      - --archive
+      - "{{ obs_release_archive.path }}"
   delegate_to: localhost
   become: false
   register: obs_release_fingerprint
@@ -232,52 +254,22 @@
     - scripts
   when: not obs_activate_existing_release
 
-- name: Copy observability release directories
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../{{ item.source }}/"
-    dest: >-
-      {{ obs_install_root }}/releases/{{ obs_release_id }}/{{ item.destination }}/
-    mode: "0644"
-    directory_mode: "0755"
-  loop:
-    - source: contracts
-      destination: contracts
-    - source: observability/vector
-      destination: observability/vector
-    - source: observability/loki
-      destination: observability/loki
-    - source: observability/prometheus
-      destination: observability/prometheus
-    - source: observability/otel
-      destination: observability/otel
-    - source: observability/grafana
-      destination: observability/grafana
-    - source: observability/tests/fixtures/website-feed
-      destination: observability/tests/fixtures/website-feed
-    - source: observability/tests/fixtures/sources
-      destination: observability/tests/fixtures/sources
-  loop_control:
-    label: "{{ item.destination }}"
+- name: Transfer the observability source archive
+  ansible.builtin.unarchive:
+    src: "{{ obs_release_archive.path }}"
+    dest: "{{ obs_install_root }}/releases/{{ obs_release_id }}"
+    extra_opts: [--same-permissions]
+    owner: "{{ 'root' if obs_manage_storage_ownership else omit }}"
+    group: "{{ 'root' if obs_manage_storage_ownership else omit }}"
   when: not obs_activate_existing_release
 
-- name: Copy observability release files
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../{{ item }}"
-    dest: >-
-      {{ obs_install_root }}/releases/{{ obs_release_id }}/{{ item }}
-    mode: "{{ '0755' if item is match('^scripts/.*\\.(sh|py)$') else '0644' }}"
-  loop:
-    - observability/compose.production.yaml
-    - scripts/_lib.sh
-    - scripts/cells.yaml
-    - scripts/export-observability-evidence.py
-    - scripts/provision-grafana-access.py
-    - scripts/refresh-observability-state.sh
-    - scripts/render-grafana-dashboards.py
-    - scripts/render-observability-lookups.py
-    - scripts/render-vector-catalogue.py
-    - scripts/sync-observability-lookups.sh
-    - scripts/wait-observability-stack.sh
+- name: Remove the temporary controller archive
+  ansible.builtin.file:
+    path: "{{ obs_release_archive.path }}"
+    state: absent
+  delegate_to: localhost
+  become: false
+  changed_when: false
   when: not obs_activate_existing_release
 
 - name: Copy rehearsal attribution fixtures
@@ -322,13 +314,24 @@
     dest: "{{ obs_config_root }}/secrets/postgresql-service.conf"
     mode: "0600"
   no_log: true
-  when: not obs_rehearsal_mode
+  when: obs_attribution_mode == 'platform'
 
 - name: Write the production environment file
   ansible.builtin.template:
     src: observability.env.j2
     dest: "{{ obs_config_root }}/observability.env"
     mode: "0600"
+  notify: Restart observability stack
+
+- name: Configure authenticated infrastructure collection
+  ansible.builtin.include_tasks: infrastructure.yml
+  when: obs_infrastructure_enabled
+
+- name: Inspect the previous Vector configuration
+  ansible.builtin.stat:
+    path: "{{ obs_state_root }}/lookups/vector.yaml"
+    checksum_algorithm: sha256
+  register: obs_vector_previous
 
 - name: Render the catalogue-driven Vector configuration
   ansible.builtin.command:
@@ -349,7 +352,21 @@
       - "{{ obs_state_root }}/lookups"
       - --website-feed-url
       - "{{ obs_effective_website_feed_url }}"
+  environment:
+    JENGASEC_DOCKER_SOURCE_PROJECT: >-
+      {{ 'jengasec-observability-rehearsal' if obs_rehearsal_mode
+         else 'jengasec-observability' }}
   changed_when: false
+
+- name: Detect a changed Vector configuration
+  ansible.builtin.stat:
+    path: "{{ obs_state_root }}/lookups/vector.yaml"
+    checksum_algorithm: sha256
+  register: obs_vector_current
+  changed_when: >-
+    (obs_vector_previous.stat.checksum | default('')) !=
+    (obs_vector_current.stat.checksum | default(''))
+  notify: Restart observability stack
 
 - name: Render rehearsal attribution lookups
   ansible.builtin.command:
@@ -374,7 +391,19 @@
       - --now
       - "2026-10-10T12:00:30Z"
   changed_when: false
-  when: obs_rehearsal_mode
+  when: obs_attribution_mode == 'rehearsal'
+
+- name: Disable attribution without retaining rehearsal identities
+  ansible.builtin.copy:
+    content: "{{ item.header }}\n"
+    dest: "{{ obs_state_root }}/lookups/{{ item.name }}"
+    mode: "0644"
+  loop:
+    - name: ip-allocations.csv
+      header: ip_address,participant_id,team_id,team_label,status
+    - name: scope-assignments.csv
+      header: source_ip,enterprise,application,namespace,target_ip,active
+  when: obs_attribution_mode == 'disabled'
 
 - name: Refresh live attribution lookups
   ansible.builtin.command:
@@ -386,7 +415,7 @@
       - --output-dir
       - "{{ obs_state_root }}/lookups"
   changed_when: false
-  when: not obs_rehearsal_mode
+  when: obs_attribution_mode == 'platform'
 
 - name: Render application dashboards
   ansible.builtin.command:
@@ -399,6 +428,7 @@
       - --output-dir
       - "{{ obs_state_root }}/dashboards"
   changed_when: false
+  when: obs_attribution_mode != 'disabled'
 
 - name: Validate the production Docker Compose model
   ansible.builtin.command:
@@ -417,6 +447,56 @@
   changed_when: false
   when: obs_validate_runtime
 
+- name: Validate the authenticated infrastructure configuration
+  ansible.builtin.include_tasks: validate-infrastructure.yml
+  when:
+    - obs_infrastructure_enabled
+    - obs_validate_runtime
+
+- name: Stop rehearsal publishers before live activation
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - compose
+      - --project-name
+      - jengasec-observability
+      - --env-file
+      - "{{ obs_config_root }}/observability.env"
+      - --file
+      - "{{ obs_install_root }}/releases/{{ obs_release_id }}/observability/compose.production.yaml"
+      - --profile
+      - rehearsal
+      - stop
+      - source-fixture
+      - otel-collector
+      - website-feed-mock
+  changed_when: false
+  when:
+    - obs_start
+    - not obs_rehearsal_mode
+
+- name: Inspect the existing auxiliary maintenance timer before rollback
+  ansible.builtin.stat:
+    path: "{{ obs_systemd_root }}/jengasec-observability-spools.timer"
+  register: obs_spool_existing_timer
+  when:
+    - obs_manage_systemd
+    - obs_start
+    - obs_activate_existing_release
+
+- name: Pause auxiliary maintenance before changing to a retained release
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+  loop:
+    - jengasec-observability-spools.timer
+    - jengasec-observability-spools.service
+  when:
+    - obs_manage_systemd
+    - obs_start
+    - obs_activate_existing_release
+    - obs_spool_existing_timer.stat.exists | default(false)
+
 - name: Activate the validated observability release
   ansible.builtin.file:
     src: "{{ obs_install_root }}/releases/{{ obs_release_id }}"
@@ -434,6 +514,8 @@
     - jengasec-observability.service
     - jengasec-observability-refresh.service
     - jengasec-observability-refresh.timer
+    - jengasec-observability-spools.service
+    - jengasec-observability-spools.timer
 
 - name: Install observability systemd units
   ansible.builtin.copy:
@@ -445,6 +527,8 @@
     - jengasec-observability.service
     - jengasec-observability-refresh.service
     - jengasec-observability-refresh.timer
+    - jengasec-observability-spools.service
+    - jengasec-observability-spools.timer
   notify: Reload observability systemd
   when: obs_manage_systemd
 
@@ -468,4 +552,20 @@
   when:
     - obs_manage_systemd
     - obs_start
-    - not obs_rehearsal_mode
+    - obs_attribution_mode == 'platform'
+
+- name: Set the auxiliary spool maintenance timer
+  ansible.builtin.include_tasks: spool-timer.yml
+  when:
+    - obs_manage_systemd
+    - obs_start
+
+- name: Disable refresh when its authoritative source is unconfigured
+  ansible.builtin.systemd:
+    name: jengasec-observability-refresh.timer
+    state: stopped
+    enabled: false
+  when:
+    - obs_manage_systemd
+    - obs_start
+    - obs_attribution_mode != 'platform'

@@ -1,0 +1,20 @@
+---
+obs_provisioning_mode: ""
+obs_provisioning_database: jengasec
+obs_provisioning_max_age_seconds: 120
+obs_provisioning_interval_seconds: 60
+obs_provisioning_install_root: /opt/jengasec-provisioning-observability
+obs_provisioning_config_root: /etc/jengasec-provisioning-observability
+obs_provisioning_output_dir: >-
+  /var/lib/jengasec-observability/provisioning{{ '-cache' if obs_provisioning_mode == 'cache' else '' }}
+obs_provisioning_textfile_dir: /var/lib/jengasec-node-metrics
+obs_provisioning_endpoint_enabled: false
+obs_provisioning_port: 9444
+obs_provisioning_listen_address: ""
+obs_provisioning_allowed_client_address: ""
+obs_provisioning_allowed_client_certificate_sha256: ""
+obs_provisioning_source_address: ""
+obs_provisioning_attribution_endpoint: ""
+obs_provisioning_tls_ca_path: /etc/jengasec-node-exporter/tls/ca.crt
+obs_provisioning_tls_cert_path: /etc/jengasec-node-exporter/tls/server.crt
+obs_provisioning_tls_key_path: /etc/jengasec-node-exporter/tls/server.key

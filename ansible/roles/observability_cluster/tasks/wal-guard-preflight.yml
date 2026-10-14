@@ -1,0 +1,64 @@
+---
+- name: Inspect existing WAL guard state before any collector mutation
+  ansible.builtin.stat:
+    path: /var/lib/jengasec-observability-wal-guard/state.json
+  register: obs_cluster_wal_existing_state
+
+- name: Honor every existing pause even when the guard is being disabled
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - "{{ obs_cluster_root }}/guard-observability-wal.py"
+      - can-start
+      - --target
+      - "{{ item }}"
+      - --config
+      - "{{ obs_cluster_root }}/wal-guard.json"
+  loop: [cluster, host]
+  changed_when: false
+  when: obs_cluster_wal_existing_state.stat.exists or obs_cluster_wal_existing_state.stat.islnk | default(false)
+
+- name: Inspect an installed guard timer before explicit opt-out
+  ansible.builtin.stat:
+    path: /etc/systemd/system/jengasec-observability-wal-guard.timer
+  register: obs_cluster_wal_existing_timer
+  when: not obs_cluster_wal_guard_enabled | bool
+
+- name: Safely disable an existing guard without clearing collection latches
+  when:
+    - not obs_cluster_wal_guard_enabled | bool
+    - obs_cluster_wal_existing_timer.stat.exists | default(false)
+  block:
+    - name: Stop and disable the OBS guard timer
+      ansible.builtin.systemd_service:
+        name: jengasec-observability-wal-guard.timer
+        state: stopped
+        enabled: false
+
+    - name: Stop any in-progress OBS guard check
+      ansible.builtin.systemd_service:
+        name: jengasec-observability-wal-guard.service
+        state: stopped
+
+    - name: Recheck latches after an in-progress guard check has stopped
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - "{{ obs_cluster_root }}/guard-observability-wal.py"
+          - can-start
+          - --target
+          - "{{ item }}"
+          - --config
+          - "{{ obs_cluster_root }}/wal-guard.json"
+      loop: [cluster, host]
+      changed_when: false
+  rescue:
+    - name: Preserve guard protection if the opt-out check fails
+      ansible.builtin.systemd_service:
+        name: jengasec-observability-wal-guard.timer
+        state: started
+        enabled: true
+
+    - name: Refuse guard opt-out while collection is paused or state is unreadable
+      ansible.builtin.fail:
+        msg: Inspect the recorded WAL pause and use explicit resume before disabling the guard.

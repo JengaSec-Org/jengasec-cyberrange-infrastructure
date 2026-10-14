@@ -6,19 +6,19 @@ image:
   pullPolicy: IfNotPresent
 
 obs:
+  environment: rehearsal
+  cluster: red
+  resourceId: cluster-red
+  eventsEnabled: false
   otlpEndpoint: ""
   prometheusRemoteWriteUrl: ""
   tls:
     insecure: false
+    secretName: observability-client-tls
 
-logAgent:
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
+persistence:
+  storageClassName: ""
+  size: 2Gi
 
 clusterCollector:
   resources:

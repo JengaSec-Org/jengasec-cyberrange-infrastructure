@@ -1,0 +1,218 @@
+---
+- name: Require explicit approved cluster identity and verified TLS inputs
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - ansible_facts.architecture == 'x86_64'
+      - obs_cluster_name in ['red', 'blue']
+      - obs_cluster_environment in ['live', 'validation', 'rehearsal']
+      - obs_cluster_resource_id is match('^[a-z][a-z0-9-]{0,31}$')
+      - obs_cluster_metrics_url is match('^https://[^/]+/api/v1/write$')
+      - not obs_cluster_events_enabled or obs_cluster_otlp_endpoint | length > 0
+      - obs_cluster_tls_ca_file | length > 0
+      - obs_cluster_tls_cert_file | length > 0
+      - obs_cluster_tls_key_file | length > 0
+
+- name: Read the Kubernetes namespace before claiming OBS resources
+  ansible.builtin.command:
+    argv:
+      - "{{ obs_cluster_kubectl }}"
+      - kubectl
+      - get
+      - namespace
+      - jengasec-observability
+      - --ignore-not-found
+      - -o
+      - json
+  register: obs_cluster_namespace
+  changed_when: false
+  environment:
+    KUBECONFIG: "{{ obs_cluster_kubeconfig }}"
+
+- name: Refuse an existing namespace owned by another service
+  ansible.builtin.assert:
+    that:
+      - (obs_cluster_namespace.stdout | from_json).metadata.labels['app.kubernetes.io/component'] | default('') == 'observability'
+    fail_msg: The existing namespace is not marked as OBS-owned.
+  when: obs_cluster_namespace.stdout | length > 0
+
+- name: Create the private OBS deployment directory
+  ansible.builtin.file:
+    path: "{{ obs_cluster_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Honor existing WAL pauses before changing collection or guard settings
+  ansible.builtin.include_tasks: wal-guard-preflight.yml
+  when: obs_cluster_apply | bool
+
+- name: Stage the WAL guard and honor any previous collection pause
+  ansible.builtin.include_tasks: wal-guard.yml
+  when: obs_cluster_wal_guard_enabled | bool
+
+- name: Download the Helm release with its published checksum
+  ansible.builtin.get_url:
+    url: "https://get.helm.sh/helm-v{{ obs_cluster_helm_version }}-linux-amd64.tar.gz"
+    checksum: "sha256:https://get.helm.sh/helm-v{{ obs_cluster_helm_version }}-linux-amd64.tar.gz.sha256sum"
+    dest: "{{ obs_cluster_root }}/helm.tar.gz"
+    mode: '0600'
+
+- name: Extract the private Helm executable
+  ansible.builtin.unarchive:
+    src: "{{ obs_cluster_root }}/helm.tar.gz"
+    dest: "{{ obs_cluster_root }}"
+    remote_src: true
+    creates: "{{ obs_cluster_root }}/linux-amd64/helm"
+
+- name: Create a temporary source archive on the controller
+  ansible.builtin.tempfile:
+    state: file
+    suffix: .tar.gz
+  delegate_to: localhost
+  become: false
+  register: obs_cluster_source_archive
+  changed_when: false
+
+- name: Package the reviewed chart for one source transfer
+  ansible.builtin.command:
+    argv:
+      - tar
+      - -czf
+      - "{{ obs_cluster_source_archive.path }}"
+      - -C
+      - "{{ role_path }}/../../../charts/observability-agent"
+      - .
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+- name: Copy the reviewed chart archive
+  ansible.builtin.copy:
+    src: "{{ obs_cluster_source_archive.path }}"
+    dest: "{{ obs_cluster_root }}/chart.tar.gz"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Create the OBS chart directory
+  ansible.builtin.file:
+    path: "{{ obs_cluster_root }}/chart"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Unpack the reviewed chart
+  ansible.builtin.unarchive:
+    src: "{{ obs_cluster_root }}/chart.tar.gz"
+    dest: "{{ obs_cluster_root }}/chart"
+    remote_src: true
+    owner: root
+    group: root
+
+- name: Remove the temporary source archive
+  ansible.builtin.file:
+    path: "{{ obs_cluster_source_archive.path }}"
+    state: absent
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+- name: Render private collector values
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: "{{ obs_cluster_root }}/values.yaml"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Render the complete reviewed resource set
+  ansible.builtin.command:
+    argv:
+      - "{{ obs_cluster_root }}/linux-amd64/helm"
+      - template
+      - jengasec-observability
+      - "{{ obs_cluster_root }}/chart"
+      - --namespace
+      - jengasec-observability
+      - --values
+      - "{{ obs_cluster_root }}/values.yaml"
+  register: obs_cluster_rendered
+  changed_when: false
+  no_log: true
+
+- name: Stage manifests for review
+  ansible.builtin.copy:
+    content: "{{ obs_cluster_rendered.stdout }}\n"
+    dest: "{{ obs_cluster_root }}/rendered.yaml"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Create the OBS namespace with release ownership
+  ansible.builtin.command:
+    argv: ["{{ obs_cluster_kubectl }}", kubectl, apply, -f, '-']
+    stdin: "{{ lookup('ansible.builtin.template', 'namespace.json.j2') }}"
+  register: obs_cluster_namespace_apply
+  changed_when: "'unchanged' not in obs_cluster_namespace_apply.stdout"
+  when: obs_cluster_apply | bool
+  environment:
+    KUBECONFIG: "{{ obs_cluster_kubeconfig }}"
+
+- name: Apply the private collector client certificate
+  ansible.builtin.command:
+    argv: ["{{ obs_cluster_kubectl }}", kubectl, apply, -f, '-']
+    stdin: "{{ lookup('ansible.builtin.template', 'tls-secret.json.j2') }}"
+  register: obs_cluster_secret_apply
+  changed_when: "'unchanged' not in obs_cluster_secret_apply.stdout"
+  no_log: true
+  when: obs_cluster_apply | bool
+  environment:
+    KUBECONFIG: "{{ obs_cluster_kubeconfig }}"
+
+- name: Apply only the OBS Helm release with automatic rollback
+  ansible.builtin.command:
+    argv:
+      - "{{ obs_cluster_root }}/linux-amd64/helm"
+      - upgrade
+      - --install
+      - jengasec-observability
+      - "{{ obs_cluster_root }}/chart"
+      - --namespace
+      - jengasec-observability
+      - --values
+      - "{{ obs_cluster_root }}/values.yaml"
+      - --atomic
+      - --wait
+      - --timeout
+      - 5m
+      - --history-max
+      - '5'
+  when: obs_cluster_apply | bool
+  changed_when: true
+  environment:
+    KUBECONFIG: "{{ obs_cluster_kubeconfig }}"
+
+- name: Configure the optional OBS host container reader
+  ansible.builtin.include_tasks: host-logs.yml
+  when: obs_cluster_host_logs_enabled | bool
+
+- name: Check current WAL usage before starting the timer
+  ansible.builtin.systemd_service:
+    name: jengasec-observability-wal-guard.service
+    state: started
+    daemon_reload: true
+  when:
+    - obs_cluster_apply | bool
+    - obs_cluster_wal_guard_enabled | bool
+
+- name: Enable ongoing WAL growth protection
+  ansible.builtin.systemd_service:
+    name: jengasec-observability-wal-guard.timer
+    enabled: true
+    state: started
+  when:
+    - obs_cluster_apply | bool
+    - obs_cluster_wal_guard_enabled | bool

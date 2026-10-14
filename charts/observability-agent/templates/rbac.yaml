@@ -10,7 +10,16 @@ metadata:
   name: jengasec-observability-agent
 rules:
   - apiGroups: [""]
-    resources: ["events", "namespaces", "nodes", "pods", "services", "endpoints"]
+    resources: ["events", "namespaces", "nodes", "pods", "services", "endpoints", "replicationcontrollers", "resourcequotas"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes/proxy", "nodes/stats", "nodes/metrics"]
+    verbs: ["get"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]

@@ -1,0 +1,12 @@
+[Unit]
+Description=Check JengaSec observability spool retention each minute
+
+[Timer]
+OnActiveSec=15s
+OnUnitActiveSec=1min
+AccuracySec=5s
+Persistent=true
+Unit=jengasec-observability-spools.service
+
+[Install]
+WantedBy=timers.target
