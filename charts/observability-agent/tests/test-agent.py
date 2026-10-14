@@ -105,7 +105,14 @@ class ProcessorTests(unittest.TestCase):
                 "regarding": {"kind": "Pod", "name": "fixture-pod"},
                 "note": "payload-secret-sentinel", "deprecatedCount": 2,
             }
-            (root / "events.jsonl").write_text(json.dumps({"type": "ADDED", "object": event}) + "\n")
+            validation_event = json.loads(json.dumps(event))
+            validation_event["metadata"]["namespace"] = "jengasec-observability"
+            validation_event["metadata"]["uid"] = "validation-event-fixture"
+            validation_event["regarding"]["name"] = "observability-validation-watch"
+            (root / "events.jsonl").write_text(
+                json.dumps({"type": "ADDED", "object": event}) + "\n" +
+                json.dumps({"type": "ADDED", "object": validation_event}) + "\n"
+            )
             with socket.socket() as listener:
                 listener.bind(("127.0.0.1", 0))
                 port = listener.getsockname()[1]
@@ -170,8 +177,12 @@ class ProcessorTests(unittest.TestCase):
             documents = [json.loads(line) for line in output.splitlines()]
             logs = [record for doc in documents for resource in doc.get("resourceLogs", [])
                     for scope in resource["scopeLogs"] for record in scope["logRecords"]]
-            self.assertEqual(len(logs), 1)
-            body = decode_value(logs[0]["body"])
+            self.assertEqual(len(logs), 2)
+            bodies = [decode_value(log["body"]) for log in logs]
+            body = next(item for item in bodies if item["resource"]["namespace"] == "kube-system")
+            validation_body = next(item for item in bodies if item["resource"]["namespace"] == "jengasec-observability")
+            self.assertEqual(body["environment"], "live")
+            self.assertEqual(validation_body["environment"], "validation")
             self.assertEqual(body["schema_version"], "infrastructure/1.0")
             self.assertEqual(body["resource"]["namespace"], "kube-system")
             self.assertEqual(body["severity"], "medium")
