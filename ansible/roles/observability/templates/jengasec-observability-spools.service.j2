@@ -1,6 +1,7 @@
 [Unit]
 Description=Maintain bounded JengaSec observability auxiliary spools
 After=jengasec-observability.service
+ConditionPathExists={{ obs_install_root }}/current/scripts/maintain-observability-spools.py
 
 [Service]
 Type=oneshot

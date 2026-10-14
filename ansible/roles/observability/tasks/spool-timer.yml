@@ -1,0 +1,23 @@
+---
+- name: Inspect spool maintenance support in the selected release
+  ansible.builtin.stat:
+    path: "{{ obs_install_root }}/releases/{{ obs_release_id }}/scripts/maintain-observability-spools.py"
+  register: obs_spool_entrypoint
+
+- name: Converge the supported auxiliary spool maintenance timer
+  ansible.builtin.systemd:
+    name: jengasec-observability-spools.timer
+    state: >-
+      {{ 'started' if obs_spool_maintenance_enabled and
+         obs_spool_entrypoint.stat.isreg | default(false) else 'stopped' }}
+    enabled: >-
+      {{ obs_spool_maintenance_enabled and
+         obs_spool_entrypoint.stat.isreg | default(false) }}
+
+- name: Stop unsupported or disabled auxiliary spool maintenance
+  ansible.builtin.systemd:
+    name: jengasec-observability-spools.service
+    state: stopped
+  when: >-
+    not obs_spool_maintenance_enabled or
+    not (obs_spool_entrypoint.stat.isreg | default(false))

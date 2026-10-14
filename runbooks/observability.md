@@ -385,14 +385,21 @@ Do not pass newer integration settings to an older release renderer.
 The role switches the `current` link and restarts the stack. Never reuse a
 release ID for different source.
 
-Take a cold backup during an approved maintenance window. Stop
-`jengasec-observability.service`, copy the full state directory with numeric
-owners to encrypted storage, record a SHA-256 inventory, then start the unit
-and run the smoke check. Back up Vault and the PostgreSQL service secret
-through the secrets owner, not with the data copy. To recover, keep the unit
-stopped, restore the state directory and numeric ownership, stage the matching
-release, start it, verify native Loki and Prometheus queries, then run the full
-smoke check. Retain backups and evidence through the appeal window.
+Take a cold backup during an approved maintenance window. Record the current
+spool timer state, then stop `jengasec-observability-spools.timer` and any active
+`jengasec-observability-spools.service` before stopping
+`jengasec-observability.service`. Older releases may have no spool units.
+Copy the full state directory with numeric owners to encrypted storage and
+record a SHA-256 inventory. Keep all three units stopped while restoring
+state so cleanup cannot change the files being copied.
+
+Back up Vault and the PostgreSQL service secret through the secrets owner.
+To recover, restore the state directory and numeric ownership, stage the
+matching release, then start the stack. Restore the spool timer's prior state
+only when that release supports maintenance. The deployment role disables
+it for older releases. Verify native Loki and Prometheus queries and a
+labelled validation event. Run the development smoke check in an isolated
+rehearsal. Retain backups and evidence through the appeal window.
 
 The website receiver and authentication remain website-owned. The AI network
 endpoint, transport and authentication remain AI-owned. Until those owners

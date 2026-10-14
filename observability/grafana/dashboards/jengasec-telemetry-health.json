@@ -1749,6 +1749,205 @@
           "sort": "desc"
         }
       }
+    },
+    {
+      "id": 27,
+      "title": "Collector WAL storage use",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 87,
+        "w": 12,
+        "h": 7
+      },
+      "description": "Share of the configured metrics WAL limit. At the limit or disk-space floor, the storage guard pauses only the affected OBS collector and preserves its queued data. Growth can continue for one check interval and graceful-stop period.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_observability_wal_guard_bytes{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"} / jengasec_observability_wal_guard_limit_bytes{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} / {{component}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 28,
+      "title": "Collector storage guard",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 87,
+        "w": 12,
+        "h": 4
+      },
+      "description": "A storage pause is latched until an operator reviews the retained queue and explicitly resumes collection. Restarting or redeploying does not clear the pause.",
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Missing guard",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Collecting",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Paused for storage",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_observability_wal_guard_paused{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} / {{component}}",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 29,
+      "title": "Storage guard check age",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 91,
+        "w": 12,
+        "h": 4
+      },
+      "description": "Age of the last storage guard check. This must remain fresh even when collection is paused.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Missing",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 120
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - jengasec_observability_wal_guard_last_check_timestamp_seconds{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{cluster}} / {{component}}",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
     }
   ]
 }

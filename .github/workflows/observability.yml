@@ -98,7 +98,10 @@ jobs:
       - name: Rehearse OBS VM deployment
         run: PATH="/tmp/jengasec-ansible-venv/bin:$PATH" make obs-vm-validate
       - name: Verify configuration changes restart the stack
-        run: PATH="/tmp/jengasec-ansible-venv/bin:$PATH" /tmp/jengasec-ansible-venv/bin/python observability/tests/test-config-notifications.py
+        run: |
+          export PATH="/tmp/jengasec-ansible-venv/bin:$PATH"
+          python observability/tests/test-config-notifications.py
+          python observability/tests/test-node-ufw.py
       - name: Validate configs, builds and contracts
         run: make obs-validate
       - name: Start observability stack

@@ -408,6 +408,34 @@
       "dashboard_uid": "jengasec-telemetry-health",
       "panel_id": 24,
       "summary": "Auxiliary spool files remain above their configured byte cap. Inspect incoming rate and cleanup before disk pressure grows."
+    },
+    {
+      "uid": "jengasec-wal-storage-paused",
+      "title": "Collector paused for storage",
+      "query": "jengasec_observability_wal_guard_paused{environment=\"live\"}",
+      "datasource": "prometheus",
+      "threshold": 0,
+      "for": "1m",
+      "keep_firing_for": "1m",
+      "severity": "critical",
+      "no_data_state": "NoData",
+      "dashboard_uid": "jengasec-telemetry-health",
+      "panel_id": 28,
+      "summary": "A collector was paused at its WAL limit or disk-space floor. Review its retained queue and the storage guard before explicitly resuming."
+    },
+    {
+      "uid": "jengasec-wal-guard-unavailable",
+      "title": "Collector storage guard unavailable",
+      "query": "((1 - jengasec_observability_wal_guard_check_success{environment=\"live\"}) + clamp_min(time() - jengasec_observability_wal_guard_last_check_timestamp_seconds{environment=\"live\"} - 120, 0)) or absent(jengasec_observability_wal_guard_last_check_timestamp_seconds{environment=\"live\",resource_id=\"vm105\"}) or absent(jengasec_observability_wal_guard_last_check_timestamp_seconds{environment=\"live\",resource_id=\"vm106\"})",
+      "datasource": "prometheus",
+      "threshold": 0,
+      "for": "3m",
+      "keep_firing_for": "1m",
+      "severity": "warning",
+      "no_data_state": "NoData",
+      "dashboard_uid": "jengasec-telemetry-health",
+      "panel_id": 29,
+      "summary": "The storage guard failed or stopped checking collector WAL usage. Inspect its timer and private configuration."
     }
   ]
 }

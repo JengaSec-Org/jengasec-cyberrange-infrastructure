@@ -352,6 +352,10 @@
       - "{{ obs_state_root }}/lookups"
       - --website-feed-url
       - "{{ obs_effective_website_feed_url }}"
+  environment:
+    JENGASEC_DOCKER_SOURCE_PROJECT: >-
+      {{ 'jengasec-observability-rehearsal' if obs_rehearsal_mode
+         else 'jengasec-observability' }}
   changed_when: false
 
 - name: Detect a changed Vector configuration
@@ -471,6 +475,28 @@
     - obs_start
     - not obs_rehearsal_mode
 
+- name: Inspect the existing auxiliary maintenance timer before rollback
+  ansible.builtin.stat:
+    path: "{{ obs_systemd_root }}/jengasec-observability-spools.timer"
+  register: obs_spool_existing_timer
+  when:
+    - obs_manage_systemd
+    - obs_start
+    - obs_activate_existing_release
+
+- name: Pause auxiliary maintenance before changing to a retained release
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+  loop:
+    - jengasec-observability-spools.timer
+    - jengasec-observability-spools.service
+  when:
+    - obs_manage_systemd
+    - obs_start
+    - obs_activate_existing_release
+    - obs_spool_existing_timer.stat.exists | default(false)
+
 - name: Activate the validated observability release
   ansible.builtin.file:
     src: "{{ obs_install_root }}/releases/{{ obs_release_id }}"
@@ -529,10 +555,7 @@
     - obs_attribution_mode == 'platform'
 
 - name: Set the auxiliary spool maintenance timer
-  ansible.builtin.systemd:
-    name: jengasec-observability-spools.timer
-    state: "{{ 'started' if obs_spool_maintenance_enabled else 'stopped' }}"
-    enabled: "{{ obs_spool_maintenance_enabled }}"
+  ansible.builtin.include_tasks: spool-timer.yml
   when:
     - obs_manage_systemd
     - obs_start
