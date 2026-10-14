@@ -17,3 +17,6 @@ obs_cluster_storage_class: ""
 obs_cluster_storage_size: 2Gi
 obs_cluster_host_logs_enabled: false
 obs_cluster_otel_version: 0.137.0
+obs_cluster_wal_guard_enabled: true
+obs_cluster_wal_max_bytes: 1073741824
+obs_cluster_wal_min_free_bytes: 2147483648

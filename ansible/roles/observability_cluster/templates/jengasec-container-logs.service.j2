@@ -8,6 +8,9 @@ Type=simple
 User=root
 Group=root
 EnvironmentFile={{ obs_cluster_root }}/host-logs.env
+{% if obs_cluster_wal_guard_enabled | bool %}
+ExecCondition=/usr/bin/python3 {{ obs_cluster_root }}/guard-observability-wal.py can-start --target host --config {{ obs_cluster_root }}/wal-guard.json
+{% endif %}
 ExecStart={{ obs_cluster_root }}/otelcol/otelcol-contrib --config={{ obs_cluster_root }}/host-logs.yaml
 LoadCredential=ca.crt:{{ obs_cluster_root }}/tls/ca.crt
 LoadCredential=tls.crt:{{ obs_cluster_root }}/tls/tls.crt

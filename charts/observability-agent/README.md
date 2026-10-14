@@ -29,6 +29,39 @@ window must cover the expected replay delay. Monitor WAL lag as well as the
 memory queue: an empty memory queue can still have a disk backlog. A local-path
 PVC request does not enforce a disk quota, so also monitor the node filesystem.
 
+The cluster role installs a host timer that checks each OBS remote-write WAL
+every 30 seconds. The defaults pause collection at 1 GiB per WAL or below
+2 GiB available filesystem space. It counts the greater of logical size and
+allocated blocks. This is a collection pause, not a filesystem quota: growth
+can overshoot during a check interval and graceful shutdown. A failed guard
+check or stop is an alert condition; Kubernetes API access is needed to stop
+the cluster collector. Existing log queue record limits remain in effect.
+
+The guard stops only `jengasec-container-logs.service` or scales only
+`observability-cluster-collector` in `jengasec-observability` to zero. It checks
+the bound PVC, volume identity, namespace ownership and local storage path
+before acting. WALs, PVCs, event queues and file checkpoints remain intact.
+The pause persists through service restarts and role redeployment. Fixed-label
+guard metrics are exported by the independent node exporter, including paused
+state, bytes, limit, disk space, check/stop success and last check time.
+
+After restoring receiver availability, inspect the private guard state at
+`/var/lib/jengasec-observability-wal-guard/state.json` and available disk space.
+Use the explicit command below to resume one paused target. It refuses if the
+recorded WAL identity changed, the WAL is still at its limit or disk space is
+below the floor. A full paused WAL may require an explicitly reviewed larger
+limit and sufficient disk space to allow replay. Never delete queued data to
+clear a pause. Do not manually start a latched collector.
+
+```sh
+sudo python3 /opt/jengasec-cluster-observability/guard-observability-wal.py resume \
+  --target cluster --config /opt/jengasec-cluster-observability/wal-guard.json
+```
+
+Use `--target host` for the host reader. Limits are supplied by
+`obs_cluster_wal_max_bytes` and `obs_cluster_wal_min_free_bytes`; a redeploy
+does not clear a latch. Keep independent guard freshness alerts enabled.
+
 Stage the OBS-only Ansible playbook with `obs_cluster_apply: false`. Review the
 rendered resources, current cluster health, and certificate paths before
 setting it to true. The role uses an atomic Helm upgrade and preserves the PVC.
@@ -61,3 +94,5 @@ disable only `jengasec-container-logs.service`; keep its state for replay.
 Run `tests/test-agent.py` with `HELM_BIN` and `OTELCOL_BIN` pointing to Helm and
 OpenTelemetry Collector Contrib 0.137.0. It verifies rendering boundaries and
 executes the native event and metric sanitization processors.
+Run `tests/test-wal-guard.py` for limit, latch, recovery and ownership checks;
+these tests never stop a live workload.

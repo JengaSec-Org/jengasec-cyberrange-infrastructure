@@ -44,6 +44,10 @@
     group: root
     mode: '0700'
 
+- name: Stage the WAL guard and honor any previous collection pause
+  ansible.builtin.include_tasks: wal-guard.yml
+  when: obs_cluster_wal_guard_enabled | bool
+
 - name: Download the Helm release with its published checksum
   ansible.builtin.get_url:
     url: "https://get.helm.sh/helm-v{{ obs_cluster_helm_version }}-linux-amd64.tar.gz"
@@ -190,3 +194,21 @@
 - name: Configure the optional OBS host container reader
   ansible.builtin.include_tasks: host-logs.yml
   when: obs_cluster_host_logs_enabled | bool
+
+- name: Check current WAL usage before starting the timer
+  ansible.builtin.systemd_service:
+    name: jengasec-observability-wal-guard.service
+    state: started
+    daemon_reload: true
+  when:
+    - obs_cluster_apply | bool
+    - obs_cluster_wal_guard_enabled | bool
+
+- name: Enable ongoing WAL growth protection
+  ansible.builtin.systemd_service:
+    name: jengasec-observability-wal-guard.timer
+    enabled: true
+    state: started
+  when:
+    - obs_cluster_apply | bool
+    - obs_cluster_wal_guard_enabled | bool
