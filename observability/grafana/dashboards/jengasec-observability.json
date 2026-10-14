@@ -86,7 +86,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Connected telemetry only.** Response approvals, execution and AI decisions are pending. Blank ID fields include all records. `synthetic-` and `staff-smoke-` IDs mark rehearsal data.\n\n**Environment:** live is the default. Records without an environment label are **unclassified** and must not be treated as live. Select All to inspect earlier records. Missing attribution stays unknown. Signups, scoring and platform actions require their separate owner feeds."
+        "content": "**Connected telemetry only.** Signups, scoring, platform actions, response approvals and AI decisions need their owner feeds. Missing attribution stays unknown. **Live** excludes unclassified and rehearsal records; blank ID filters include all matching records."
       }
     },
     {

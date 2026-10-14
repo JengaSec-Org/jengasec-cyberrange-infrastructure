@@ -293,7 +293,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "k8s_node_condition_ready{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "expr": "k8s_node_condition_ready{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
           "legendFormat": "{{cluster}} / {{node}}",
           "instant": true,
@@ -360,7 +360,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "time() - max by (cluster) (timestamp(k8s_node_condition_ready{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}))",
+          "expr": "time() - max by (cluster) (timestamp(k8s_node_condition_ready{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}))",
           "editorMode": "code",
           "legendFormat": "{{cluster}}",
           "instant": true,
@@ -430,7 +430,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "k8s_node_condition_memory_pressure{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "expr": "k8s_node_condition_memory_pressure{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
           "legendFormat": "{{cluster}} / {{node}}",
           "instant": true,
@@ -500,7 +500,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "k8s_node_condition_disk_pressure{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "expr": "k8s_node_condition_disk_pressure{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
           "legendFormat": "{{cluster}} / {{node}}",
           "instant": true,
@@ -562,7 +562,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "k8s_deployment_desired{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "expr": "k8s_deployment_desired{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
           "legendFormat": "{{cluster}} {{namespace}} / {{workload}} {{__name__}}",
           "instant": false,
@@ -574,7 +574,7 @@
         },
         {
           "refId": "B",
-          "expr": "k8s_deployment_available{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "expr": "k8s_deployment_available{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
           "legendFormat": "{{cluster}} {{namespace}} / {{workload}} {{__name__}}",
           "instant": false,
@@ -637,7 +637,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (cluster,namespace,pod) (clamp_min(delta(k8s_container_restarts{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}[5m]), 0))",
+          "expr": "sum by (cluster,namespace,pod) (clamp_min(delta(k8s_container_restarts{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}[5m]), 0))",
           "editorMode": "code",
           "legendFormat": "{{cluster}} {{namespace}} / {{pod}}",
           "instant": false,
@@ -723,7 +723,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "k8s_pod_phase{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "expr": "k8s_pod_phase{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
           "legendFormat": "{{cluster}} {{namespace}} / {{pod}}",
           "instant": true,
@@ -773,7 +773,7 @@
         "w": 12,
         "h": 8
       },
-      "description": "",
+      "description": "Events from the selected cluster and resource. Expand a row and choose View event to open its exact record and integrity fields in Investigation.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -792,7 +792,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",source=\"kubernetes\"} | json cluster=\"resource.cluster\" | cluster=~\"${cluster:regex}\"",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",source=\"kubernetes\"} | json | __error__=\"\" | resource_cluster=~\"${cluster:regex}\" | line_format \"{{.resource_id}} \u00b7 {{.resource_cluster}} \u00b7 {{.resource_namespace}}/{{.resource_name}} \u00b7 {{.attributes_type}} \u00b7 {{.attributes_reason}} \u00b7 {{.outcome}}\"",
           "editorMode": "code",
           "legendFormat": "{{resource_id}}",
           "instant": false,
@@ -851,7 +851,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (cluster) (rate(container_cpu_usage_seconds_total{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\",container!=\"\",container!=\"POD\",pod!=\"\"}[$__rate_interval])) / sum by (cluster) (k8s_node_allocatable_cpu{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"})",
+          "expr": "sum by (cluster) (rate(container_cpu_usage_seconds_total{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\",container!=\"\",container!=\"POD\",pod!=\"\"}[$__rate_interval])) / sum by (cluster) (k8s_node_allocatable_cpu{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"})",
           "editorMode": "code",
           "legendFormat": "{{cluster}}",
           "instant": false,
@@ -914,7 +914,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (cluster) (container_memory_working_set_bytes{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\",container!=\"\",container!=\"POD\",pod!=\"\"})",
+          "expr": "sum by (cluster) (container_memory_working_set_bytes{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\",container!=\"\",container!=\"POD\",pod!=\"\"})",
           "editorMode": "code",
           "legendFormat": "{{cluster}}",
           "instant": false,
@@ -977,7 +977,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * otelcol_exporter_queue_size{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"} / otelcol_exporter_queue_capacity{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "expr": "100 * otelcol_exporter_queue_size{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"} / otelcol_exporter_queue_capacity{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
           "legendFormat": "{{cluster}} {{exporter}}",
           "instant": false,
@@ -1040,7 +1040,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (cluster,exporter) (increase(otelcol_exporter_send_failed_metric_points_total{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}[$__rate_interval]))",
+          "expr": "sum by (cluster,exporter) (increase(otelcol_exporter_send_failed_metric_points_total{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}[$__rate_interval]))",
           "editorMode": "code",
           "legendFormat": "{{cluster}} {{exporter}}",
           "instant": false,
@@ -1105,7 +1105,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "otelcol_exporter_prometheusremotewrite_wal_lag_ratio{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}",
+          "expr": "otelcol_exporter_prometheusremotewrite_wal_lag_ratio{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",cluster=~\"${cluster:regex}\"}",
           "editorMode": "code",
           "legendFormat": "{{cluster}} / {{job}}",
           "instant": false,

@@ -500,7 +500,7 @@
         "w": 8,
         "h": 3
       },
-      "description": "Exporter reachability for vm105. Open Infrastructure & Services for CPU, memory, disk and service health.",
+      "description": "Exporter reachability for vm105. Open this cluster for workload health, or its host for CPU, memory, disk and services.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -566,7 +566,11 @@
       },
       "links": [
         {
-          "title": "Open resource",
+          "title": "Open cluster",
+          "url": "/d/jengasec-kubernetes?var-cluster=red&var-resource=vm105&${environment:queryparam}&from=${__from}&to=${__to}"
+        },
+        {
+          "title": "Open host",
           "url": "/d/jengasec-infrastructure?var-resource=vm105&${environment:queryparam}&from=${__from}&to=${__to}"
         }
       ]
@@ -581,7 +585,7 @@
         "w": 8,
         "h": 3
       },
-      "description": "Exporter reachability for vm106. Open Infrastructure & Services for CPU, memory, disk and service health.",
+      "description": "Exporter reachability for vm106. Open this cluster for workload health, or its host for CPU, memory, disk and services.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -647,7 +651,11 @@
       },
       "links": [
         {
-          "title": "Open resource",
+          "title": "Open cluster",
+          "url": "/d/jengasec-kubernetes?var-cluster=blue&var-resource=vm106&${environment:queryparam}&from=${__from}&to=${__to}"
+        },
+        {
+          "title": "Open host",
           "url": "/d/jengasec-infrastructure?var-resource=vm106&${environment:queryparam}&from=${__from}&to=${__to}"
         }
       ]
