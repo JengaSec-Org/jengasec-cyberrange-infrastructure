@@ -275,7 +275,7 @@ jq --exit-status '
   all(
     .data.result[];
     (.stream | keys | sort) ==
-      ["application", "detected_level", "enterprise", "event_type", "namespace", "service_name", "severity", "source"]
+      ["application", "detected_level", "enterprise", "environment", "event_type", "namespace", "service_name", "severity", "source"]
   )
 ' "$TEMP_DIR/source-loki-response.json" >/dev/null \
   || die "Loki stream labels contain an unapproved field"
