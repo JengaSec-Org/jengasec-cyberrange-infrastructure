@@ -38,6 +38,7 @@ SRC="$(cd "$(dirname "$0")/../.." && pwd)"
 for f in ai-api/app/main.py ai-api/requirements.txt contracts/telemetry-event.schema.json contracts/telemetry-event-catalogue.yaml scripts/cells.yaml scripts/ai-teams.yaml; do
   [ -e "$SRC/$f" ] || die "$SRC/$f missing: run this from the repository or the bundle"
 done
+# shellcheck source=/dev/null
 . /etc/os-release
 [ "${VERSION_ID:-}" = 12 ] || log "warning: built for Debian 12, this is ${PRETTY_NAME:-unknown}"
 

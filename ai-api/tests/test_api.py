@@ -397,6 +397,9 @@ def test_admin_teams_overview(client):
 def test_every_contract_path_is_implemented(client):
     spec = yaml.safe_load((REPO / "contracts/ai-api/openapi.yaml").read_text(encoding="utf-8"))
     routes = {(m.lower(), r.path) for r in client.app.routes for m in getattr(r, "methods", set())}
+    # Included routers may be stored lazily. Generated OpenAPI resolves their
+    # mounted paths; the direct route list also covers hidden health endpoints.
+    routes.update((method, path) for path, methods in client.app.openapi()["paths"].items() for method in methods)
     for path, ops in spec["paths"].items():
         for method in ops:
             assert (method, f"/api/v1{path}") in routes, f"{method.upper()} {path} is in the contract but not implemented"
