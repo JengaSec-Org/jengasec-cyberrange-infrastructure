@@ -105,7 +105,7 @@ class ProcessorTests(unittest.TestCase):
                 "regarding": {"kind": "Pod", "name": "fixture-pod"},
                 "note": "payload-secret-sentinel", "deprecatedCount": 2,
             }
-            (root / "events.jsonl").write_text(json.dumps(event) + "\n")
+            (root / "events.jsonl").write_text(json.dumps({"type": "ADDED", "object": event}) + "\n")
             with socket.socket() as listener:
                 listener.bind(("127.0.0.1", 0))
                 port = listener.getsockname()[1]

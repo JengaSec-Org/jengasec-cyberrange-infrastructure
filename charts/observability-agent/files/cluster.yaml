@@ -14,6 +14,10 @@ receivers:
     - name: events
       mode: watch
       group: events.k8s.io
+      exclude_watch_type:
+      - DELETED
+      - BOOKMARK
+      - ERROR
   k8s_cluster:
     auth_type: serviceAccount
     collection_interval: 30s
@@ -165,6 +169,7 @@ processors:
     - context: log
       statements:
       - set(cache["event"], body)
+      - set(cache["event"], body["object"]) where IsMap(body["object"])
       - set(body, ParseJSON("{}"))
       - set(body["schema_version"], "infrastructure/1.0")
       - set(body["record_family"], "infrastructure_telemetry")
