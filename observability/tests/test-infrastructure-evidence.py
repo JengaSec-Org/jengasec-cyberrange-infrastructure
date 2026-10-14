@@ -52,6 +52,26 @@ class InfrastructureEvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.select([first, later])
 
+    def test_retry_preserves_first_verified_attribution_and_rejects_stale_ids(self):
+        first = record()
+        first["attribution"] = {"identity_source": "jengasec_provisioning", "mapping_state": "native_only",
+                                "authorization": "none", "state": "known", "snapshot_hash": "sha256:" + "1" * 64,
+                                "captured_at": "2026-10-14T08:59:00Z", "expires_at": "2026-10-14T09:01:00Z",
+                                "source": {"participant_id": "9007199254740993", "role": "red_participant"}}
+        del first["integrity_hash"]
+        first["integrity_hash"] = "sha256:" + digest(canonical(first))
+        later = copy.deepcopy(first)
+        later["received_ts"] = "2026-10-14T09:02:00.000000Z"
+        later["attribution"] = {"identity_source": "jengasec_provisioning", "mapping_state": "native_only", "authorization": "none", "state": "expired"}
+        del later["integrity_hash"]
+        later["integrity_hash"] = "sha256:" + digest(canonical(later))
+        self.assertEqual(self.select([later, first]), [first])
+        later["attribution"]["source"] = first["attribution"]["source"]
+        del later["integrity_hash"]
+        later["integrity_hash"] = "sha256:" + digest(canonical(later))
+        with self.assertRaisesRegex(ValueError, "schema"):
+            self.select([later])
+
     def test_empty_pack_is_valid_private_separate_and_idempotent(self):
         selection = {"resource_ids": ["test-host"], "start_ts": "2026-10-14T09:00:00Z", "end_ts": "2026-10-14T09:05:00Z", "environment": "validation", "event_ids": []}
         with tempfile.TemporaryDirectory() as directory:

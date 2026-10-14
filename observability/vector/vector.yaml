@@ -5,6 +5,14 @@ api:
   address: 0.0.0.0:8686
 
 enrichment_tables:
+  infrastructure_attribution:
+    type: memory
+    inputs:
+      - infrastructure_attribution_updates
+    ttl: 300
+    scan_interval: 1
+    max_byte_size: 16777216
+
   event_catalogue:
     type: file
     file:
@@ -34,6 +42,14 @@ enrichment_tables:
         type: csv
 
 sources:
+  infrastructure_attribution_http:
+    type: http_server
+    address: 0.0.0.0:8688
+    path: /
+    acknowledgements: true
+    decoding:
+      codec: bytes
+
   application_logs:
     type: docker_logs
     include_labels:
@@ -584,6 +600,59 @@ transforms:
       )
       . = normalized
 
+  infrastructure_attribution_updates:
+    type: remap
+    inputs:
+      - infrastructure_attribution_http
+    drop_on_error: true
+    drop_on_abort: true
+    source: |
+      raw = string!(.message)
+      assert!(length(raw) <= 8388608)
+      update = object!(parse_json!(raw))
+      for_each(keys(update)) -> |_index, key| {
+        assert!(includes(["contract_version", "identity_source", "mapping_state", "authorization", "state", "allocations", "captured_at", "expires_at", "snapshot_hash"], key))
+      }
+      assert_eq!(string!(update.contract_version), "infrastructure-attribution/1.0")
+      assert_eq!(string!(update.identity_source), "jengasec_provisioning")
+      assert_eq!(string!(update.mapping_state), "native_only")
+      assert_eq!(string!(update.authorization), "none")
+      state = string!(update.state)
+      assert!(includes(["fresh", "unavailable", "stale"], state))
+      allocations = array!(update.allocations)
+      assert!(length(allocations) <= 10000)
+      status = {"state": state}
+      entries = {}
+      if state == "fresh" {
+        captured = parse_timestamp!(string!(update.captured_at), format: "%+")
+        expires = parse_timestamp!(string!(update.expires_at), format: "%+")
+        assert!(captured <= now() && now() < expires)
+        assert!(to_unix_timestamp(expires) - to_unix_timestamp(captured) <= 300)
+        hash = string!(update.snapshot_hash)
+        assert!(match(hash, r'^sha256:[a-f0-9]{64}$'))
+        status.captured_at = string!(update.captured_at)
+        status.expires_at = string!(update.expires_at)
+        status.snapshot_hash = hash
+        for_each(allocations) -> |_index, value| {
+          row = object!(value)
+          for_each(keys(row)) -> |_i, key| { assert!(includes(["ip_address", "participant_id", "team_id", "role"], key)) }
+          address = string!(row.ip_address)
+          assert!(is_ipv4(address) || is_ipv6(address))
+          assert!(is_null(get!(entries, [address])), "duplicate native allocation")
+          assert!(match(string!(row.participant_id), r'^[1-9][0-9]{0,18}$'))
+          assert!(includes(["blue_participant", "red_participant", "judge", "infrastructure_staff"], string!(row.role)))
+          identity = {"participant_id": string!(row.participant_id), "role": string!(row.role), "snapshot_hash": hash}
+          if exists(row.team_id) {
+            assert!(match(string!(row.team_id), r'^[1-9][0-9]{0,18}$'))
+            identity.team_id = string!(row.team_id)
+          }
+          entries = set!(entries, [address], identity)
+        }
+      } else {
+        assert_eq!(length(allocations), 0)
+      }
+      . = set!(entries, ["__status__"], status)
+
   normalized_infrastructure:
     type: remap
     inputs:
@@ -780,6 +849,39 @@ transforms:
       collector = if source == "kubernetes" { "otel-kubernetes/1.0" } else { "jengasec-event-agent/1.0" }
       transport = if string!(.source_hint) == "otlp" { "otlp" } else { "https" }
       normalized.provenance = {"collector": collector, "transport": transport}
+      attribution = {"identity_source": "jengasec_provisioning", "mapping_state": "native_only", "authorization": "none", "state": "not_applicable"}
+      if string!(original.environment) == "live" && (exists(attributes.src_ip) || exists(attributes.dst_ip)) {
+        attribution.state = "unavailable"
+        current, current_error = get_enrichment_table_record("infrastructure_attribution", {"key": "__status__"})
+        if current_error == null {
+          status = object(current.value) ?? {}
+          if status.state == "stale" { attribution.state = "stale" }
+          if status.state == "fresh" {
+            captured = parse_timestamp(to_string(status.captured_at) ?? "", format: "%+") ?? now()
+            expires = parse_timestamp(to_string(status.expires_at) ?? "", format: "%+") ?? now()
+            if now() >= expires {
+              attribution.state = "expired"
+            } else if parsed_ts < captured || parsed_ts >= expires {
+              attribution.state = "outside_window"
+            } else {
+              attribution.state = "unknown"
+              attribution.captured_at = status.captured_at
+              attribution.expires_at = status.expires_at
+              attribution.snapshot_hash = status.snapshot_hash
+              for_each({"source": to_string(attributes.src_ip) ?? "", "destination": to_string(attributes.dst_ip) ?? ""}) -> |endpoint, address| {
+                native, native_error = get_enrichment_table_record("infrastructure_attribution", {"key": address})
+                if native_error == null && native.value.snapshot_hash == status.snapshot_hash {
+                  identity = object(native.value) ?? {}
+                  del(identity.snapshot_hash)
+                  attribution = set!(attribution, [endpoint], identity)
+                  attribution.state = "known"
+                }
+              }
+            }
+          }
+        }
+      }
+      normalized.attribution = attribution
       normalized.integrity_hash = "sha256:" + sha2(encode_json(normalized), variant: "SHA-256")
       . = normalized
 

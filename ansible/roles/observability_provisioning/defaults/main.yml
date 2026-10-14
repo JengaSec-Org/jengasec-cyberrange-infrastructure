@@ -14,6 +14,7 @@ obs_provisioning_listen_address: ""
 obs_provisioning_allowed_client_address: ""
 obs_provisioning_allowed_client_certificate_sha256: ""
 obs_provisioning_source_address: ""
+obs_provisioning_attribution_endpoint: ""
 obs_provisioning_tls_ca_path: /etc/jengasec-node-exporter/tls/ca.crt
 obs_provisioning_tls_cert_path: /etc/jengasec-node-exporter/tls/server.crt
 obs_provisioning_tls_key_path: /etc/jengasec-node-exporter/tls/server.key

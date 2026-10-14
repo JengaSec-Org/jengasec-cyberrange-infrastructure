@@ -1,0 +1,38 @@
+{
+  "schema_version": "infrastructure/1.0",
+  "record_family": "infrastructure_telemetry",
+  "environment": "validation",
+  "source": "network",
+  "resource_id": "test-host",
+  "event_type": "network.flow",
+  "source_event_id": "3b21278178ed3463f3bde3a35f088caf6d99ff1b2f647d9a0c2b8de599ec3dc6",
+  "ts": "2026-10-14T09:00:00Z",
+  "severity": "low",
+  "outcome": "unknown",
+  "resource": {
+    "interface": "wg0"
+  },
+  "attributes": {
+    "src_ip": "192.0.2.10",
+    "dst_ip": "198.51.100.2",
+    "src_port": 40000,
+    "dst_port": 443,
+    "protocol": "TCP",
+    "bytes": 1200,
+    "packets": 10,
+    "sampling_rate": 1
+  },
+  "attribution": {
+    "identity_source": "jengasec_provisioning",
+    "mapping_state": "native_only",
+    "authorization": "none",
+    "state": "known",
+    "source": {
+      "participant_id": "42",
+      "role": "red_participant"
+    },
+    "captured_at": "2026-10-14T09:00:00Z",
+    "expires_at": "2026-10-14T09:02:00Z",
+    "snapshot_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  }
+}

@@ -25,14 +25,29 @@ The normalizer checks the source schema and the resource inventory. It adds
 `integrity_hash` is `sha256:` followed by SHA-256 of the stored object before
 that field is added. The encoding is UTF-8 JSON with keys sorted recursively,
 no extra whitespace and no ASCII escaping. A delivery retry can produce the
-same event ID with a later receipt time. Exports verify each record before
-deduplicating those retries.
+same event ID with a later receipt time or newer optional attribution. Exports
+verify each record before deduplicating retries and retain the earliest
+verified receipt, including its original attribution.
 
 The staff Loki tenant stores these records. The allowed labels are
 `record_family`, `environment`, `source`, `resource_id`, `event_type` and
 `severity`. Resource IDs come from a deployment allowlist. Resource names,
 service names, addresses, ports and event IDs stay in the JSON body.
 Application organizations never receive this stream.
+
+The optional normalized `attribution` object is an observation-only lookup
+from the private native provisioning cache. It always states
+`identity_source=jengasec_provisioning`, `mapping_state=native_only` and
+`authorization=none`. A `known` result carries `source` or `destination`
+participant, optional team and role fields, plus the original snapshot hash,
+capture time and expiry. IDs remain native decimal strings in the body.
+The normalizer does not accept attribution from event producers.
+
+The current native snapshot must be fresh and the event must fall within its
+capture window. A failed pull clears the lookup before it fetches. Unknown,
+stale, expired and out-of-window records carry no identity; validation and
+rehearsal records remain un-attributed. A current lookup cannot reconstruct
+earlier assignments and never supplies access or scoring authority.
 
 | Event | Meaning |
 |---|---|

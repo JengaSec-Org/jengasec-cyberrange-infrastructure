@@ -12,6 +12,7 @@
       - obs_provisioning_port | int > 1024
       - obs_provisioning_port | int < 65536
       - obs_provisioning_mode != 'cache' or obs_provisioning_source_address | length > 0
+      - obs_provisioning_attribution_endpoint | length == 0 or obs_provisioning_mode == 'cache'
       - not obs_provisioning_endpoint_enabled or obs_provisioning_mode == 'source'
       - not obs_provisioning_endpoint_enabled or obs_provisioning_listen_address | length > 0
       - not obs_provisioning_endpoint_enabled or obs_provisioning_allowed_client_address | length > 0
@@ -115,6 +116,7 @@
           'allowed_client_address': obs_provisioning_allowed_client_address,
           'allowed_client_certificate_sha256': obs_provisioning_allowed_client_certificate_sha256,
           'source_address': obs_provisioning_source_address,
+          'attribution_endpoint': obs_provisioning_attribution_endpoint,
           'port': obs_provisioning_port | int} | to_nice_json }}
     dest: "{{ obs_provisioning_config_root }}/config.json"
     mode: "0600"

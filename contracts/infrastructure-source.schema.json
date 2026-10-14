@@ -29,6 +29,11 @@
             "required": [
               "provenance"
             ]
+          },
+          {
+            "required": [
+              "attribution"
+            ]
           }
         ]
       }
@@ -190,6 +195,9 @@
               ]
             }
           }
+        },
+        "attribution": {
+          "$ref": "#/$defs/native_attribution"
         }
       },
       "allOf": [
@@ -775,6 +783,130 @@
                   }
                 }
               }
+            }
+          }
+        }
+      ]
+    },
+    "native_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "participant_id",
+        "role"
+      ],
+      "properties": {
+        "participant_id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,18}$"
+        },
+        "team_id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,18}$"
+        },
+        "role": {
+          "enum": [
+            "blue_participant",
+            "red_participant",
+            "judge",
+            "infrastructure_staff"
+          ]
+        }
+      }
+    },
+    "native_attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity_source",
+        "mapping_state",
+        "authorization",
+        "state"
+      ],
+      "properties": {
+        "identity_source": {
+          "const": "jengasec_provisioning"
+        },
+        "mapping_state": {
+          "const": "native_only"
+        },
+        "authorization": {
+          "const": "none"
+        },
+        "state": {
+          "enum": [
+            "known",
+            "unknown",
+            "unavailable",
+            "stale",
+            "expired",
+            "outside_window",
+            "not_applicable"
+          ]
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "snapshot_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "source": {
+          "$ref": "#/$defs/native_identity"
+        },
+        "destination": {
+          "$ref": "#/$defs/native_identity"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "known"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "captured_at",
+              "expires_at",
+              "snapshot_hash"
+            ],
+            "anyOf": [
+              {
+                "required": [
+                  "source"
+                ]
+              },
+              {
+                "required": [
+                  "destination"
+                ]
+              }
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "source"
+                  ]
+                },
+                {
+                  "required": [
+                    "destination"
+                  ]
+                }
+              ]
             }
           }
         }

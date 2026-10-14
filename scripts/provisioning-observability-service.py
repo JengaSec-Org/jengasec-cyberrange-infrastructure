@@ -16,6 +16,7 @@ import re
 import socket
 import ssl
 import time
+import urllib.parse
 
 
 SPEC = importlib.util.spec_from_file_location(
@@ -24,6 +25,48 @@ ADAPTER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ADAPTER)
 MAX_ENVELOPE = ADAPTER.MAX_BYTES + 16384
 ROUTE = "/v1/provisioning/snapshot"
+ATTRIBUTION_ROUTE = "/api/v1/infrastructure-attribution"
+
+
+def attribution_update(snapshot=None, *, state="unavailable"):
+    """Build a separate observation-only lookup from validated native rows."""
+    update = {"contract_version": "infrastructure-attribution/1.0",
+              "identity_source": "jengasec_provisioning", "mapping_state": "native_only",
+              "authorization": "none", "state": state, "allocations": []}
+    if snapshot is None:
+        return update
+    update.update(state="fresh", captured_at=snapshot["captured_at"], expires_at=snapshot["expires_at"],
+                  snapshot_hash=ADAPTER.snapshot_hash(ADAPTER.encode(snapshot)))
+    participants = {row["participant_id"]: row for row in snapshot["records"]["participants"]}
+    for allocation in snapshot["records"]["allocations"]:
+        if allocation["effective_state"] != "active":
+            continue
+        participant = participants[allocation["participant_id"]]
+        row = {"ip_address": allocation["vpn_address"], "participant_id": participant["participant_id"],
+               "role": participant["role"]}
+        if participant["team_id"] is not None:
+            row["team_id"] = participant["team_id"]
+        update["allocations"].append(row)
+    return update
+
+
+def publish_attribution(config, update):
+    """Wait for the private receiver to acknowledge an in-memory table update."""
+    url = urllib.parse.urlsplit(config["attribution_endpoint"])
+    if (url.scheme != "https" or not url.hostname or url.username or url.password
+            or url.query or url.fragment or url.path != ATTRIBUTION_ROUTE):
+        raise ADAPTER.SnapshotError("invalid_configuration")
+    connection = http.client.HTTPSConnection(url.hostname, url.port or 443, timeout=5,
+                                             context=client_context(config))
+    try:
+        connection.request("POST", url.path, body=ADAPTER.encode(update),
+                           headers={"Content-Type": "application/json"})
+        response = connection.getresponse()
+        if response.status != 200:
+            raise ADAPTER.SnapshotError("attribution_unavailable")
+        response.read(4096)
+    finally:
+        connection.close()
 
 
 def private_directory(path):
@@ -112,7 +155,7 @@ def failed_cache(output, *, now=None):
     ADAPTER.atomic_write(output / "provisioning-status.json", ADAPTER.encode(status))
 
 
-def pull_snapshot(output, fetch, *, now=None):
+def pull_snapshot(output, fetch, *, now=None, publish=None):
     private_directory(output)
     with (output / "refresh.lock").open("a") as lock:
         os.chmod(lock.name, 0o600)
@@ -120,16 +163,34 @@ def pull_snapshot(output, fetch, *, now=None):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise ADAPTER.SnapshotError("refresh_already_running") from error
+        # Clear the local commit marker and the central observation-only index
+        # before beginning a pull. A failed fetch cannot retain usable identities.
+        (output / "provisioning-status.json").unlink(missing_ok=True)
+        empty = attribution_update()
+        ADAPTER.atomic_write(output / "infrastructure-attribution.json", ADAPTER.encode(empty))
+        if publish is not None:
+            publish(empty)
         try:
             envelope = fetch()
             snapshot = validate_envelope(envelope, now=now)
         except (OSError, ValueError, http.client.HTTPException):
             failed_cache(output, now=now)
+            stale = attribution_update(state="stale")
+            ADAPTER.atomic_write(output / "infrastructure-attribution.json", ADAPTER.encode(stale))
+            if publish is not None:
+                try:
+                    publish(stale)
+                except (OSError, ValueError, http.client.HTTPException):
+                    pass  # The earlier acknowledged empty table still fails closed.
             raise ADAPTER.SnapshotError("source_unavailable") from None
         # Keep the original source clock and hash. Polling cannot extend expiry.
         (output / "provisioning-status.json").unlink(missing_ok=True)
         ADAPTER.atomic_write(output / "provisioning-snapshot.json", ADAPTER.encode(snapshot))
         ADAPTER.atomic_write(output / "provisioning-status.json", ADAPTER.encode(envelope["status"]))
+        update = attribution_update(snapshot)
+        if publish is not None:
+            publish(update)
+        ADAPTER.atomic_write(output / "infrastructure-attribution.json", ADAPTER.encode(update))
         return snapshot
 
 
@@ -295,7 +356,8 @@ def main():
             ADAPTER.refresh(args.output_dir, lambda: ADAPTER.fetch_database(local_peer=True, database=args.database),
                             database=args.database, max_age=args.max_age_seconds)
         else:
-            pull_snapshot(args.output_dir, lambda: fetch_https(config))
+            publish = (lambda update: publish_attribution(config, update)) if config.get("attribution_endpoint") else None
+            pull_snapshot(args.output_dir, lambda: fetch_https(config), publish=publish)
         success = True
     finally:
         if args.metrics_file:

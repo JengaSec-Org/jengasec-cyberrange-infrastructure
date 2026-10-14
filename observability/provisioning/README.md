@@ -159,6 +159,28 @@ environment labels; snapshots contribute no identity labels.
 Run `python3 observability/tests/test-provisioning-service.py` for exchange,
 content validation, failed pulls, recovery and aggregate health checks.
 
+The central cache can publish a separate infrastructure lookup when
+`obs_provisioning_attribution_endpoint` points to the existing collector's
+HTTPS `/api/v1/infrastructure-attribution` route. Restrict that route to the
+exact cache client certificate. General event clients must not write this
+lookup. Its internal Vector listener must not be published on a host port.
+
+Before fetching, the cache removes its local commit marker, atomically writes
+an empty `infrastructure-attribution.json`, and waits for the collector to
+acknowledge the empty lookup. It does not fetch if invalidation fails. After
+validating and committing a fresh source snapshot, it publishes only active
+native allocations with the original hash and capture window. Failed pulls
+leave an unusable state. An empty successful snapshot removes prior matches.
+The Vector memory table holds at most 16 MiB and expires entries after 300
+seconds; each lookup also checks the shorter original source expiry.
+
+Only live infrastructure events whose event time falls inside the original
+capture window can receive native participant, team and role fields. Unknown,
+stale, expired and earlier events receive no identity. IDs appear only in the
+optional normalized event body. The source event schema forbids producers
+from supplying attribution. This lookup does not update competition identity,
+Grafana membership, application attribution or firewall policy.
+
 To stop collection, disable the source and cache timers and stop the optional
 endpoint. Existing snapshot bytes become unusable at their original expiry.
 For rollback, stop these OBS units, restore matching saved scripts, query,

@@ -57,7 +57,7 @@ def verify(record, check):
 
 
 def content_identity(record):
-    return canonical({key: value for key, value in record.items() if key not in {"received_ts", "integrity_hash", "provenance"}})
+    return canonical({key: value for key, value in record.items() if key not in {"received_ts", "integrity_hash", "provenance", "attribution"}})
 
 
 def select(records, resources, start, end, environment, event_ids):

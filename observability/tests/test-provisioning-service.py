@@ -11,6 +11,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
+from unittest.mock import Mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,6 +53,55 @@ class ProvisioningServiceTests(unittest.TestCase):
         self.assertEqual(result["records"]["participants"][0]["participant_id"], "9007199254740993")
         self.assertEqual(ADAPTER.read_current(self.cache, now=NOW + timedelta(seconds=120))[1], "expired")
         self.assertTrue(all(path.stat().st_mode & 0o777 == 0o600 for path in self.cache.iterdir()))
+
+    def test_native_attribution_is_cleared_before_fetch_and_published_after_commit(self):
+        SERVICE.pull_snapshot(self.cache, self.envelope, now=NOW)
+        published = []
+        def publish(update):
+            published.append(update)
+            if update["state"] == "fresh":
+                self.assertEqual(ADAPTER.read_current(self.cache, now=NOW)[1], "fresh")
+        def fetch():
+            self.assertEqual(published[-1]["state"], "unavailable")
+            self.assertEqual(published[-1]["allocations"], [])
+            self.assertEqual(ADAPTER.read_current(self.cache, now=NOW)[1], "unavailable")
+            return self.envelope()
+        result = SERVICE.pull_snapshot(self.cache, fetch, now=NOW, publish=publish)
+        update = published[-1]
+        self.assertEqual(update["authorization"], "none")
+        self.assertEqual(update["mapping_state"], "native_only")
+        self.assertEqual(update["snapshot_hash"], ADAPTER.snapshot_hash(ADAPTER.encode(result)))
+        self.assertEqual(update["captured_at"], result["captured_at"])
+        self.assertEqual(update["expires_at"], result["expires_at"])
+        self.assertEqual(update["allocations"], [{"ip_address": "192.0.2.10", "participant_id": "9007199254740993", "team_id": "2", "role": "red_participant"}])
+        self.assertEqual(update, json.loads((self.cache / "infrastructure-attribution.json").read_text()))
+
+    def test_invalidation_failure_never_starts_a_pull(self):
+        SERVICE.pull_snapshot(self.cache, self.envelope, now=NOW)
+        fetch = Mock(side_effect=self.envelope)
+        with self.assertRaises(OSError):
+            SERVICE.pull_snapshot(self.cache, fetch, now=NOW, publish=Mock(side_effect=OSError("unavailable")))
+        fetch.assert_not_called()
+        self.assertEqual(ADAPTER.read_current(self.cache, now=NOW)[1], "unavailable")
+        self.assertEqual(json.loads((self.cache / "infrastructure-attribution.json").read_text())["allocations"], [])
+
+    def test_failed_fetch_leaves_only_an_unusable_attribution_state(self):
+        updates = []
+        SERVICE.pull_snapshot(self.cache, self.envelope, now=NOW, publish=updates.append)
+        with self.assertRaises(ADAPTER.SnapshotError):
+            SERVICE.pull_snapshot(self.cache, lambda: {}, now=NOW, publish=updates.append)
+        self.assertEqual([item["state"] for item in updates[-2:]], ["unavailable", "stale"])
+        for item in updates[-2:]:
+            self.assertEqual(item["allocations"], [])
+            self.assertNotIn("participant_id", json.dumps(item))
+        self.assertEqual(ADAPTER.read_current(self.cache, now=NOW)[1], "stale")
+
+    def test_attribution_contains_only_active_native_allocations(self):
+        snapshot = self.envelope()["snapshot"]
+        for state in ("inactive", "revoked", "expired", "unknown"):
+            with self.subTest(state=state):
+                snapshot["records"]["allocations"][0]["effective_state"] = state
+                self.assertEqual(SERVICE.attribution_update(snapshot)["allocations"], [])
 
     def test_hash_and_native_contract_both_reject_invalid_data(self):
         def extra_field(e):
