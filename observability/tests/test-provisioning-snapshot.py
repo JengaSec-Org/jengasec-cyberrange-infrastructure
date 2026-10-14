@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import errno
 import fcntl
 import importlib.util
+import ipaddress
 import json
 from pathlib import Path
 import subprocess
@@ -129,7 +130,7 @@ class ProvisioningTests(unittest.TestCase):
         self.assertIsNone(snapshot["records"]["targets"][0]["endpoint_ip"])
 
     def test_supported_ip_literals_remain_schema_valid_and_resolvable(self):
-        for value, normalized in (("192.0.2.10", "192.0.2.10"),
+        for value, equivalent in (("192.0.2.10", "192.0.2.10"),
                                   ("2001:0DB8::0010", "2001:db8::10"),
                                   ("::ffff:192.0.2.10", "::ffff:c000:20a")):
             with self.subTest(value=value):
@@ -137,11 +138,15 @@ class ProvisioningTests(unittest.TestCase):
                 payload["allocations"][0]["vpn_address"] = value
                 payload["targets"][0]["endpoint_ip"] = value
                 snapshot = self.refresh(payload)
-                self.assertEqual(snapshot["records"]["allocations"][0]["vpn_address"], normalized)
-                self.assertEqual(snapshot["records"]["targets"][0]["endpoint_ip"], normalized)
-                result = ADAPTER.resolve_address(self.output, value, now=NOW)
-                self.assertEqual(result["state"], "known")
-                self.assertEqual(result["authorization"], "none")
+                allocation = snapshot["records"]["allocations"][0]["vpn_address"]
+                self.assertEqual(allocation, snapshot["records"]["targets"][0]["endpoint_ip"])
+                # Python versions use hex or dotted notation for mapped IPv6.
+                self.assertEqual(ipaddress.ip_address(allocation), ipaddress.ip_address(equivalent))
+                for lookup in (value, equivalent):
+                    result = ADAPTER.resolve_address(self.output, lookup, now=NOW)
+                    self.assertEqual(result["state"], "known")
+                    self.assertEqual(result["participant_id"], "9007199254740993")
+                    self.assertEqual(result["authorization"], "none")
 
     def test_scoped_allocation_addresses_invalidate_prior_attribution(self):
         for value in ("fe80::1%wg0", "fe80::1%2", "fe80::1%DO_NOT_EXPORT"):
