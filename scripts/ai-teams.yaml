@@ -1,0 +1,26 @@
+# The AI track teams (Competition Architecture §3, §5.2, §15). AI teams are not cells: they host
+# nothing on Server 3, run their agents on their own machines, and reach the range over WireGuard.
+#
+# Owner: AIC. DATA, not configuration: regenerate it from the competition website's allocation export
+#   python manage.py export_range --competition <id> --out <dir>          (website repo)
+#   python ai-api/scripts/import-ai-teams.py <dir>/allocation.csv          (this repo)
+# The team_id values below are EXAMPLES until that import has run.
+#
+#   code       short name used in the AI API, its logs and runbooks (AI-01…AI-03, RI-01…RI-06)
+#   team_id    the website's team identifier; telemetry actor.team_id carries the same value, and
+#              the AI marks pushed to the website's POST /api/feed are addressed to it
+#   role       ai-blue = reads all telemetry for all 18 apps, posts decisions, requests shadow actions
+#              ai-red  = reads only events whose actor.team_id is its own, and the alerts they triggered
+#   wg_range   the team's WireGuard /24 (contracts/address-plan.md: AI Blue 10.62.n, AI Red 10.64.n)
+#   paired     ai-red only: the AI Blue team it tries to make wrong (2 AI Red per AI Blue)
+#   enabled    false = not allocated; no token is issued and an existing one stops working
+teams:
+  - { code: AI-01, team_id: JS26-B-901, role: ai-blue, wg_range: 10.62.1.0/24, enabled: true }
+  - { code: AI-02, team_id: JS26-B-902, role: ai-blue, wg_range: 10.62.2.0/24, enabled: true }
+  - { code: AI-03, team_id: JS26-B-903, role: ai-blue, wg_range: 10.62.3.0/24, enabled: true }
+  - { code: RI-01, team_id: JS26-R-901, role: ai-red, wg_range: 10.64.1.0/24, paired: AI-01, enabled: true }
+  - { code: RI-02, team_id: JS26-R-902, role: ai-red, wg_range: 10.64.2.0/24, paired: AI-01, enabled: true }
+  - { code: RI-03, team_id: JS26-R-903, role: ai-red, wg_range: 10.64.3.0/24, paired: AI-02, enabled: true }
+  - { code: RI-04, team_id: JS26-R-904, role: ai-red, wg_range: 10.64.4.0/24, paired: AI-02, enabled: true }
+  - { code: RI-05, team_id: JS26-R-905, role: ai-red, wg_range: 10.64.5.0/24, paired: AI-03, enabled: true }
+  - { code: RI-06, team_id: JS26-R-906, role: ai-red, wg_range: 10.64.6.0/24, paired: AI-03, enabled: true }

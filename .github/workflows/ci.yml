@@ -23,3 +23,22 @@ jobs:
           version: v3.22.0
       - name: Static and contract checks
         run: PATH="/tmp/jengasec-contract-venv/bin:$PATH" make lint
+
+  ai-api:
+    # AI-owned: the AI API tests, scenario data against telemetry v2, and the VM deploy scripts.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: AI API tests and scenario validation
+        run: |
+          pip install -r ai-api/requirements-dev.txt
+          (cd ai-api && pytest -q)
+          python ai-api/scripts/validate-scenarios.py
+      - name: Deploy scripts
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck ai-api/deploy/*.sh
+          ./ai-api/deploy/make-bundle.sh /tmp

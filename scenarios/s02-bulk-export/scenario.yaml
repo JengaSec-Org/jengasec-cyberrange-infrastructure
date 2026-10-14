@@ -1,0 +1,25 @@
+id: s02
+name: bulk-export
+enterprise: ENT-B
+application: APP06       # namespace jengasec-ent-b-app06
+summary: >-
+  A Red team using a stolen back-office login (staff-17) signs in to the Internal Back-Office
+  Portal from a Red address, browses a few customer records, tries one large export (denied by
+  the app's limit), then pulls the customer table in 200-record pages to stay under the limit.
+  Real staff use the portal normally from Blue-side addresses during the same window.
+attack_ids:
+  - T1078                   # valid accounts
+  - T1530                   # data from cloud storage / application
+  - T1005                   # data from local system
+duration_minutes: 15
+expected_detections:
+  - "staff_login for staff-17 from a Red range (10.60.7.2) instead of the usual Blue-side address"
+  - "a denied bulk_export (data_export, high) followed by many small data_export events from the same session"
+  - "total exported records far above normal staff behaviour"
+expected_responses:
+  - "alert naming staff-17 and the export events as evidence"
+  - "revoke-session for staff-17, then disable-account"
+  - "snapshot-evidence for ENT-B APP06"
+unacceptable_responses:
+  - "disabling every staff account in the cell"
+  - "isolate-workload on ENT-B APP06 (takes the whole portal down for real staff)"

@@ -1,0 +1,104 @@
+diff --git a/services/provision_worker.py b/services/provision_worker.py
+index bafd069..d3a3fef 100644
+--- a/services/provision_worker.py
++++ b/services/provision_worker.py
+@@ -17,6 +17,17 @@ SERVER_ADDRESS=os.getenv("WG_SERVER_ADDRESS","10.250.0.1/22")
+ FIRST_MEMBER_HOST=int(os.getenv("VPN_FIRST_MEMBER_HOST","10"))
+ PARTICIPANT_POOLS=json.loads(os.getenv('JENGASEC_PEER_CIDRS_JSON','["10.60.0.0/16","10.61.0.0/16","10.62.0.0/16","10.63.0.0/24","10.64.0.0/16"]'))
+ PROTECTED_CIDRS=json.loads(os.getenv('PROTECTED_CIDRS_JSON','["192.168.40.0/24","192.168.42.0/23","10.10.32.0/24","10.250.0.0/22","10.60.0.0/16","10.61.0.0/16","10.62.0.0/16","10.63.0.0/24","10.64.0.0/16"]'))
++# Platform services every participant of a given side/category may reach, e.g. the website (findings, VPN
++# configs, scoreboard) and the AI API. They live on the platform VM's VLAN 109 address, which is NOT a
++# competition target. Exact /32 + port allows, rendered BEFORE the protected-destination drop.
++# Example: [{"id":"website","endpoint":"10.109.0.10","protocol":"tcp","ports":[443],"sides":["red","blue"],
++#            "categories":["application","ai"],"staff":true},
++#           {"id":"ai-api","endpoint":"10.109.0.10","protocol":"tcp","ports":[8443],"sides":["red","blue"],
++#            "categories":["ai"],"staff":true}]
++PLATFORM_SERVICES=json.loads(os.getenv('PLATFORM_SERVICES_JSON','[]'))
++# Competition rule (Architecture 9 Oct, section 3.2): AI Red attacks the 18 applications, rate-limited at the
++# gateway. "applications" = every enabled application target; "ai" = the kit's original AI-target pairing.
++AI_RED_TARGETS=os.getenv('AI_RED_TARGETS','ai')
+ 
+ class ProvisionError(RuntimeError): pass
+ 
+@@ -88,10 +99,49 @@ def flows_for(cur):
+         proto=row['protocol'].lower()
+         if proto not in ('tcp','udp'): raise ProvisionError(f"Invalid policy protocol for target {row['target_id']}")
+         result.append((row['source_ip'],dest,proto,[int(row['permitted_ports'][0])],row['participant_id'],row['target_id'],row['action']))
++    if AI_RED_TARGETS == 'applications':
++        cur.execute("""SELECT host(v.vpn_address) source_ip,p.participant_id,t.target_id,t.endpoint,t.permitted_protocol,t.permitted_ports
++                      FROM participants p JOIN vpn_allocations v USING(participant_id) JOIN teams pt ON pt.team_id=p.team_id
++                      JOIN targets t ON t.enabled=true AND t.category='application'
++                      WHERE p.role='red_participant' AND pt.category='ai' AND p.status='active' AND p.eligible=true
++                        AND v.status='active' AND v.vpn_address IS NOT NULL""")
++        for row in cur.fetchall():
++            try: dest=str(ipaddress.ip_address(row['endpoint']))
++            except ValueError: raise ProvisionError(f"Target {row['target_id']} endpoint must be an IP literal: {row['endpoint']}")
++            proto=row['permitted_protocol'].lower(); ports=sorted(set(int(x) for x in (row['permitted_ports'] or [])))
++            if proto not in ('tcp','udp') or not ports: raise ProvisionError(f"Invalid target protocol/ports for target {row['target_id']}")
++            result.append((row['source_ip'],dest,proto,ports,row['participant_id'],row['target_id'],'allow'))
+     return result
+ 
++
++def service_matches(service, role, side, category):
++    if role in ('judge','infrastructure_staff'): return bool(service.get('staff'))
++    return side in service.get('sides',[]) and category in service.get('categories',[])
++
++
++def service_flows(cur):
++    """(source, endpoint, proto, ports, participant, service id) for every active participant and matching service."""
++    if not PLATFORM_SERVICES: return []
++    cur.execute("""SELECT host(v.vpn_address) source_ip,p.participant_id,p.role,t.side,t.category
++                   FROM participants p JOIN vpn_allocations v USING(participant_id) LEFT JOIN teams t ON t.team_id=p.team_id
++                   WHERE p.status='active' AND p.eligible=true AND v.status='active' AND v.vpn_address IS NOT NULL""")
++    rows=cur.fetchall(); result=[]
++    for s in PLATFORM_SERVICES:
++        dest=str(ipaddress.ip_address(s['endpoint'])); proto=s.get('protocol','tcp').lower()
++        ports=sorted(set(int(x) for x in s['ports']))
++        if proto not in ('tcp','udp') or not ports or any(x<1 or x>65535 for x in ports): raise ProvisionError(f"Invalid platform service {s.get('id')}")
++        for row in rows:
++            if service_matches(s,row['role'],row['side'],row['category']):
++                result.append((row['source_ip'],dest,proto,ports,row['participant_id'],s['id']))
++    return result
++
++
++def has_platform_service(role, side, category):
++    return any(service_matches(s,role,side,category) for s in PLATFORM_SERVICES)
++
+ def apply_firewall(cur):
+     flows=flows_for(cur)
++    services=service_flows(cur)
+     # Scope deny rules to JengaSec participant pools so other existing WireGuard peers are not silently disrupted.
+     lines=[f"flush chain inet {NFT_TABLE} forward_guard"]
+     pools=[]
+@@ -121,6 +171,11 @@ def apply_firewall(cur):
+     for network in sorted(protected_nets,key=lambda n:n.prefixlen):
+         if any(network.subnet_of(parent) for parent in protected): continue
+         protected.append(network)
++    # Platform services first: an exact participant /32 -> service /32 + port, so the website and AI API stay
++    # reachable even when their address sits inside a protected range. Nothing else on that host is.
++    for src,dst,proto,ports,pid,sid in services:
++        port_expr=', '.join(str(x) for x in ports)
++        lines.append(f'add rule inet {NFT_TABLE} forward_guard iifname "{IFACE}" ip saddr {src}/32 ip daddr {dst} {proto} dport {{ {port_expr} }} ct state {{ new, established, related }} accept comment "JengaSec service {sid} participant {pid}"')
+     if protected:
+         lines.append(f'add rule inet {NFT_TABLE} forward_guard iifname "{IFACE}" ip saddr {{ {scope_expr} }} ip daddr {{ {", ".join(str(n) for n in protected)} }} drop comment "JengaSec protected destinations"')
+     # Permit replies to participant clients, but never new inbound connections to them.
+@@ -136,7 +191,7 @@ def apply_firewall(cur):
+     content='\n'.join(lines)+'\n'
+     run(['nft','-c','-f','-'],content)
+     run(['nft','-f','-'],content)
+-    return len(flows)
++    return len(flows)+len(services)
+ 
+ def peer(action, key, address, pool):
+     args=['python3',WG_ADMIN,action,'--interface',IFACE,'--config',WG_CONFIG,'--pool',pool,'--server-address',SERVER_ADDRESS,'--public-key',key]
+@@ -198,7 +253,9 @@ def process_one():
+         with psycopg.connect(DSN,row_factory=dict_row) as conn, conn.cursor() as cur:
+             if job['role'] in ('blue_participant','red_participant'):
+                 cur.execute("SELECT 1 FROM targets t WHERE t.enabled=true AND ((%s='blue_participant' AND t.owner_team_id=%s) OR (%s='red_participant' AND EXISTS (SELECT 1 FROM target_assignments a WHERE a.red_team_id=%s AND a.target_id=t.target_id AND (a.starts_at IS NULL OR a.starts_at<=now()) AND (a.ends_at IS NULL OR a.ends_at>now())))) LIMIT 1",(job['role'],job['team_id'],job['role'],job['team_id']))
+-                if not cur.fetchone(): raise ProvisionError('No enabled authorized target assignment; participant left unprovisioned')
++                if not cur.fetchone() and not (has_platform_service(job['role'],job['side'],job['category'])
++                                               or (AI_RED_TARGETS=='applications' and job['role']=='red_participant' and job['category']=='ai')):
++                    raise ProvisionError('No enabled authorized target assignment or platform service; participant left unprovisioned')
+             address,key=allocate(cur,job)
+             # Allocation is committed before touching the host; on later failure it remains reserved and is never reassigned.
+             cur.execute("UPDATE provisioning_jobs SET request_json=request_json || %s WHERE job_id=%s",(Jsonb({'allocated_address':address}),job_id))

@@ -1,0 +1,14 @@
+# Copy this folder to scenarios/<id>-<name>/ and fill it in.
+id: s00
+name: example-scenario
+enterprise: ENT-A
+application: APP03       # namespace jengasec-ent-a-app03
+summary: >-
+  TODO(AIC-A3): one paragraph — what the attacker does and what a defender should notice.
+attack_ids:                 # MITRE ATT&CK technique IDs
+  - T1110.004               # e.g. credential stuffing
+duration_minutes: 10
+expected_detections:
+  - TODO: "burst of login_failure from one source_ip across many users"
+expected_responses:
+  - TODO: "block source_ip at the gateway (shadow mode: recorded, not applied)"
