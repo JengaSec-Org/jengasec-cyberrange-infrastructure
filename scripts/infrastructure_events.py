@@ -23,7 +23,7 @@ EVENT_SOURCES = {
 PROTOCOLS = {1: "ICMP", 6: "TCP", 17: "UDP", 47: "GRE", 50: "ESP", 51: "AH", 58: "ICMPV6", 132: "SCTP"}
 RULES = {
     "invalid", "peer_isolation", "protected_destination", "inbound_unsolicited",
-    "allowed_assignment", "established_return", "default_deny",
+    "allowed_assignment", "established_return", "default_deny", "assigned_policy",
 }
 
 

@@ -571,7 +571,8 @@
                       "inbound_unsolicited",
                       "allowed_assignment",
                       "established_return",
-                      "default_deny"
+                      "default_deny",
+                      "assigned_policy"
                     ]
                   }
                 }

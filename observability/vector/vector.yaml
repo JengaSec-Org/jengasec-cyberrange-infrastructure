@@ -693,7 +693,7 @@ transforms:
           assert!(includes(["TCP", "UDP", "ICMP", "ICMPV6", "SCTP", "GRE", "ESP", "AH", "OTHER"], string!(attributes.protocol)))
         }
           assert!(includes(["allowed", "refused"], string!(attributes.verdict)))
-          assert!(includes(["invalid", "peer_isolation", "protected_destination", "inbound_unsolicited", "allowed_assignment", "established_return", "default_deny"], string!(attributes.rule_id)))
+          assert!(includes(["invalid", "peer_isolation", "protected_destination", "inbound_unsolicited", "allowed_assignment", "established_return", "default_deny", "assigned_policy"], string!(attributes.rule_id)))
       } else if event_type == "ids.alert" {
         assert_eq!(source, "ids")
         allowed_attributes = ["src_ip", "dst_ip", "src_port", "dst_port", "protocol", "signature_id", "signature_revision", "category", "ids_action"]
@@ -762,6 +762,13 @@ transforms:
       normalized.provenance = {"collector": collector, "transport": transport}
       normalized.integrity_hash = "sha256:" + sha2(encode_json(normalized), variant: "SHA-256")
       . = normalized
+
+  infrastructure_loki:
+    type: remap
+    inputs:
+      - normalized_infrastructure
+    source: |
+      .timestamp = parse_timestamp!(string!(.ts), format: "%+")
 
   infrastructure_metric_fields:
     type: remap
@@ -927,7 +934,7 @@ sinks:
   loki_infrastructure:
     type: loki
     inputs:
-      - normalized_infrastructure
+      - infrastructure_loki
     endpoint: http://loki:3100
     tenant_id: staff
     healthcheck:
@@ -941,6 +948,8 @@ sinks:
       severity: "{{ severity }}"
     encoding:
       codec: json
+      except_fields:
+        - timestamp
     batch:
       timeout_secs: 1
     buffer:

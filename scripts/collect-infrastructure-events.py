@@ -189,7 +189,14 @@ def collect_ids(config, queue):
             try:
                 if len(line) > 65536:
                     raise ValueError("oversized IDS record")
-                value = map_ids(config, json.loads(line), marker + ":" + str(start))
+                raw = json.loads(line)
+                if raw.get("event_type") == "stats":
+                    stats = raw.get("stats", {})
+                    capture = stats.get("capture", {})
+                    queue.set("ids_packets_total", int(stats.get("decoder", {}).get("pkts", 0)))
+                    queue.set("ids_dropped_total", int(capture.get("pcap_drop", capture.get("kernel_drops", 0))))
+                    queue.set("ids_last_stats_timestamp_seconds", int(time.time()))
+                value = map_ids(config, raw, marker + ":" + str(start))
                 if value:
                     queue.append(value)
             except (ValueError, KeyError, TypeError):
@@ -198,6 +205,12 @@ def collect_ids(config, queue):
         queue.set("ids_file", marker)
         queue.set("ids_offset", offset)
         queue.set("ids_size", stat.st_size)
+        # Rotate only after this reader has consumed the complete file. HUP
+        # makes Suricata reopen its log without restarting packet capture.
+        if offset >= 32 * 1024 * 1024 and offset == stat.st_size:
+            path.replace(path.with_suffix(".json.1"))
+            subprocess.run(["systemctl", "kill", "--signal=HUP", "jengasec-suricata.service"],
+                           check=True, timeout=5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def heartbeat(config, queue, collection_ok=True):
@@ -232,7 +245,7 @@ def deliver(config, queue):
 
 def write_metrics(config, queue, collection_ok):
     count, used = queue.size()
-    values = {key: int(queue.get(key)) for key in ("dropped_total", "delivered_total", "rejected_total", "collection_errors_total", "delivery_errors_total", "last_delivery_timestamp_seconds", "last_collect_timestamp_seconds", "journal_lag_seconds", "flow_last_observed_timestamp_seconds")}
+    values = {key: int(queue.get(key)) for key in ("dropped_total", "delivered_total", "rejected_total", "collection_errors_total", "delivery_errors_total", "last_delivery_timestamp_seconds", "last_collect_timestamp_seconds", "journal_lag_seconds", "flow_last_observed_timestamp_seconds", "ids_packets_total", "ids_dropped_total", "ids_last_stats_timestamp_seconds")}
     values.update({"queue_events": count, "queue_bytes": used, "collection_success": int(collection_ok)})
     target = pathlib.Path(config["metrics_file"])
     target.parent.mkdir(parents=True, exist_ok=True)
