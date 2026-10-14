@@ -1,0 +1,77 @@
+---
+- name: Allow a single collector through an existing UFW policy
+  when: obs_node_manage_ufw | bool
+  block:
+    - name: Validate the exact private source and local destination
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import ipaddress, json, re, subprocess, sys
+            source, destination, interface, port = sys.argv[1:]
+            for value in (source, destination):
+                address = ipaddress.IPv4Address(value)
+                assert address.is_private and not (
+                    address.is_unspecified or address.is_loopback
+                    or address.is_link_local or address.is_multicast
+                ), "Collector ingress requires exact private IPv4 addresses"
+            assert source != destination, (
+                "Collector source must be a separate host")
+            assert re.fullmatch(r"[a-zA-Z0-9_.:-]{1,15}", interface), (
+                "Invalid interface")
+            assert 1024 < int(port) < 65536, "Invalid collector port"
+            result = subprocess.run(
+                ["ip", "-4", "-json", "address", "show", "dev", interface],
+                check=True, capture_output=True, text=True, timeout=5)
+            addresses = json.loads(result.stdout)
+            assert any(item.get("local") == destination
+                       for entry in addresses
+                       for item in entry.get("addr_info", [])), (
+                "Collector destination must belong to the selected interface")
+          - "{{ obs_node_ufw_source_address }}"
+          - "{{ obs_node_address }}"
+          - "{{ obs_node_ufw_interface }}"
+          - "{{ obs_node_port | string }}"
+      changed_when: false
+      check_mode: false
+
+    - name: Inspect UFW without enabling it
+      ansible.builtin.command:
+        argv: [ufw, status]
+      environment:
+        LC_ALL: C
+      register: obs_node_ufw_status
+      changed_when: false
+      check_mode: false
+
+    - name: Require an already active UFW policy
+      ansible.builtin.assert:
+        that:
+          - "'Status: active' in obs_node_ufw_status.stdout_lines"
+        fail_msg: Enable this option only on a host whose owner already uses UFW
+        quiet: true
+
+    - name: Allow authenticated metrics from the configured collector
+      ansible.builtin.command:
+        argv:
+          - ufw
+          - allow
+          - in
+          - "on"
+          - "{{ obs_node_ufw_interface }}"
+          - proto
+          - tcp
+          - from
+          - "{{ obs_node_ufw_source_address }}"
+          - to
+          - "{{ obs_node_address }}"
+          - port
+          - "{{ obs_node_port | string }}"
+          - comment
+          - JengaSec observability
+      environment:
+        LC_ALL: C
+      register: obs_node_ufw_rule
+      changed_when: >-
+        'Skipping adding existing rule' not in obs_node_ufw_rule.stdout

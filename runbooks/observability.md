@@ -340,6 +340,16 @@ local read-only `pg_monitor` queries and excludes its own connection. The VPN
 collector exports aggregate counts and traffic without peer keys. Zero peers
 is a valid empty state. The node exporter requires a client certificate.
 
+On a host that already uses active UFW, set `obs_node_manage_ufw: true`,
+`obs_node_ufw_source_address` to the collector's private IPv4 address, and
+`obs_node_ufw_interface` to the interface holding `obs_node_address`. This
+adds one incoming TCP rule for that source, destination, interface and
+`obs_node_port`. It does not enable UFW or change existing rules or policies.
+The option defaults to false. To remove the allowance, use `ufw delete allow
+in on INTERFACE proto tcp from COLLECTOR_IP to NODE_IP port NODE_PORT comment
+'JengaSec observability'` with the same inventory values. Disabling the option
+leaves the existing rule in place.
+
 Use `ansible/observability-event-agents.yml` for sanitized host events. Supply
 resource identity, service list, HTTPS receiver and client TLS paths in private
 inventory. The collector keeps its queue and cursor under

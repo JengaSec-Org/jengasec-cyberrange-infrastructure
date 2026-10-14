@@ -2,6 +2,9 @@
 obs_node_exporter_version: 1.12.1
 obs_node_address: ""
 obs_node_port: 9100
+obs_node_manage_ufw: false
+obs_node_ufw_source_address: ""
+obs_node_ufw_interface: ""
 obs_node_services: []
 obs_node_wireguard_interface: ""
 obs_node_postgresql: false
