@@ -205,7 +205,7 @@ class Collector:
                                 "window": {"start": utc(self.start), "end": utc(end)}, "facts": facts,
                                 "quality": quality, "assignment_revisions": revisions}
                     semantic = digest({key: value for key, value in archived.items() if key != "window"}
-                                      | {"final_window": end == self.end})
+                                      | {"final_window": end == self.end, "marks": str(result.marks)})
                     cursor_key = "score_input:" + key
                     if self.outbox.cursor(cursor_key) == semantic:
                         readiness[key] = "unchanged"

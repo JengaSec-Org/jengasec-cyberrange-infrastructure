@@ -461,7 +461,8 @@ website source, `obs_scoring_config_source` as the private JSON file, and only
 the explicit `obs_scoring_credentials` files. The role uses the existing Python
 runtime with JSON Schema and YAML support. It creates no accounts and changes
 no SSH settings. `obs_scoring_start` defaults to false. Review the selected
-host, storage budget, credentials and rollback before enabling the service.
+host, storage budget, credentials, state paths and recovery controls before
+enabling the service.
 
 The service keeps functional measurements on a separate schedule from slow
 publication. Its private `status.json` and `probes.json` distinguish delivery
@@ -553,12 +554,66 @@ actual effect, automatic expiry, explicit reversal and the kill switch on the
 approved network target. Have another reviewer reproduce the marks from the
 archived inputs. Local tests are not evidence of this live acceptance.
 
-Rollback starts by enabling the AI kill switch and verifying restoration of
-all active restrictions. Stop the scoring collector and gateway, disable their
-units, and restore their reviewed prior configuration or source release.
-Preserve queued rows, receipt cursors, website score history and held evidence.
-Do not flush shared firewall tables or delete scoring data. Resume with the
-same state only after source identity, policy and receiver compatibility pass.
+Use fix-forward recovery for code and configuration failures:
+
+1. Contain the affected operation. Stop incorrect publication through the
+   website's controls or stop `jengasec-scoring.service`. Keep OBS collection
+   and unaffected reads running where possible. For an unsafe AI restriction,
+   enable the actual actuator kill switch and verify functional restoration
+   before stopping the gateway. Kernel expiry, explicit reversal and the kill
+   switch remain required containment controls. Do not flush shared firewall
+   tables. Keep current-identity refresh running unless that component needs
+   repair.
+2. Record the affected release, configuration paths, service identities and
+   state paths privately. Preserve the collector's `delivery.sqlite3` and
+   `sources.sqlite3`, source and receipt cursors, rejected rows and retained
+   proof. Preserve each gateway and actuator `state_file`, evidence directory,
+   action keys, producer sequences and kill-switch state. Preserve website
+   score revisions, overrides, archive objects and appeal holds through the
+   website owner's recovery procedure. Source control cannot restore this
+   runtime state.
+3. Before a migration or storage repair, take a consistent private backup.
+   Stop all writers before copying a state directory, or use SQLite's backup
+   API for each database and coordinate the related stores and evidence.
+   A live copy of the main SQLite file alone can omit committed WAL data.
+   Retain required journal files and numeric ownership when copying stopped
+   state. Verify database integrity and that referenced evidence remains
+   readable. A backup from before an acknowledged export can be incomplete;
+   keep affected publication held until retained source proof and receiver
+   history establish what can be recovered.
+4. Apply a reviewed forward correction with compatible code, configuration
+   and migrations. Validate migrations on a copy first. Preserve existing
+   rows, stable component keys and the enrolled policy; do not reset databases,
+   counters, cursors, producer IDs or epochs to bypass a failure. Use a new
+   policy version only through the website's approved policy process. Stop
+   affected writers before replacing their installed source. The Ansible
+   roles update code and configuration in place; setting their `*_start`
+   options to false does not stop an already running service. These roles do
+   not reverse migrations or remove runtime state after a failed check.
+5. Run checks for the changed behavior and redeploy the corrected release
+   against the preserved state. Confirm credential and receiver compatibility,
+   source progress, queue delivery, archived inputs and stored revisions.
+   Fetch a fresh execution-authority snapshot before resuming actions. Keep
+   historical authority as evidence; never extend an old snapshot's expiry.
+   Reconcile actuator state and verify functional recovery before clearing
+   the kill switch. A restart must not replay a missing firewall restriction.
+
+A corrected calculation keeps `main:<criterion>` and receives the next
+delivery revision. The collector includes calculated marks in its input
+fingerprint, so changed results can produce a correction without deleting
+source cursors. Older input-only fingerprints are reevaluated once. Existing
+queued payloads and immutable evidence are not rewritten. A permanently
+rejected older row stays visible in queue metrics while an eligible higher
+revision can be delivered. Retry the same rejected payload only after fixing
+its rejection cause; changed facts or marks require a new revision. Verify
+the website's accepted revision and authorized view before resuming normal
+publication. Missing evidence or identity remains a hold.
+
+Use release rollback only for an incident where a forward correction cannot
+contain the harm adequately. Record that reason and check data compatibility
+before selecting an earlier binary. Reverting code does not reverse committed
+scores, restore database contents or remove a runtime action. A separate
+release-rollback drill is not a prerequisite for routine forward repair.
 
 For isolated integration validation, install the website's test dependencies,
 set `JENGASEC_PLATFORM_SOURCE` to its compatible checkout, and run

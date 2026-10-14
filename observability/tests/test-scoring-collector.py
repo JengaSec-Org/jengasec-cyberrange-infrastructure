@@ -130,6 +130,95 @@ class QueueTests(unittest.TestCase):
             self.box.fail(1, "Bearer secret\n")
 
 
+class CalculationCorrectionTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.path = pathlib.Path(self.directory.name) / "delivery.sqlite3"
+        self.box = Outbox(self.path)
+        self.addCleanup(lambda: self.box.close())
+        self.collector = Collector.__new__(Collector)
+        self.collector.outbox = self.box
+        self.collector.competition, self.collector.start, self.collector.end = 7, START, END
+        self.collector.platform, self.collector.proof = Mock(), Mock()
+        self.collector.identity = Mock(return_value={
+            "teams": [{"team": "JS26-B-014", "track": "application", "side": "blue", "revision": 1}],
+            "targets": [],
+        })
+        self.collector.collect = Mock(return_value=True)
+        self.collector.cache = Mock()
+        self.collector.cache.window.return_value = ([], [], [])
+        self.result = types.SimpleNamespace(status="ready", marks="12.00")
+        self.facts, self.quality = {"expected": 2, "successful": 1}, {}
+        policy = types.SimpleNamespace(calculate=Mock(side_effect=lambda *args, **kwargs: self.result))
+        patches = [
+            patch.dict(sys.modules, {"jengasec_scoring_policy": policy}),
+            patch("scoring_obs.cli.CRITERIA", {"application_blue": ("availability",)}),
+            patch("scoring_obs.cli.build", return_value=(self.facts, self.quality, [])),
+            patch("scoring_obs.cli.archive", return_value=[{"id": "immutable-input", "sha256": "fixed-input-hash"}]),
+        ]
+        for replacement in patches:
+            replacement.start()
+            self.addCleanup(replacement.stop)
+        self.key = "score_input:JS26-B-014:availability"
+        self.box.cursor("ai_receipts", {"after": "retained-source-cursor"})
+
+    def score(self):
+        return self.collector.score(now=END + dt.timedelta(minutes=3))["criteria"]["JS26-B-014:availability"]
+
+    def restart(self):
+        self.box.close()
+        self.box = self.collector.outbox = Outbox(self.path)
+
+    def test_changed_calculation_creates_next_revision_without_resetting_source_state(self):
+        self.assertEqual(self.score(), "queued")
+        original = copy.deepcopy(self.box.due()[0])
+        self.result.marks = "6.00"
+        self.assertEqual(self.score(), "queued")
+        rows = self.box.due()
+        self.assertEqual(rows[0], original)
+        self.assertEqual([(row["payload"]["scores"][0]["revision"], row["payload"]["scores"][0]["marks"])
+                          for row in rows], [(1, "12.00"), (2, "6.00")])
+        self.assertTrue(all(row["payload"]["scores"][0]["key"] == "main:availability" for row in rows))
+        self.assertTrue(all(row["payload"]["scores"][0]["policy_version"] == "main-scoring/1.0" for row in rows))
+        self.restart()
+        self.assertEqual(self.score(), "unchanged")
+        self.assertEqual(self.box.due(), rows)
+        self.assertEqual(self.box.cursor("ai_receipts"), {"after": "retained-source-cursor"})
+
+    def test_upgrade_from_old_fingerprint_preserves_rejection_and_delivers_correction(self):
+        self.score()
+        original = copy.deepcopy(self.box.due()[0])
+        # The earlier release persisted input-only fingerprints. Keep that
+        # state and the uncommitted payload while the corrected release runs.
+        self.box.cursor(self.key, digest({"policy_version": "main-scoring/1.0", "side": "application_blue",
+                        "criterion": "availability", "facts": self.facts, "quality": self.quality,
+                        "assignment_revisions": [1], "final_window": True}))
+        self.result.marks = "6.00"
+        self.restart()
+        self.assertEqual(self.score(), "queued")
+        attempted = []
+
+        class Receiver:
+            def call(self, path, body):
+                row = body["scores"][0]
+                attempted.append(row["revision"])
+                if row["revision"] == 1:
+                    return 202, {"outcomes": [{"index": 0, "status": "rejected", "retryable": False}]}
+                return 200, {"outcomes": [{"index": 0, "key": row["key"], "revision": row["revision"], "status": "accepted"}]}
+
+        self.assertEqual(deliver(self.box, Receiver(), now=time.time() + 1), 1)
+        self.assertEqual(attempted, [1, 2])
+        saved = self.box.db.execute("SELECT payload,state,reason FROM pending WHERE id=?", (original["id"],)).fetchone()
+        self.assertEqual(saved, (canonical(original["payload"]), "rejected", "row_rejected"))
+        self.restart()
+        self.assertEqual(self.score(), "unchanged")
+        self.assertEqual(self.box.stats()["rejected"], 1)
+        self.assertEqual(deliver(self.box, Receiver(), now=time.time() + 3600), 0)
+        self.assertEqual(attempted, [1, 2])
+        self.assertEqual(self.box.cursor("ai_receipts"), {"after": "retained-source-cursor"})
+
+
 class EvidenceTests(unittest.TestCase):
     def test_every_chunk_is_integrity_checked_before_score_can_be_queued(self):
         snapshot = {"facts": {"expected": 2}}
