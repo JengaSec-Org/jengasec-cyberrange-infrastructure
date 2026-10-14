@@ -20,7 +20,7 @@ from .facts import build
 from .outbox import Full, Outbox
 from .probes import clock_uncertainty_ms, measure, receipt
 from .publisher import archive, deliver
-from .transport import Client, Failure
+from .transport import Client, Failure, base_url, client_tls
 
 
 CRITERIA = {
@@ -47,6 +47,9 @@ def load_config(path):
         raise Invalid("invalid_competition_window")
     if type(config.get("source_cache_bytes")) is not int or config["source_cache_bytes"] < 1048576:
         raise Invalid("explicit_source_cache_budget_required")
+    if "loki_tls" in config:
+        base_url(config["loki_url"])
+        client_tls(config["loki_tls"])
     return config
 
 
@@ -72,7 +75,8 @@ class Collector:
                 if source.stat().st_mode & 0o077 or source.is_symlink():
                     raise Invalid("loki_credentials_not_private")
                 headers.update(decode(source.read_bytes(), 8192))
-            self.loki = Client(config["loki_url"], headers, loopback_http=True)
+            headers["X-Scope-OrgID"] = "staff"
+            self.loki = Client(config["loki_url"], headers, loopback_http=True, tls=config.get("loki_tls"))
         self.proof = ProofResolver(self.cache, loki=self.loki,
                                    infrastructure_resources=config.get("infrastructure_resources", []))
         self.ai_bridge = self.ai_client = None

@@ -444,8 +444,29 @@ assertions. A successful process-health response cannot satisfy a failed
 functional assertion. Set `metrics_file` to the existing node exporter's
 textfile directory. All credential files must be owner-only.
 
-For native proof, configure the existing private Loki endpoint and its staff
-headers file. List the infrastructure resources that the collector may cite.
+For native proof and collector measurement writes, set `loki_url` to the
+existing OBS mTLS receiver using a name or address covered by its server
+certificate. Set `loki_tls` with `ca_file`, `cert_file` and `key_file`, installed
+through `obs_scoring_credentials`. All three must be regular files owned by
+root or the service account. The private key must be owner-only; the CA and
+certificate must not be writable by a group or other users. Symlinks,
+incomplete settings, invalid material and mismatched keys fail validation.
+Server trust and hostname checks remain enabled.
+
+Issue a dedicated client certificate from the existing telemetry CA with
+`CN=jengasec-scoring-collector`. Set
+`obs_infrastructure_scoring_certificate_sha1` to its fingerprint as 40 hex
+characters without separators. The default empty value disables the native
+routes. Nginx requires both the reserved CN and the active fingerprint for
+`GET /loki/api/v1/query_range` and `POST /loki/api/v1/push`. It forces the
+`staff` tenant and removes any Authorization header before forwarding. This
+credential permits evidence reads and measurement appends, and needs no
+Grafana or administrator credential. The reserved collector role is denied
+on every other ingestion route even when its pin is disabled or replaced;
+retired certificates cannot regain generic ingest access. Other existing
+ingest clients retain their routes and cannot use the native Loki routes.
+List the infrastructure resources that the collector may cite.
+
 For AI receipts, configure `ai_gateway.url`, its operator credential file and
 an exact producer map from team, source ID and role to the platform producer
 UUID. Use the AIC service's HTTPS origin. `ai_gateway.api_prefix` defaults to

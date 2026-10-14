@@ -7,7 +7,11 @@ import fcntl
 import hashlib
 import http.server
 import json
+import os
 import pathlib
+import shutil
+import ssl
+import subprocess
 import sys
 import tempfile
 import threading
@@ -20,18 +24,54 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "scripts"))
 
 from scoring_obs.cache import SourceCache
-from scoring_obs.cli import Collector, main
+from scoring_obs.cli import Collector, load_config, main
 from scoring_obs.common import Invalid, canonical, digest, timestamp, utc
 from scoring_obs.evidence import ProofResolver
 from scoring_obs.facts import availability, build
 from scoring_obs.outbox import Full, Outbox
 from scoring_obs.probes import _get, measure
 from scoring_obs.publisher import archive, deliver
-from scoring_obs.transport import Client, Failure
+from scoring_obs.transport import Client, Failure, client_tls
 
 
 START = timestamp("2026-01-01T00:00:00Z")
 END = START + dt.timedelta(minutes=10)
+
+
+def tls_fixture(directory):
+    """Short-lived local certificates, also used by the hosted nginx test."""
+    root = pathlib.Path(directory)
+
+    def openssl(*args):
+        subprocess.run(["openssl", *map(str, args)], check=True, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.PIPE, timeout=10)
+
+    for ca in ("ca", "foreign-ca"):
+        openssl("req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
+                "-nodes", "-sha256", "-days", "1", "-subj", "/CN=" + ca,
+                "-addext", "basicConstraints=critical,CA:TRUE", "-keyout", root / (ca + ".key"),
+                "-out", root / (ca + ".crt"))
+    settings = {}
+    for serial, name in enumerate(("server", "wrong-name", "collector", "retired", "generic", "foreign"), 1):
+        server = name in {"server", "wrong-name"}
+        issuer = "foreign-ca" if name == "foreign" else "ca"
+        subject = "jengasec-scoring-collector" if name in {"collector", "retired"} else name
+        openssl("req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
+                "-nodes", "-sha256", "-subj", "/CN=" + subject,
+                "-keyout", root / (name + ".key"), "-out", root / (name + ".csr"))
+        extensions = "basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\n"
+        extensions += "extendedKeyUsage=" + ("serverAuth" if server else "clientAuth") + "\n"
+        if server:
+            extensions += "subjectAltName=" + ("DNS:localhost,IP:127.0.0.1" if name == "server" else "DNS:wrong.invalid") + "\n"
+        ext = root / (name + ".ext")
+        ext.write_text(extensions)
+        openssl("x509", "-req", "-in", root / (name + ".csr"), "-CA", root / (issuer + ".crt"),
+                "-CAkey", root / (issuer + ".key"), "-set_serial", serial, "-days", "1", "-sha256",
+                "-extfile", ext, "-out", root / (name + ".crt"))
+        (root / (name + ".key")).chmod(0o600)
+        settings[name] = {"ca_file": str(root / "ca.crt"), "cert_file": str(root / (name + ".crt")),
+                          "key_file": str(root / (name + ".key"))}
+    return settings
 
 
 def score_row(marks="12.00"):
@@ -217,6 +257,137 @@ class CalculationCorrectionTests(unittest.TestCase):
         self.assertEqual(deliver(self.box, Receiver(), now=time.time() + 3600), 0)
         self.assertEqual(attempted, [1, 2])
         self.assertEqual(self.box.cursor("ai_receipts"), {"after": "retained-source-cursor"})
+
+
+class ClientTlsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.directory = tempfile.TemporaryDirectory(prefix="scoring-client-tls-")
+        cls.addClassCleanup(cls.directory.cleanup)
+        cls.material = tls_fixture(cls.directory.name)
+
+    def test_private_tls_material_rejects_missing_unsafe_and_mismatched_files(self):
+        valid = self.material["collector"]
+        context = client_tls(valid)
+        self.assertTrue(context.check_hostname)
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        bad_configs = [{}, {"ca_file": valid["ca_file"]}, dict(valid, unexpected=True),
+                       dict(valid, key_file=self.material["generic"]["key_file"]),
+                       dict(valid, ca_file=str(pathlib.Path(self.directory.name) / "missing")),
+                       dict(valid, cert_file="relative.crt")]
+        for config in bad_configs:
+            with self.subTest(config_fields=sorted(config)), self.assertRaises(Invalid):
+                client_tls(config)
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            path = root / "unsafe.key"
+            shutil.copyfile(valid["key_file"], path)
+            path.chmod(0o640)
+            with self.assertRaises(Invalid):
+                client_tls(dict(valid, key_file=str(path)))
+            path.chmod(0o600)
+            link = root / "link.key"
+            link.symlink_to(path)
+            with self.assertRaises(Invalid):
+                client_tls(dict(valid, key_file=str(link)))
+            link.unlink()
+            os.mkfifo(link, 0o600)
+            with self.assertRaises(Invalid):
+                client_tls(dict(valid, key_file=str(link)))
+            for field in ("ca_file", "cert_file"):
+                public = root / field
+                shutil.copyfile(valid[field], public)
+                public.chmod(0o666)
+                with self.assertRaises(Invalid):
+                    client_tls(dict(valid, **{field: str(public)}))
+        with self.assertRaises(Invalid):
+            Client("http://127.0.0.1", loopback_http=True, tls=valid)
+
+    def test_config_check_rejects_incomplete_or_missing_tls_before_network_calls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            config = {"schema_version": "scoring-collector/1.0", "competition": 7,
+                      "platform_url": "https://platform.invalid", "feed_token_file": str(root / "token"),
+                      "state_dir": str(root), "source_cache_bytes": 1048576,
+                      "window_start": utc(START), "window_end": utc(END), "producers": {}, "probes": {}}
+            path = root / "config.json"
+            path.write_bytes(canonical(config))
+            self.assertEqual(load_config(path), config)  # Existing configuration remains valid.
+            for extra in ({"loki_tls": self.material["collector"]},
+                          {"loki_url": "https://obs.invalid", "loki_tls": {}},
+                          {"loki_url": "http://127.0.0.1", "loki_tls": self.material["collector"]},
+                          {"loki_url": "https://obs.invalid", "loki_tls": dict(self.material["collector"], key_file=str(root / "missing"))}):
+                path.write_bytes(canonical(dict(config, **extra)))
+                with patch("scoring_obs.cli.Client") as client, self.assertRaises(Invalid):
+                    main(["--config", str(path), "--check"])
+                client.assert_not_called()
+
+    def test_real_tls_requires_client_identity_trust_and_hostname_and_refuses_redirects(self):
+        received = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                received.append(self.path)
+                if self.path == "/redirect":
+                    self.send_response(302)
+                    self.send_header("Location", "/must-not-follow")
+                    self.end_headers()
+                    return
+                body = canonical({"peer": self.connection.getpeercert()["subject"][0][0][1]})
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        for server_identity in ("server", "wrong-name"):
+            server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            material = self.material[server_identity]
+            context.load_cert_chain(material["cert_file"], material["key_file"])
+            context.load_verify_locations(material["ca_file"])
+            context.verify_mode = ssl.CERT_REQUIRED
+            server.socket = context.wrap_socket(server.socket, server_side=True)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            url = f"https://127.0.0.1:{server.server_port}"
+            try:
+                client = Client(url, tls=self.material["collector"], timeout=2)
+                if server_identity == "wrong-name":
+                    with self.assertRaises(Failure):
+                        client.call("/query")
+                    continue
+                self.assertEqual(client.call("/query"), (200, {"peer": "jengasec-scoring-collector"}))
+                with tempfile.TemporaryDirectory() as directory:
+                    root = pathlib.Path(directory)
+                    token, headers = root / "feed-token", root / "loki-headers"
+                    token.write_text("fixture-only")
+                    headers.write_text('{"X-Scope-OrgID":"application-other"}')
+                    token.chmod(0o600)
+                    headers.chmod(0o600)
+                    collector = Collector({"platform_url": url, "feed_token_file": str(token),
+                        "competition": 7, "state_dir": str(root / "state"), "source_cache_bytes": 1048576,
+                        "window_start": utc(START), "window_end": utc(END), "loki_url": url,
+                        "loki_headers_file": str(headers), "loki_tls": self.material["collector"]})
+                    try:
+                        self.assertEqual(collector.loki.headers["X-Scope-OrgID"], "staff")
+                        self.assertEqual(collector.loki.call("/query"), (200, {"peer": "jengasec-scoring-collector"}))
+                    finally:
+                        collector.close()
+                with self.assertRaises(Failure) as redirect:
+                    client.call("/redirect")
+                self.assertEqual(redirect.exception.code, 302)
+                self.assertNotIn("/must-not-follow", received)
+                for config in (None, self.material["foreign"],
+                               dict(self.material["collector"], ca_file=str(pathlib.Path(self.directory.name) / "foreign-ca.crt"))):
+                    with self.assertRaises(Failure):
+                        Client(url, tls=config, timeout=2).call("/query")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join()
 
 
 class EvidenceTests(unittest.TestCase):

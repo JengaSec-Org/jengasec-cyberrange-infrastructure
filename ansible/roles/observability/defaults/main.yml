@@ -22,6 +22,7 @@ obs_metrics_tls_key_file: ""
 obs_ingest_tls_cert_file: ""
 obs_ingest_tls_key_file: ""
 obs_infrastructure_attribution_certificate_sha1: ""
+obs_infrastructure_scoring_certificate_sha1: ""
 obs_manage_packages: true
 obs_manage_systemd: true
 obs_manage_storage_ownership: true

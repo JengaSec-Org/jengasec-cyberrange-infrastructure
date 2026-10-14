@@ -16,6 +16,9 @@
     "producers",
     "probes"
   ],
+  "dependentRequired": {
+    "loki_tls": ["loki_url"]
+  },
   "properties": {
     "schema_version": {
       "const": "scoring-collector/1.0"
@@ -160,6 +163,16 @@
       "type": "string",
       "pattern": "^/[^\\u0000\\r\\n]+$",
       "maxLength": 512
+    },
+    "loki_tls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ca_file", "cert_file", "key_file"],
+      "properties": {
+        "ca_file": {"type": "string", "pattern": "^/[^\u0000\r\n]+$", "maxLength": 512},
+        "cert_file": {"type": "string", "pattern": "^/[^\u0000\r\n]+$", "maxLength": 512},
+        "key_file": {"type": "string", "pattern": "^/[^\u0000\r\n]+$", "maxLength": 512}
+      }
     },
     "infrastructure_resources": {
       "type": "array",
