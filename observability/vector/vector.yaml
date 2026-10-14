@@ -587,7 +587,7 @@ transforms:
       assert!(includes(resource_ids, resource_id), "unregistered infrastructure resource")
       assert!(match(string!(original.source_event_id), r'^[a-f0-9]{64}$'))
       assert!(ends_with(string!(original.ts), "Z"), "infrastructure time must be UTC")
-      _ = parse_timestamp!(string!(original.ts), format: "%+")
+      parsed_ts = parse_timestamp!(string!(original.ts), format: "%+")
       resource = object!(original.resource)
       for_each(keys(resource)) -> |_index, key| {
         assert!(includes(["service", "cluster", "namespace", "kind", "name", "interface"], key))
@@ -748,6 +748,7 @@ transforms:
           assert!(includes(["queue_full", "journal_cursor_lost", "input_rotated", "oversized_record", "invalid_record"], string!(attributes.reason)))
       } else { abort }
       normalized = original
+      normalized.ts = format_timestamp!(parsed_ts, format: "%Y-%m-%dT%H:%M:%S%.6fZ")
       normalized.received_ts = format_timestamp!(now(), format: "%Y-%m-%dT%H:%M:%S%.6fZ")
       normalized.event_id = "infra_" + sha2(resource_id + "\n" + string!(original.source_event_id), variant: "SHA-256")
       collector = if source == "kubernetes" { "otel-kubernetes/1.0" } else { "jengasec-event-agent/1.0" }
