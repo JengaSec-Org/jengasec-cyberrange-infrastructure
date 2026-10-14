@@ -178,6 +178,10 @@ class DashboardTests(unittest.TestCase):
 
     def test_provisioning_preserves_access_secrets_other_routes_and_converges(self):
         fake = FakeGrafana()
+        fake.sources["loki"]["jsonData"]["derivedFields"].append({
+            "name": "Event evidence", "matcherType": "label", "matcherRegex": "^event_id$",
+            "url": "/d/jengasec-investigation?var-event_id=${__value.raw}",
+        })
         original_source = copy.deepcopy(fake.sources["loki"])
         foreign_route = copy.deepcopy(fake.policy["routes"][0])
         for _ in range(2):
@@ -194,10 +198,33 @@ class DashboardTests(unittest.TestCase):
         fields = fake.sources["loki"]["jsonData"]["derivedFields"]
         self.assertIn({"name": "Existing custom field", "matcherRegex": "custom"}, fields)
         self.assertTrue(all('/d/jengasec-investigation?' in field["url"] for field in fields if "url" in field))
+        links = {field["name"]: field for field in fields if "url" in field}
+        self.assertEqual(set(links), {"event_id", "request_id", "trace_id"})
+        for name, link in links.items():
+            self.assertEqual(link["matcherType"], "label")
+            self.assertEqual(link["matcherRegex"], "^" + name + "$")
+            self.assertIn("${__value.raw:percentencode}", link["url"])
+            self.assertIn("${environment:queryparam}&from=${__from}&to=${__to}", link["url"])
+            self.assertNotIn("$__all", link["url"])
+        self.assertEqual(links["event_id"]["urlDisplayLabel"], "View event in Investigation")
+        self.assertEqual(sum(method == "PUT" and path == "/api/datasources/uid/loki"
+                             for method, path, _, _ in fake.calls), 1)
         for method, path, org_id, _ in fake.calls:
             if method != "GET":
                 self.assertEqual(org_id, 2)
                 self.assertNotRegex(path, r'/api/(admin|orgs|users)')
+
+    def test_evidence_links_preserve_unrelated_identifier_fields(self):
+        fake = FakeGrafana()
+        fake.org_id = 2
+        fake.sources["loki"]["jsonData"]["derivedFields"].append({
+            "name": "event_id", "matcherRegex": "custom-event", "url": "/custom-investigation",
+        })
+        original = copy.deepcopy(fake.sources["loki"])
+        with self.assertRaisesRegex(PROVISION.ProvisioningError, "unrelated derived field"):
+            fake.update_evidence_links()
+        self.assertEqual(fake.sources["loki"], original)
+        self.assertTrue(all(method == "GET" for method, _, _, _ in fake.calls))
 
     def test_wrong_organization_source_or_unavailable_payload_stops_before_mutation(self):
         for change in ("organization", "datasource", "payload", "unrelated_rule"):

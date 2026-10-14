@@ -82,7 +82,7 @@
         "x": 0,
         "y": 0,
         "w": 24,
-        "h": 2
+        "h": 3
       },
       "options": {
         "mode": "markdown",
@@ -96,7 +96,7 @@
       "description": "Distinct attributed participants with matching telemetry in the selected time window. This is an observed-activity count.",
       "gridPos": {
         "x": 0,
-        "y": 2,
+        "y": 3,
         "w": 4,
         "h": 4
       },
@@ -150,7 +150,7 @@
       "description": "Counts application request summaries once. Ingress and network records remain separate observations.",
       "gridPos": {
         "x": 4,
-        "y": 2,
+        "y": 3,
         "w": 4,
         "h": 4
       },
@@ -204,7 +204,7 @@
       "description": "Application request summaries with HTTP 5xx responses.",
       "gridPos": {
         "x": 8,
-        "y": 2,
+        "y": 3,
         "w": 4,
         "h": 4
       },
@@ -258,7 +258,7 @@
       "description": "Records with an explicit refused verdict. Use the timeline to inspect target and scope evidence.",
       "gridPos": {
         "x": 12,
-        "y": 2,
+        "y": 3,
         "w": 4,
         "h": 4
       },
@@ -312,7 +312,7 @@
       "description": "IDS alert records, including the reported IDS action. Alerts need investigation.",
       "gridPos": {
         "x": 16,
-        "y": 2,
+        "y": 3,
         "w": 4,
         "h": 4
       },
@@ -366,7 +366,7 @@
       "description": "Application authentication failures, access denials, revocations, privilege changes, exports and input rejections.",
       "gridPos": {
         "x": 20,
-        "y": 2,
+        "y": 3,
         "w": 4,
         "h": 4
       },
@@ -420,7 +420,7 @@
       "description": "Actor \u2192 target \u2192 event \u2192 reported outcome. Expand a record for source, scope, evidence ID, integrity hash and request/trace IDs. The ID links open an exact filtered view in this time window. Latest 300 matching records.",
       "gridPos": {
         "x": 0,
-        "y": 6,
+        "y": 7,
         "w": 24,
         "h": 12
       },
@@ -470,7 +470,7 @@
       "description": "Event records by attributed team and target. A click opens that team and target in the timeline. Counts include distinct source observations.",
       "gridPos": {
         "x": 0,
-        "y": 18,
+        "y": 19,
         "w": 14,
         "h": 10
       },
@@ -563,7 +563,7 @@
       "description": "Matching source observations per interval. A role describes attribution, not intent.",
       "gridPos": {
         "x": 14,
-        "y": 18,
+        "y": 19,
         "w": 10,
         "h": 10
       },
@@ -623,7 +623,7 @@
       "description": "Application request summaries per interval. Ingress copies are excluded from this request count.",
       "gridPos": {
         "x": 0,
-        "y": 28,
+        "y": 29,
         "w": 12,
         "h": 9
       },
@@ -683,7 +683,7 @@
       "description": "Workload lifecycle, restarts and host alerts. Participant identity is shown only when present in source attribution. Expand a record for reason and workload details.",
       "gridPos": {
         "x": 12,
-        "y": 28,
+        "y": 29,
         "w": 12,
         "h": 9
       },
@@ -733,7 +733,7 @@
       "description": "Authentication failures, denials, revocations, privilege changes and exports, with reported outcomes and evidence links. These records do not establish scoring decisions.",
       "gridPos": {
         "x": 0,
-        "y": 37,
+        "y": 38,
         "w": 24,
         "h": 10
       },
@@ -783,7 +783,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 47,
+        "y": 48,
         "w": 24,
         "h": 1
       },
@@ -795,7 +795,7 @@
           "description": "Current Prometheus and Vector scrape status. Global pipeline health is independent of activity filters.",
           "gridPos": {
             "x": 0,
-            "y": 49,
+            "y": 50,
             "w": 6,
             "h": 4
           },
@@ -851,7 +851,7 @@
           "description": "Rejected input counter increase in the selected time range. Zero without a rejection counter requires a healthy live Vector scrape and its quarantine component metric. Missing collection remains unavailable; zero does not prove that validation passed.",
           "gridPos": {
             "x": 6,
-            "y": 49,
+            "y": 50,
             "w": 6,
             "h": 4
           },
@@ -935,7 +935,7 @@
           "description": "Matching records without a known participant, including system observations. Check the record before interpreting an attribution gap.",
           "gridPos": {
             "x": 12,
-            "y": 49,
+            "y": 50,
             "w": 6,
             "h": 4
           },
@@ -988,7 +988,7 @@
           "type": "alertlist",
           "gridPos": {
             "x": 18,
-            "y": 49,
+            "y": 50,
             "w": 6,
             "h": 4
           },
@@ -1017,7 +1017,7 @@
           "description": "Events sent by Vector sinks. A delivered record can have more than one destination.",
           "gridPos": {
             "x": 0,
-            "y": 53,
+            "y": 54,
             "w": 12,
             "h": 9
           },
@@ -1080,7 +1080,7 @@
           "description": "Matching stored records per interval. Missing sources need input verification; quiet sources do not prove healthy collection.",
           "gridPos": {
             "x": 12,
-            "y": 53,
+            "y": 54,
             "w": 12,
             "h": 9
           },

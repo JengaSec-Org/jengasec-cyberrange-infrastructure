@@ -132,16 +132,22 @@ class Grafana:
         source = self.request("GET", "/api/datasources/uid/loki")
         desired = copy.deepcopy(source.get("jsonData", {}))
         names = {"Event evidence", "Request trail", "Trace trail"}
-        fields = [field for field in desired.get("derivedFields", []) if field.get("name") not in names]
-        for name, field, variable, label in (
-            ("Event evidence", "event_id", "event_id", "View event"),
-            ("Request trail", "request_id", "correlation", "Follow request"),
-            ("Trace trail", "trace_id", "correlation", "Follow trace"),
+        identifiers = {"event_id", "request_id", "trace_id"}
+        fields = [field for field in desired.get("derivedFields", [])
+                  if field.get("name") not in names and not (
+                      field.get("name") in identifiers and
+                      field.get("url", "").startswith("/d/jengasec-investigation?"))]
+        if any(field.get("name") in identifiers for field in fields):
+            raise ProvisioningError("An unrelated derived field uses an evidence identifier name")
+        for field, variable, label in (
+            ("event_id", "event_id", "View event in Investigation"),
+            ("request_id", "correlation", "Follow request"),
+            ("trace_id", "correlation", "Follow trace"),
         ):
             fields.append({
-                "name": name, "matcherType": "label", "matcherRegex": f"^{field}$",
-                "url": "/d/jengasec-investigation?" + f"var-{variable}=${{__value.raw}}"
-                       "&var-environment=$__all&from=${__from}&to=${__to}",
+                "name": field, "matcherType": "label", "matcherRegex": f"^{field}$",
+                "url": "/d/jengasec-investigation?" + f"var-{variable}=${{__value.raw:percentencode}}"
+                       "&${environment:queryparam}&from=${__from}&to=${__to}",
                 "urlDisplayLabel": label,
             })
         desired["derivedFields"] = fields

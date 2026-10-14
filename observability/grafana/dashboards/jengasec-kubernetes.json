@@ -807,7 +807,7 @@
         "showTime": true,
         "showLabels": false,
         "showCommonLabels": false,
-        "wrapLogMessage": false,
+        "wrapLogMessage": true,
         "enableLogDetails": true,
         "sortOrder": "Descending",
         "dedupStrategy": "none",
