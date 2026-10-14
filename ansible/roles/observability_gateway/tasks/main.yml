@@ -7,6 +7,9 @@
       - ansible_architecture == 'x86_64'
       - obs_network_interface is match('^[A-Za-z0-9][A-Za-z0-9_.-]{0,14}$')
       - obs_network_debian_suite is match('^[a-z]+$')
+      - obs_network_suricata_file_size_limit_bytes is integer
+      - obs_network_suricata_file_size_limit_bytes > 33554432
+      - obs_network_suricata_file_size_limit_bytes < 9223372036854775807
 
 - name: Verify the existing VPN capture interface
   ansible.builtin.command:
@@ -133,6 +136,15 @@
     group: root
     mode: '0755'
 
+- name: Install the scoped IDS file-cap launcher
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../scripts/run-bounded-suricata.py"
+    dest: "{{ obs_network_install_root | dirname }}/run-bounded-suricata.py"
+    owner: root
+    group: root
+    mode: '0755'
+  register: obs_network_suricata_launcher
+
 - name: Read the package's Suricata defaults
   ansible.builtin.slurp:
     src: "{{ obs_network_install_root }}/vendor/etc/suricata/suricata.yaml"
@@ -235,10 +247,22 @@
     - jengasec-softflowd.service
     - jengasec-goflow2.service
     - jengasec-suricata.service
+  register: obs_network_sensor_units
   notify: Reload passive sensor units
 
 - name: Apply passive sensor unit changes
   ansible.builtin.meta: flush_handlers
+
+- name: Restart approved IDS when its unit or launcher changed
+  ansible.builtin.systemd_service:
+    name: jengasec-suricata.service
+    state: restarted
+  when:
+    - obs_network_start | bool
+    - >-
+      obs_network_suricata_launcher.changed or
+      (obs_network_sensor_units.results | selectattr('item', 'equalto',
+      'jengasec-suricata.service') | first).changed
 
 - name: Enable approved passive capture
   ansible.builtin.systemd_service:

@@ -8,4 +8,5 @@ obs_network_install_root: /opt/jengasec-observability-tools/network
 obs_network_event_config: /etc/jengasec-event-agent/config.json
 obs_network_event_state: /var/lib/jengasec-event-agent
 obs_network_suricata_memory_limit: 2G
+obs_network_suricata_file_size_limit_bytes: 67108864
 obs_network_rules_url: https://rules.emergingthreats.net/open/suricata-7.0.3/emerging.rules.tar.gz

@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart={{ obs_network_install_root }}/vendor/usr/bin/suricata --pcap={{ obs_network_interface }} -c {{ obs_network_install_root }}/suricata.yaml
+ExecStart=/usr/bin/python3 {{ obs_network_install_root | dirname }}/run-bounded-suricata.py --eve-file {{ obs_network_event_state }}/suricata/eve.json -- {{ obs_network_install_root }}/vendor/usr/bin/suricata --pcap={{ obs_network_interface }} -c {{ obs_network_install_root }}/suricata.yaml
 Environment=LD_LIBRARY_PATH={{ obs_network_install_root }}/vendor/usr/lib/x86_64-linux-gnu:{{ obs_network_install_root }}/vendor/lib/x86_64-linux-gnu
 WorkingDirectory={{ obs_network_install_root }}
 User=root
@@ -13,7 +13,10 @@ Group=root
 UMask=0077
 Restart=on-failure
 RestartSec=5s
+RestartPreventExitStatus=75 SIGXFSZ
 KillSignal=SIGINT
+KillMode=mixed
+TimeoutStopSec=20s
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
@@ -24,6 +27,8 @@ ProtectControlGroups=true
 ReadWritePaths={{ obs_network_event_state }}/suricata
 CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_SYS_NICE
 MemoryMax={{ obs_network_suricata_memory_limit }}
+LimitFSIZE={{ obs_network_suricata_file_size_limit_bytes }}
+LimitCORE=0
 StandardOutput=null
 StandardError=journal
 
