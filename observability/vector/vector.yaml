@@ -87,9 +87,12 @@ transforms:
     inputs:
       - application_logs
     source: |
+      environment = get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "unclassified"
+      if !includes(["live", "validation", "rehearsal"], environment) { environment = "unclassified" }
       . = {
         "input_kind": "application",
         "source_hint": "application",
+        "ingress_environment": environment,
         "raw_message": string!(.message)
       }
 
@@ -107,9 +110,16 @@ transforms:
       input_kind = if decoded.schema_version == "infrastructure/1.0" {
         "infrastructure"
       } else if exists(decoded.source) { "source" } else { "application" }
+      environment = if input_kind == "infrastructure" {
+        string(decoded.environment) ?? "unclassified"
+      } else if decoded.schema_version == "2.0" {
+        get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "unclassified"
+      } else { "unclassified" }
+      if !includes(["live", "validation", "rehearsal"], environment) { environment = "unclassified" }
       . = {
         "input_kind": input_kind,
         "source_hint": "otlp",
+        "ingress_environment": environment,
         "raw_message": raw_message
       }
 
@@ -118,9 +128,13 @@ transforms:
     inputs:
       - infrastructure_http
     source: |
+      decoded = parse_json(string!(.message)) ?? {}
+      environment = string(decoded.environment) ?? "unclassified"
+      if !includes(["live", "validation", "rehearsal"], environment) { environment = "unclassified" }
       . = {
         "input_kind": "infrastructure",
         "source_hint": "https",
+        "ingress_environment": environment,
         "raw_message": string!(.message)
       }
 
@@ -130,9 +144,12 @@ transforms:
       - gateway_syslog_tcp
       - gateway_syslog_udp
     source: |
+      environment = get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "unclassified"
+      if !includes(["live", "validation", "rehearsal"], environment) { environment = "unclassified" }
       . = {
         "input_kind": "source",
         "source_hint": "syslog",
+        "ingress_environment": environment,
         "raw_message": string!(.message)
       }
 
@@ -148,9 +165,12 @@ transforms:
       - netflow_json
     source: |
       observed_ts = .timestamp
+      environment = get_env_var("JENGASEC_V2_TELEMETRY_ENVIRONMENT") ?? "unclassified"
+      if !includes(["live", "validation", "rehearsal"], environment) { environment = "unclassified" }
       . = {
         "input_kind": "source",
         "source_hint": "netflow",
+        "ingress_environment": environment,
         "observed_ts": observed_ts,
         "raw_message": string!(.message)
       }
@@ -836,6 +856,7 @@ transforms:
         increment_by_value: false
         kind: incremental
         tags:
+          environment: "{{ environment }}"
           reason: "{{ reason }}"
           source: "{{ source }}"
 
@@ -865,6 +886,7 @@ transforms:
       raw_message = to_string(.raw_message) ?? ""
       . = {
         "ts": now(),
+        "environment": string(.ingress_environment) ?? "unclassified",
         "source": to_string(.source_hint) ?? "unknown",
         "reason": "sensitive_field",
         "payload_hash": "sha256:" + sha2(raw_message, variant: "SHA-256")
@@ -881,6 +903,7 @@ transforms:
       raw_message = to_string(.raw_message) ?? ""
       . = {
         "ts": now(),
+        "environment": string(.ingress_environment) ?? "unclassified",
         "source": to_string(.source_hint) ?? "unknown",
         "reason": "contract_or_catalogue_rejected",
         "payload_hash": "sha256:" + sha2(raw_message, variant: "SHA-256")

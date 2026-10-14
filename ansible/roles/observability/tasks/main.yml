@@ -314,10 +314,17 @@
     src: observability.env.j2
     dest: "{{ obs_config_root }}/observability.env"
     mode: "0600"
+  notify: Restart observability stack
 
 - name: Configure authenticated infrastructure collection
   ansible.builtin.include_tasks: infrastructure.yml
   when: obs_infrastructure_enabled
+
+- name: Inspect the previous Vector configuration
+  ansible.builtin.stat:
+    path: "{{ obs_state_root }}/lookups/vector.yaml"
+    checksum_algorithm: sha256
+  register: obs_vector_previous
 
 - name: Render the catalogue-driven Vector configuration
   ansible.builtin.command:
@@ -339,6 +346,16 @@
       - --website-feed-url
       - "{{ obs_effective_website_feed_url }}"
   changed_when: false
+
+- name: Detect a changed Vector configuration
+  ansible.builtin.stat:
+    path: "{{ obs_state_root }}/lookups/vector.yaml"
+    checksum_algorithm: sha256
+  register: obs_vector_current
+  changed_when: >-
+    (obs_vector_previous.stat.checksum | default('')) !=
+    (obs_vector_current.stat.checksum | default(''))
+  notify: Restart observability stack
 
 - name: Render rehearsal attribution lookups
   ansible.builtin.command:
