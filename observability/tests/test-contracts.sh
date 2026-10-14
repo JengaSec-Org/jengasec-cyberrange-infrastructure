@@ -45,6 +45,7 @@ python scripts/validate-contracts.py
 python observability/tests/test-infrastructure-events.py
 python observability/tests/test-infrastructure-evidence.py
 python observability/tests/test-gateway-observation.py
+python observability/tests/test-observability-spools.py
 
 rendered="$(mktemp -d)"
 cleanup() {

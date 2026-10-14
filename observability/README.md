@@ -106,6 +106,14 @@ The AI boundary is a mode-locked NDJSON spool of normalized telemetry at
 `/var/lib/vector/ai-handoff/`. It deliberately defines no AI endpoint,
 transport or authentication. Those remain AI-owned integration dependencies.
 
+Quarantine and AI handoff files use minute segments. The auxiliary spool
+maintenance timer removes completed segments older than seven days or above
+their configured byte caps. It preserves the two most recent minutes and
+files that changed during inspection. Capacity can shorten these auxiliary
+copies; Loki retains the primary seven-day records. Removal counts, retained
+bytes, cap excess and maintenance freshness are node textfile metrics. Active
+segments can exceed a cap until they close and the next sweep completes.
+
 See `runbooks/observability.md` for operation and recovery.
 
 ## OBS VM

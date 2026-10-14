@@ -1087,7 +1087,8 @@ sinks:
     inputs:
       - quarantine_sensitive
       - quarantine_invalid
-    path: /var/lib/vector/quarantine/events.jsonl
+    path: /var/lib/vector/quarantine/events-%Y-%m-%d-%H-%M.jsonl
+    idle_timeout_secs: 10
     encoding:
       codec: json
     framing:
@@ -1127,7 +1128,8 @@ sinks:
     inputs:
       - normalized_application
       - normalized_sources
-    path: /var/lib/vector/ai-handoff/telemetry-%Y-%m-%d.ndjson
+    path: /var/lib/vector/ai-handoff/telemetry-%Y-%m-%d-%H-%M.ndjson
+    idle_timeout_secs: 10
     encoding:
       codec: json
     framing:
