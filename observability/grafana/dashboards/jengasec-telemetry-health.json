@@ -465,7 +465,7 @@
         "w": 6,
         "h": 4
       },
-      "description": "Rejected input counter increase. Missing series is not a claim that validation passed.",
+      "description": "Rejected input counter increase in the selected time range. Zero without a rejection counter requires a healthy live Vector scrape and its quarantine component metric. Missing collection remains unavailable; zero does not prove that validation passed.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -473,13 +473,29 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "Missing signal",
+                  "color": "gray",
+                  "index": 0
+                }
+              }
+            }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "gray",
                 "value": null
+              },
+              {
+                "color": "green",
+                "value": 0
               },
               {
                 "color": "orange",
@@ -497,7 +513,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(jengasec_contract_rejections_total{environment=~\"${environment:regex}\"}[$__range]))",
+          "expr": "sum(increase(jengasec_contract_rejections_total{environment=~\"${environment:regex}\"}[$__range])) or on() (0 * sum(vector_component_received_events_total{job=\"vector\",environment=\"live\",component_id=\"quarantine_metrics\"}) and on() (max(up{job=\"vector\",environment=\"live\"}) == 1))",
           "editorMode": "code",
           "legendFormat": "{{resource_id}}",
           "instant": true,

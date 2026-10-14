@@ -610,7 +610,7 @@
         "w": 12,
         "h": 8
       },
-      "description": "Positive change in the restart gauge during each interval. A reset or a replacement pod does not count as new restarts.",
+      "description": "Positive change in the restart gauge over the preceding five minutes. The window allows for collection and delivery intervals. A reset or a replacement pod does not count as new restarts. Missing samples remain unavailable.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -637,7 +637,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (cluster,namespace,pod) (clamp_min(delta(k8s_container_restarts{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}[$__rate_interval]), 0))",
+          "expr": "sum by (cluster,namespace,pod) (clamp_min(delta(k8s_container_restarts{environment=~\"${environment:regex}\",cluster=~\"${cluster:regex}\"}[5m]), 0))",
           "editorMode": "code",
           "legendFormat": "{{cluster}} {{namespace}} / {{pod}}",
           "instant": false,

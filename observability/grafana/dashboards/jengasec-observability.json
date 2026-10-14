@@ -848,7 +848,7 @@
           "id": 16,
           "title": "Quarantined inputs",
           "type": "stat",
-          "description": "Invalid or sensitive inputs rejected before telemetry storage, across the whole pipeline.",
+          "description": "Rejected input counter increase in the selected time range. Zero without a rejection counter requires a healthy live Vector scrape and its quarantine component metric. Missing collection remains unavailable; zero does not prove that validation passed.",
           "gridPos": {
             "x": 6,
             "y": 49,
@@ -862,13 +862,41 @@
           "fieldConfig": {
             "defaults": {
               "color": {
-                "mode": "fixed",
-                "fixedColor": "orange"
+                "mode": "thresholds"
               },
               "decimals": 0,
               "unit": "short",
               "noValue": "Missing signal",
-              "mappings": []
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "text": "Missing signal",
+                      "color": "gray",
+                      "index": 0
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "gray",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  }
+                ]
+              }
             },
             "overrides": []
           },
@@ -876,7 +904,7 @@
             {
               "refId": "A",
               "editorMode": "code",
-              "expr": "sum(increase(jengasec_contract_rejections_total{environment=~\"${environment:regex}\"}[$__range]))",
+              "expr": "sum(increase(jengasec_contract_rejections_total{environment=~\"${environment:regex}\"}[$__range])) or on() (0 * sum(vector_component_received_events_total{job=\"vector\",environment=\"live\",component_id=\"quarantine_metrics\"}) and on() (max(up{job=\"vector\",environment=\"live\"}) == 1))",
               "queryType": "instant",
               "instant": true,
               "range": false,
