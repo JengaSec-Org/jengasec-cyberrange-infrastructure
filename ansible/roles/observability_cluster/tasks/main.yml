@@ -58,13 +58,59 @@
     remote_src: true
     creates: "{{ obs_cluster_root }}/linux-amd64/helm"
 
-- name: Copy the reviewed collector chart
+- name: Create a temporary source archive on the controller
+  ansible.builtin.tempfile:
+    state: file
+    suffix: .tar.gz
+  delegate_to: localhost
+  become: false
+  register: obs_cluster_source_archive
+  changed_when: false
+
+- name: Package the reviewed chart for one source transfer
+  ansible.builtin.command:
+    argv:
+      - tar
+      - -czf
+      - "{{ obs_cluster_source_archive.path }}"
+      - -C
+      - "{{ role_path }}/../../../charts/observability-agent"
+      - .
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+- name: Copy the reviewed chart archive
   ansible.builtin.copy:
-    src: "{{ role_path }}/../../../charts/observability-agent/"
-    dest: "{{ obs_cluster_root }}/chart/"
+    src: "{{ obs_cluster_source_archive.path }}"
+    dest: "{{ obs_cluster_root }}/chart.tar.gz"
     owner: root
     group: root
-    mode: preserve
+    mode: '0600'
+
+- name: Create the OBS chart directory
+  ansible.builtin.file:
+    path: "{{ obs_cluster_root }}/chart"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Unpack the reviewed chart
+  ansible.builtin.unarchive:
+    src: "{{ obs_cluster_root }}/chart.tar.gz"
+    dest: "{{ obs_cluster_root }}/chart"
+    remote_src: true
+    owner: root
+    group: root
+
+- name: Remove the temporary source archive
+  ansible.builtin.file:
+    path: "{{ obs_cluster_source_archive.path }}"
+    state: absent
+  delegate_to: localhost
+  become: false
+  changed_when: false
 
 - name: Render private collector values
   ansible.builtin.template:
