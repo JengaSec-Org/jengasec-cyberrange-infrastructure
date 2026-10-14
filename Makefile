@@ -1,8 +1,10 @@
-.PHONY: help lint contracts cells dev obs-validate obs-up obs-smoke obs-down obs-vm-validate
+.PHONY: help lint contracts cells scope dry-run-scope dev obs-validate obs-up obs-smoke obs-down obs-vm-validate
 help:
 	@echo "make lint          # the same checks CI runs"
 	@echo "make contracts     # validate shared contracts and fixtures"
 	@echo "make cells         # update team cells (needs cluster access)"
+	@echo "make scope         # apply imported ingress scope (needs cluster access)"
+	@echo "make dry-run-scope # render scope updates without changing the cluster"
 	@echo "make dev           # set up this machine (Debian 12)"
 	@echo "make obs-validate  # validate observability configs and contracts"
 	@echo "make obs-up        # start the observability stack"
@@ -23,10 +25,18 @@ lint:
 	$(MAKE) contracts
 
 contracts:
+	python3 scripts/test_platform_exports.py
+	python3 scripts/test_make_scope.py
 	python3 scripts/validate-contracts.py
 
 cells:
 	./scripts/provision-cells.sh
+
+scope:
+	python3 scripts/make-scope.py
+
+dry-run-scope:
+	python3 scripts/make-scope.py --dry-run
 
 dev:
 	./tools/bootstrap-dev-vm.sh

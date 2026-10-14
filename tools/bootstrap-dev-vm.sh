@@ -14,7 +14,7 @@ echo "== JengaSec dev VM setup (Debian 12) =="
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
   ca-certificates curl git gnupg jq make python3 python3-pip python3-venv \
-  shellcheck unzip vim wireguard-tools
+  shellcheck unzip vim wireguard-tools python3-yaml
 
 # kubectl
 if ! command -v kubectl >/dev/null; then
