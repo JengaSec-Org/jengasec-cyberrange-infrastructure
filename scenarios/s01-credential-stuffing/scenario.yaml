@@ -1,0 +1,25 @@
+id: s01
+name: credential-stuffing
+enterprise: ENT-A
+application: APP03       # namespace jengasec-ent-a-app03
+summary: >-
+  A Red team replays a leaked username/password list against the Customer Authentication and
+  Identity Service. Forty usernames fail within two minutes from one address, then one account
+  (k.otieno) logs in successfully and changes its password. Ordinary customers keep logging in
+  from Blue-side addresses throughout, so the burst has to be told apart from normal failures.
+attack_ids:
+  - T1110.004               # credential stuffing
+  - T1078                   # valid accounts (the one that worked)
+  - T1098                   # account manipulation (password change)
+duration_minutes: 10
+expected_detections:
+  - "burst of login_failure (authentication_failure) from 10.60.5.14 across many distinct users"
+  - "authentication_success for k.otieno from the same address straight after the burst"
+  - "password_changed (account_change) on k.otieno from the attacking address"
+expected_responses:
+  - "alert with the attacking address and the compromised account as evidence"
+  - "block-ip 10.60.5.14 on ENT-A APP03 (shadow mode: recorded, not applied)"
+  - "revoke-session or disable-account for k.otieno"
+unacceptable_responses:
+  - "blocking the whole 10.61.0.0/16 Blue range or the whole enterprise"
+  - "disabling accounts that only had one ordinary failed login"

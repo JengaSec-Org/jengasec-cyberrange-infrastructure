@@ -269,8 +269,52 @@ for _attempt in {1..60}; do
   fi
   sleep 1
 done
-[[ "$source_events_ready" == true ]] \
-  || die "Loki did not return every synthetic production-source event"
+if [[ "$source_events_ready" != true ]]; then
+  log "Loki did not return every synthetic production-source event"
+  jq --slurpfile emitted "$TEMP_DIR/source-emission.json" '
+    [.data.result[].values[]?[1] | fromjson?] as $events |
+    ($emitted[0].markers) as $markers |
+    ($emitted[0].netflow_src_port) as $netflow_port |
+    {
+      missing_markers: [
+        $markers | to_entries[] as $entry |
+        select(all($events[]; .request_id != $entry.value)) |
+        $entry.key
+      ],
+      missing_netflow_record: all(
+        $events[];
+        .source != "network" or .raw_event != "netflow_record" or
+        .network.src_port != $netflow_port
+      ),
+      returned_synthetic_events: [
+        $events[] |
+        select(
+          (.request_id | IN(
+            $markers.ingress,
+            $markers.firewall,
+            $markers.ids,
+            $markers.host,
+            $markers.application,
+            $markers.kubernetes
+          )) or
+          (.source == "network" and .raw_event == "netflow_record" and
+           .network.src_port == $netflow_port)
+        ) |
+        {
+          request_id,
+          source,
+          raw_event,
+          application,
+          namespace,
+          target_ip: .target.ip,
+          actor_ip: .actor.ip,
+          netflow_src_port: .network.src_port
+        }
+      ]
+    }
+  ' "$TEMP_DIR/source-loki-response.json" >&2
+  die "Loki did not return every synthetic production-source event"
+fi
 jq --exit-status '
   all(
     .data.result[];

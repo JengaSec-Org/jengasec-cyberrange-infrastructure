@@ -1,0 +1,8 @@
+# Pinned: change by pull request (docs/versions.md).
+fastapi==0.115.6
+uvicorn==0.34.0
+SQLAlchemy==2.0.36
+psycopg[binary]==3.2.3
+jsonschema==4.23.0
+rfc3339-validator==0.1.4
+PyYAML==6.0.2

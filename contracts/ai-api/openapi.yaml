@@ -1,70 +1,252 @@
 openapi: 3.1.0
 info:
   title: JengaSec AI API
-  version: 1.0.0
+  version: 1.3.0
   description: >
-    Read-only telemetry for AI cells, and a gateway for permitted actions.
+    Telemetry for the AI track, and a gateway for permitted actions (Competition Architecture §3, §15).
     Event one runs the gateway in shadow mode: every action is authorised, recorded and scored,
     but only `alert` takes effect.
+
+    Two roles, one token per team (scripts/ai-teams.yaml).
+    AI Blue (AI-01…AI-03) reads every event for all 18 applications, posts decisions and requests actions.
+    AI Red (RI-01…RI-06) reads only events about its own traffic and the baseline alerts that traffic
+    triggered; it cannot post decisions or actions (403) — its output is traffic.
+
+    Events are telemetry contract v2 (telemetry-event.schema.json), produced and attributed by Observability:
+    `actor.team_id` / `actor.team_label` come from the platform's ip_allocations and are the ground truth.
+    AI Red's view is every event whose `actor.team_id` is its own team's.
+
+    v1.1 added `/ingest`, `/healthz` and the shapes. v1.2 moved to per-team tokens and the AI Red view.
+    v1.3 serves telemetry v2 (ENT-A/APP01/namespace identifiers), accepts NDJSON on `/ingest`, and runs on
+    the platform VM 101 next to the website (docs/platform-vm.md). Owner: AIC. Implementation: `ai-api/`.
 servers:
-  - url: https://ai.range.example/api/v1
+  - url: https://10.109.0.10:8443/api/v1
+    description: platform VM 101 on the Functions VLAN, for AI teams over WireGuard (once VLAN 109 is live)
+  - url: https://192.168.40.11:8443/api/v1
+    description: platform VM 101 on the VM network, for Observability's Vector and staff
+  - url: https://ai.range.jengasec.lan:8443/api/v1
 security:
-  - cellToken: []
+  - teamToken: []
 components:
   securitySchemes:
-    cellToken:
+    teamToken:
       type: http
       scheme: bearer
-      description: One token per AI cell, scoped to one enterprise. Never share it.
+      description: One token per AI team, published on the team's page on the website. Never share it.
+    ingestToken:
+      type: http
+      scheme: bearer
+      description: Held only by the observability collector (Vector). Cannot read anything.
+  parameters:
+    actionType:
+      name: type
+      in: path
+      required: true
+      schema:
+        enum: [alert, block-ip, revoke-session, disable-account, rate-limit, isolate-workload, snapshot-evidence]
+  responses:
+    Unauthorised: { description: Missing or unknown token }
+    RateLimited: { description: Over your rate limit — back off }
+    Halted: { description: The gateway kill switch is on; the request was recorded but not accepted }
   schemas:
     Event:
       $ref: "../telemetry-event.schema.json"
+    Asset:
+      type: object
+      required: [asset_id, enterprise, application, namespace, ip, enabled]
+      description: One application instance, from scripts/cells.yaml
+      properties:
+        asset_id: { type: string, description: "<namespace>/app, the value telemetry uses in `asset`" }
+        enterprise: { enum: [ENT-A, ENT-B] }
+        application: { type: string, pattern: "^APP0[1-9]$" }
+        namespace: { type: string, pattern: "^jengasec-ent-(a|b)-app0[1-9]$" }
+        ip: { type: string, description: Reserved VLAN 108 address }
+        service: { type: string }
+        optional: { type: boolean }
+        enabled: { type: boolean }
+    EventPage:
+      type: object
+      required: [events, next_cursor, has_more]
+      properties:
+        events: { type: array, items: { $ref: "#/components/schemas/Event" } }
+        next_cursor:
+          type: string
+          description: Pass back as `cursor` to continue from here. Always present, so you can keep polling after you catch up.
+        has_more:
+          type: boolean
+          description: true = more events are waiting now; false = you have caught up, poll again in a few seconds
+    IngestResult:
+      type: object
+      required: [accepted, rejected]
+      properties:
+        accepted: { type: integer, description: Events stored (duplicates by event_id count as accepted) }
+        rejected:
+          type: array
+          items:
+            type: object
+            required: [index, error]
+            properties:
+              index: { type: integer, description: Position in the posted array }
+              error: { type: string }
+    Alert:
+      type: object
+      required: [alert_id, ts, enterprise, application, namespace, rule, severity, evidence]
+      properties:
+        alert_id: { type: string }
+        ts: { type: string, format: date-time }
+        enterprise: { enum: [ENT-A, ENT-B] }
+        application: { type: string }
+        namespace: { type: string }
+        rule: { type: string, description: "Baseline rule name, e.g. auth_failure_burst" }
+        severity: { enum: [low, medium, high, critical] }
+        summary: { type: string }
+        evidence: { type: array, items: { type: string }, description: telemetry event_id values }
+    ActionRequest:
+      type: object
+      required: [target, justification]
+      properties:
+        target:
+          type: object
+          required: [namespace]
+          properties:
+            namespace: { type: string, pattern: "^jengasec-ent-(a|b)-app0[1-9]$" }
+            ip: { type: string, description: The sender you act on; acting on a non-Red sender counts as a false action }
+            user_id: { type: string }
+            session: { type: string }
+        parameters: { type: object }
+        justification: { type: string, minLength: 1, description: Why — judges read this }
+        incident_id: { type: string }
+        evidence: { type: array, items: { type: string } }
+    ActionRecord:
+      type: object
+      required: [action_id, type, status, effective]
+      properties:
+        action_id: { type: string }
+        type: { type: string }
+        status: { enum: [recorded, halted, reverted] }
+        effective: { type: boolean, description: Only `alert` is true in event one (shadow mode) }
+        budget_remaining: { type: integer }
+    Decision:
+      type: object
+      required: [incident_id, summary, confidence, evidence]
+      properties:
+        incident_id: { type: string }
+        summary: { type: string, description: What you concluded and why, in plain words }
+        attack_mapping: { type: array, items: { type: string } }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        severity: { enum: [low, medium, high, critical] }
+        evidence: { type: array, minItems: 1, items: { type: string }, description: telemetry event_id values }
+        actions: { type: array, items: { type: string }, description: action_id values this decision led to }
+        handoff:
+          $ref: "../handoff.schema.json"
+    DecisionRecord:
+      type: object
+      required: [decision_id, ts]
+      properties:
+        decision_id: { type: string }
+        ts: { type: string, format: date-time }
 paths:
+  /healthz:
+    get:
+      summary: Liveness check
+      security: []
+      responses:
+        "200": { description: ok }
   /telemetry/events:
     get:
-      summary: Page through events for your enterprise
+      summary: Page through events (AI Blue - everything; AI Red - your own traffic only)
       parameters:
         - { name: since, in: query, schema: { type: string, format: date-time } }
         - { name: cursor, in: query, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer, maximum: 1000, default: 200 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } }
       responses:
-        "200": { description: Events and a next cursor }
-        "401": { description: Missing or unknown token }
-        "429": { description: Over your rate limit — back off }
+        "200":
+          description: Events and a next cursor
+          content: { application/json: { schema: { $ref: "#/components/schemas/EventPage" } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }
+        "429": { $ref: "#/components/responses/RateLimited" }
   /telemetry/stream:
     get:
       summary: Server-sent events, same shape, live
+      description: Each `data:` line is one Event. A comment line is sent every 15 seconds to keep the connection open.
+      parameters:
+        - { name: cursor, in: query, schema: { type: string }, description: Start after this cursor; default is now }
       responses:
         "200": { description: text/event-stream }
+        "401": { $ref: "#/components/responses/Unauthorised" }
   /assets:
     get:
-      summary: What exists in your enterprise (cells, hostnames, services)
+      summary: The applications in both enterprises (cells, reserved IPs, ports, services)
       responses:
-        "200": { description: Asset inventory }
+        "200":
+          description: Asset inventory
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Asset" } } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }
   /alerts:
     get:
-      summary: Platform baseline alerts, for comparison with your own detections
+      summary: Platform baseline alerts (AI Red - only those your traffic triggered, evidence trimmed to yours)
       responses:
-        "200": { description: Alerts }
+        "200":
+          description: Alerts
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Alert" } } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }
   /actions/{type}:
     post:
       summary: Request an action (shadow mode in event one)
       parameters:
-        - name: type
-          in: path
-          required: true
-          schema:
-            enum: [alert, block-ip, revoke-session, disable-account, rate-limit, isolate-workload, snapshot-evidence]
+        - $ref: "#/components/parameters/actionType"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ActionRequest" } } }
       responses:
-        "202": { description: Recorded, with an action_id }
-        "403": { description: Outside your scope, or over budget }
+        "202":
+          description: Recorded, with an action_id
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActionRecord" } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }
+        "403": { description: Not an application in the range, over budget, or an AI Red token }
+        "423": { $ref: "#/components/responses/Halted" }
   /actions/{id}/revert:
     post:
       summary: Undo an action you requested
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
       responses:
-        "202": { description: Recorded }
+        "202":
+          description: Recorded
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActionRecord" } } }
+        "403": { description: Not your action, or an AI Red token }
+        "404": { description: No such action }
   /decisions:
     post:
       summary: Publish a decision-log entry (this is what judges score)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/Decision" } } }
       responses:
-        "201": { description: Stored }
+        "201":
+          description: Stored
+          content: { application/json: { schema: { $ref: "#/components/schemas/DecisionRecord" } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }
+        "403": { description: AI Red token }
+        "422": { description: Evidence refers to an unknown event_id, or the body is malformed }
+  /ingest:
+    post:
+      summary: Collector only — post normalised telemetry events
+      description: >
+        Observability's Vector posts batches here over the Functions VLAN (docs/ai-integration.md). Each item is
+        validated against telemetry-event.schema.json (v2) on its own; bad items are rejected and reported,
+        good items are stored. Re-posting an event_id is a no-op, so Vector retries are safe.
+      security:
+        - ingestToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: array, maxItems: 5000, items: { $ref: "#/components/schemas/Event" } }
+          application/x-ndjson:
+            schema: { type: string, description: One Event per line (Vector framing newline_delimited) }
+      responses:
+        "202":
+          description: Batch processed
+          content: { application/json: { schema: { $ref: "#/components/schemas/IngestResult" } } }
+        "401": { $ref: "#/components/responses/Unauthorised" }

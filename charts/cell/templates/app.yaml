@@ -19,7 +19,8 @@ spec:
         prometheus.io/path: "/metrics"
         prometheus.io/port: {{ .Values.app.port | quote }}
     spec:
-      serviceAccountName: deployer
+      serviceAccountName: application
+      automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: app

@@ -1,0 +1,55 @@
+# Vector sink TEMPLATE: OBS -> AI VM. Owner: AIC (the AI-owned interface the OBS runbook leaves open).
+#
+# Render it, then load it as a second Vector config next to OBS's generated vector.yaml:
+#   python3 ai-api/deploy/render-vector-ai-sink.py --url https://192.168.40.11:8443/api/v1/ingest \
+#       --ca-file /etc/vector/ai/ai-ca.crt --secret-file /etc/vector/ai/ai-secret.json --out <dir>/vector-ai-sink.yaml
+#   vector --config <generated>/vector.yaml --config <dir>/vector-ai-sink.yaml
+#
+# Vector 0.58 does not interpolate ${ENV} in configuration (it needs --dangerously-allow-env-var-interpolation),
+# so, like OBS's __WEBSITE_FEED_URL__, the URL and CA path are rendered placeholders, and the bearer token is
+# read from a root-only Vector secret file: {"ingest_token": "<INGEST_TOKEN from the AI VM's ai-api.env>"}.
+#
+# It sends the same normalized telemetry v2 events as OBS's ai_telemetry_handoff file spool, as NDJSON over
+# HTTPS on the VM network (platform VM 101, docs/platform-vm.md), to POST /api/v1/ingest (contracts/ai-api/openapi.yaml). The AI API stores each
+# event_id once, so Vector's retries and a replay of the spool are safe. The disk buffer holds up to 1 GB while
+# the AI VM is unreachable; the spool remains the backstop.
+secret:
+  ai:
+    type: file
+    path: __AI_SECRET_FILE__
+
+sinks:
+  ai_api_ingest:
+    type: http
+    inputs:
+      - normalized_application
+      - normalized_sources
+    uri: __AI_INGEST_URL__
+    method: post
+    compression: none
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    request:
+      headers:
+        Content-Type: application/x-ndjson
+      retry_attempts: 1000000
+      timeout_secs: 30
+    auth:
+      strategy: bearer
+      token: "SECRET[ai.ingest_token]"
+    # __AI_TLS_BEGIN__
+    tls:
+      ca_file: __AI_CA_FILE__
+      verify_certificate: true
+    # __AI_TLS_END__
+    batch:
+      max_events: 500
+      timeout_secs: 1
+    buffer:
+      type: disk
+      max_size: 1073741824
+      when_full: block
+    healthcheck:
+      enabled: false

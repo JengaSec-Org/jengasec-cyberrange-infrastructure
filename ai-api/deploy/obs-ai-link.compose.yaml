@@ -1,0 +1,20 @@
+# Rehearsal only: OBS's development stack (observability/compose.yaml) plus the AI sink, so the real Vector
+# normalizer posts its telemetry v2 output to an AI API running on the host. Owner: AIC.
+#
+#   python3 ai-api/deploy/render-vector-ai-sink.py --url http://host.docker.internal:8766/api/v1/ingest \
+#       --secret-file /etc/vector/ai/ai-secret.json --out out/obs-ai-link/vector-ai-sink.yaml
+#   printf '{"ingest_token":"rehearsal-ingest"}' > out/obs-ai-link/ai-secret.json
+#   docker compose -f observability/compose.yaml -f ai-api/deploy/obs-ai-link.compose.yaml up -d --build
+#
+# Needs an AI API on the host at :8766 with INGEST_TOKEN=rehearsal-ingest (runbooks/ai-api-vm.md §8).
+services:
+  vector:
+    command:
+      - --config
+      - /etc/vector/generated/vector.yaml
+      - --config
+      - /etc/vector/ai/vector-ai-sink.yaml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./../out/obs-ai-link:/etc/vector/ai:ro
