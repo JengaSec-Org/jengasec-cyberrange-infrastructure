@@ -1,6 +1,51 @@
 # AI API
 
-**Owner:** AIC · **Contract:** [`contracts/ai-api/openapi.yaml`](../contracts/ai-api/openapi.yaml) (v1.2) · **Design:** Competition Architecture §3, §15 · **Tasks:** AIC-05, AIC-11, AIC-15, AIC-18, AIC-20, base for AIC-17
+**Owner:** AIC · **Contract:** [`contracts/ai-api/openapi.yaml`](../contracts/ai-api/openapi.yaml) (v1.3) · **Design:** Competition Architecture §3, §15 · **Tasks:** AIC-05, AIC-11, AIC-15, AIC-18, AIC-20, base for AIC-17
+
+With `SCORING_MODE=1`, this service also exposes
+[`/api/v1/scoring`](../contracts/ai-api/scoring-openapi.yaml). The website's
+versioned scoring policy owns official marks. Existing v1 telemetry, stream,
+asset and alert routes keep their client shapes and permissions. Legacy
+decision/action/revert writes and both admin marks routes return 409. Use the
+structured scoring namespace with its original bearer token, case, event time,
+epoch and sequence; the facade does not infer those values or translate IDs.
+The `X-JengaSec-Scoring-Mode` response header identifies `website-v2` or
+`legacy-shadow`. The sandbox examples and heuristic scoring described below
+apply only when scoring mode is disabled.
+
+Install the private scoring backend on the same host as this facade. Its
+address is fixed at `127.0.0.1`, with port
+`SCORING_GATEWAY_PORT` (default 9681). It receives private `/api/v1/*` requests
+from the public `/api/v1/scoring/*` facade. It authenticates the original
+bearer independently; observer and operator tokens need their own grants in
+its protected token configuration. There is no shared credential substitution.
+Requests are limited to 64 KiB, responses to 1 MiB, backend response headers
+to 16 KiB, and backend connections to 16. `SCORING_GATEWAY_TIMEOUT_SECONDS` defaults to 35
+and cannot exceed 60. Oversized receipt pages return 413; request a smaller
+page. Redirects, encoded paths and unavailable backends are rejected. Scoring
+SSE uses bounded resumable batches; the existing v1 stream remains live SSE.
+Keep action keys and producer epoch/sequence unchanged on retry. A transport
+timeout does not establish whether an action ran; inspect its native state.
+
+In scoring mode, `/admin/kill-switch` forwards the staff caller's original
+token to the actual gateway. Register that same reviewed `ADMIN_TOKEN` as a
+gateway operator; otherwise the backend denies it. GET reads the actuator's
+current switch. POST translates only `{on: boolean}` to `{enabled: boolean}`
+and requires confirmed revocation before reporting success. A failed backend
+or unresolved revocation returns an error; the legacy database flag is unused.
+
+`SANDBOX_SEED` defaults to 0 in scoring mode; explicitly enabling it prevents
+startup. Use a reviewed database without rehearsal fixtures. Clear the legacy
+website feed credentials and disable `jengasec-ai-marks.timer` when enabling
+scoring mode. The installer disables that timer in scoring mode, and the
+publisher itself exits without any request. Admin exports of legacy activity
+are marked non-scoring and omit the heuristic ground-truth summary.
+
+`snapshot-evidence` captures telemetry evidence only. It does not snapshot or
+restore a VM or application. Real revert removes the gateway's own block-ip
+lease and verifies recovery. Other restoration actions are unsupported. See
+the [scoring rollout](../runbooks/observability.md) for private service paths,
+identity refresh, source access and actuator configuration.
 
 **Try it on a Debian 12 VM:** [`runbooks/ai-api-vm.md`](../runbooks/ai-api-vm.md). There, `make-bundle.sh`, then `install.sh`, then `smoke.sh`.
 
@@ -116,7 +161,10 @@ These staff and judges' endpoints are intentionally left out of the AI team cont
 | `DATABASE_URL` | `sqlite:///./ai-api.db` | Use `postgresql+psycopg://…` on the platform (PostgreSQL 16) |
 | `TOKENS_FILE` | `tokens.yaml` | Token hashes from `scripts/issue-tokens.py`. Keep it out of Git; on the cluster it is a Secret |
 | `INGEST_TOKEN` / `ADMIN_TOKEN` | empty (endpoint refuses everyone) | Vector's token and the staff token |
-| `SANDBOX_SEED` | `1` | Load scripted scenarios at start-up. Set `0` on the live range once Vector feeds `/ingest` |
+| `SCORING_MODE` | `0` | Enable the additive scoring protocol; disable legacy writes and marks |
+| `SCORING_GATEWAY_PORT` | `9681` | Private backend port on fixed `127.0.0.1`; 1024–65535 |
+| `SCORING_GATEWAY_TIMEOUT_SECONDS` | `35` | Total backend request deadline; 0.1–60 seconds |
+| `SANDBOX_SEED` | `1` in legacy mode, `0` in scoring mode | Load scripted scenarios at start-up; forbidden in scoring mode |
 | `ACTION_BUDGET` | `20` | Actions per AI Blue team per engagement day |
 | `RATE_LIMIT_PER_MINUTE` | `600` | Requests per token per minute |
 | `REPO_ROOT` | the repository | Where `contracts/`, `scripts/cells.yaml`, `scripts/ai-teams.yaml` and `scenarios/` are read from |

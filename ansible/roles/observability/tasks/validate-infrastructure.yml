@@ -26,6 +26,7 @@
       - --network=none
       - --add-host=prometheus:127.0.0.1
       - --add-host=vector:127.0.0.1
+      - --add-host=loki:127.0.0.1
       - --entrypoint=nginx
       - --volume
       - "{{ obs_infrastructure_config_root }}:/etc/jengasec-infrastructure:ro"

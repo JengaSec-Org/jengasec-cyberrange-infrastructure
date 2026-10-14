@@ -36,6 +36,8 @@ def _m(cap, ratio):
 
 def marks_for(db, state, day=None):
     """Every AI team's proposed marks for one engagement day (or the whole event when day is None)."""
+    if state.settings.scoring_mode:
+        raise ValueError("website_scoring_authority")
     window = day_windows(state.settings.engagement_days).get(day) if day else None
     if day and window is None:
         raise ValueError(f"day {day} is not in ENGAGEMENT_DAYS")
@@ -78,6 +80,8 @@ def marks_for(db, state, day=None):
 
 def publish(settings, rows):
     """POST the marks to the website. Returns (http_status, response_json). Raises if not configured."""
+    if settings.scoring_mode:
+        raise RuntimeError("website_scoring_authority")
     if not (settings.website_feed_url and settings.website_feed_token):
         raise RuntimeError("WEBSITE_FEED_URL and WEBSITE_FEED_TOKEN must both be set")
     body = {"scores": [{k: v for k, v in r.items() if k != "code"} for r in rows]}

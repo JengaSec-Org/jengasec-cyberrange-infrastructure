@@ -401,19 +401,243 @@ it for older releases. Verify native Loki and Prometheus queries and a
 labelled validation event. Run the development smoke check in an isolated
 rehearsal. Retain backups and evidence through the appeal window.
 
-The website receiver and authentication remain website-owned. The AI network
-endpoint, transport and authentication remain AI-owned. Until those owners
-publish their interfaces, do not treat a rehearsal mock or the local AI spool
-as a live integration.
+The website receiver and authentication remain website-owned. The shared AI
+gateway uses the versioned AI API contract. A rehearsal mock or a local spool
+does not establish that either integration is deployed.
 
 ## Outbound integrations
 
 The development stack posts sanitized events to its mock `/api/feed` receiver.
-Set `JENGASEC_WEBSITE_FEED_URL` only after the website owner provides the live
-HTTPS receiver and authentication method. `make obs-smoke` proves a live event
-arrived without sensitive or attribution fields.
+Keep `JENGASEC_WEBSITE_FEED_URL` pointed at that event-consumer interface. The
+website scoring endpoint accepts calculated criterion revisions, so it must
+receive the separate scoring collector's `scoring-feed/2.0` envelope.
 
 Vector also writes normalized events to the `vector-ai-handoff` volume. A live
 deployment mounts that volume at `/var/lib/vector/ai-handoff/` with OBS-only
-write access. Do not add a network destination or credentials until the AI
-owner publishes that interface.
+write access. The AI gateway reads this bounded spool and applies fresh
+platform scope to each caller.
+
+## Scoring collector rollout and recovery
+
+Use the website owner's approved release and a designated competition. Apply
+its migrations and run `manage.py scoring_policy preflight --competition ID`
+before enrollment. Resolve baseline differences before freezing a future
+window with `scoring_policy enroll`. The website requires an explicit archive
+byte budget. Register verified frozen workloads, assignments, producers and
+scenario versions with `manage.py scoring_sources`. Confirm the deployed
+website release, acting identity and secret paths before starting collection.
+
+The deployment agent must run with `--verify-artifacts` during the competition.
+Its authenticated artifact heartbeat verifies deployed content independently
+of application health. A tag, an old freeze or a ready process is insufficient.
+AI workload owners must supply equivalent authenticated deployment receipts.
+An outage should reduce measured availability; missing content identity must
+hold scoring. Do not fill an identity gap retroactively.
+
+Prepare a private JSON configuration that validates against
+`contracts/scoring-collector.schema.json`. Set the exact HTTPS website origin,
+competition ID, UTC window, feed credential file, source-cache budget and
+private state directory. `producers` maps local aliases to platform-issued
+producer UUIDs and credential files. Each `probes` entry names its registered
+target, producer alias, health path, separate functional path and typed JSON
+assertions. A successful process-health response cannot satisfy a failed
+functional assertion. Set `metrics_file` to the existing node exporter's
+textfile directory. All credential files must be owner-only.
+
+For native proof and collector measurement writes, set `loki_url` to the
+existing OBS mTLS receiver using a name or address covered by its server
+certificate. Set `loki_tls` with `ca_file`, `cert_file` and `key_file`, installed
+through `obs_scoring_credentials`. All three must be regular files owned by
+root or the service account. The private key must be owner-only; the CA and
+certificate must not be writable by a group or other users. Symlinks,
+incomplete settings, invalid material and mismatched keys fail validation.
+Server trust and hostname checks remain enabled.
+
+Issue a dedicated client certificate from the existing telemetry CA with
+`CN=jengasec-scoring-collector`. Set
+`obs_infrastructure_scoring_certificate_sha1` to its fingerprint as 40 hex
+characters without separators. The default empty value disables the native
+routes. Nginx requires both the reserved CN and the active fingerprint for
+`GET /loki/api/v1/query_range` and `POST /loki/api/v1/push`. It forces the
+`staff` tenant and removes any Authorization header before forwarding. This
+credential permits evidence reads and measurement appends, and needs no
+Grafana or administrator credential. The reserved collector role is denied
+on every other ingestion route even when its pin is disabled or replaced;
+retired certificates cannot regain generic ingest access. Other existing
+ingest clients retain their routes and cannot use the native Loki routes.
+List the infrastructure resources that the collector may cite.
+
+For AI receipts, configure `ai_gateway.url`, its operator credential file and
+an exact producer map from team, source ID and role to the platform producer
+UUID. Use the AIC service's HTTPS origin. `ai_gateway.api_prefix` defaults to
+`/api/v1/scoring`; select `/api/v1` only for an explicit private backend
+connection. The bridge retains complete native and embedded effect proof before
+queueing normalized receipts and acknowledging the gateway cursor. A missing
+mapping for an issued case holds that cursor. Unscheduled action audit records
+stay non-scoring records.
+
+Deploy with `ansible/scoring-observability.yml` and a private inventory selecting
+one existing OBS host. Supply `obs_scoring_policy_source` as the checked-out
+website source, `obs_scoring_config_source` as the private JSON file, and only
+the explicit `obs_scoring_credentials` files. The role uses the existing Python
+runtime with JSON Schema and YAML support. It creates no accounts and changes
+no SSH settings. `obs_scoring_start` defaults to false. Review the selected
+host, storage budget, credentials, state paths and recovery controls before
+enabling the service.
+
+The service keeps functional measurements on a separate schedule from slow
+publication. Its private `status.json` and `probes.json` distinguish delivery
+from probe progress. Existing node metrics expose pending rows, pending bytes,
+rejected rows and backpressure. At capacity or after a storage failure, restore
+capacity or repair the source before retrying. Preserve the delivery database,
+source cache and original IDs across restarts. Do not reset cursors to make a
+warning disappear. A missing source receipt or archive must remain a hold.
+
+Use `ansible/scoring-ai.yml` for the separately selected gateway, actuator or
+effect-probe role. The gateway requires an existing unprivileged account and
+group with the reviewed file access; the role does not create identities or
+change memberships. Its defaults are `/opt/jengasec-scoring-ai`,
+`/etc/jengasec-scoring-ai` and `/var/lib/jengasec-scoring-ai`, with unit
+`jengasec-scoring-ai.service`. These are separate from the AIC service's
+`jengasec-ai` directories. The gateway listens only on `127.0.0.1`; it creates
+no public nginx location. Configure a fixed authenticated command to the
+actuator and a separate fixed command to the effect verifier.
+
+Install the private gateway on the same host as the AIC service, with reviewed
+read access to its configured OBS telemetry spool and current identity. The
+facade does not copy the AIC event database into that spool.
+The existing AIC service is the only public facade. Set its `SCORING_MODE=1`,
+`SANDBOX_SEED=0`, and `SCORING_GATEWAY_PORT` to the gateway's `listen_port`
+(default 9681). `SCORING_GATEWAY_TIMEOUT_SECONDS` defaults to 35, with a
+maximum of 60 seconds. Public `/api/v1/scoring/*` requests reach private
+`/api/v1/*` paths. The facade preserves the original bearer and request bytes.
+Register each producer's token hash, canonical identity and role in the
+gateway's protected configuration. Existing v1 reads retain their contract.
+Legacy decision, action and revert writes return 409 in scoring mode; callers
+must supply the scoring protocol's provenance. Backend failures never record
+a shadow replacement.
+
+The operator must clear the AIC service's legacy website feed credentials and
+disable `jengasec-ai-marks.timer`. The installer disables the timer in scoring
+mode; it does not rewrite existing credentials. The publisher also refuses
+publication. Use a reviewed database without sandbox
+events; explicit sandbox seeding prevents scoring-mode startup. The existing
+AIC `ADMIN_TOKEN` must also be registered as a gateway operator for
+`/admin/kill-switch` to work. The original staff token reaches the gateway;
+the facade supplies no privileged replacement token. GET reads real actuator
+state and POST must confirm actual revocation. Failed or pending recovery is
+an error, not a change to an independent flag.
+
+`snapshot-evidence` archives selected telemetry evidence. It is not a VM or
+application snapshot. Revert removes an actuator-owned block lease and checks
+functional recovery; workload restoration remains unsupported.
+
+Deploy `ansible/scoring-ai-identity.yml` on each selected gateway and actuator
+host before enabling actions. Set the website's
+`DJANGO_SCORING_IDENTITY_TOKEN` and supply its matching private file as
+`scoring_ai_identity_token_source`. The `scoring_ai_identity_config` object
+requires `schema_version: scoring-ai-identity/1.0`, the HTTPS `origin`, the
+competition ID, `token_file` under the role's configuration directory, and
+`snapshot_file` under its state directory. An optional `ca_file` selects a
+root-owned CA bundle. The credential grants identity reads only.
+
+For a gateway, set the role's `scoring_ai_identity_reader_user` and
+`scoring_ai_identity_reader_group` to its existing service identity, and set
+the same `reader_group` in the JSON configuration. The publisher owns the
+snapshot and grants that group read access only. For a root actuator, omit
+the reader group. Set each runtime's `identity_file` to that host's published
+snapshot. Keep the credential outside all runtime-readable directories.
+Enable `scoring_ai_identity_start` during the approved rollout. Confirm a
+fresh snapshot can be read as the selected service account before starting
+the gateway. The timer refreshes every 30 seconds and invalidates the snapshot
+on a failed refresh; actions require current authority with at most 120
+seconds of validity.
+
+The actuator uses a dedicated drop-only
+nftables table and timed exact-target tuples. It requires fresh current scope,
+management-network exclusions, one active restriction per team and target,
+five new restrictions per minute, thirty per hour and leases of at most 60
+seconds. Expired authority, unsupported actions and unverified effects cannot
+be recorded as successful execution.
+
+The effect verifier must run from the approved source and independent control
+addresses. It checks actual service responses before, during and after the
+restriction. Runtime design, safety and decision assertions must come from the
+registered independent observer. Teams still supply their competition AI
+services; the shared gateway does not manufacture a competing agent or a
+successful runtime assertion.
+
+Before finalization, verify each role's source, timed identity, native proof,
+calculated facts, feed outcome, stored revision and authorized website view.
+Exercise a correction, duplicate retry, partial rejection, outage/restart,
+override, delayed board, evidence-access rejection and appeal hold. Verify
+actual effect, automatic expiry, explicit reversal and the kill switch on the
+approved network target. Have another reviewer reproduce the marks from the
+archived inputs. Local tests are not evidence of this live acceptance.
+
+Use fix-forward recovery for code and configuration failures:
+
+1. Contain the affected operation. Stop incorrect publication through the
+   website's controls or stop `jengasec-scoring.service`. Keep OBS collection
+   and unaffected reads running where possible. For an unsafe AI restriction,
+   enable the actual actuator kill switch and verify functional restoration
+   before stopping the gateway. Kernel expiry, explicit reversal and the kill
+   switch remain required containment controls. Do not flush shared firewall
+   tables. Keep current-identity refresh running unless that component needs
+   repair.
+2. Record the affected release, configuration paths, service identities and
+   state paths privately. Preserve the collector's `delivery.sqlite3` and
+   `sources.sqlite3`, source and receipt cursors, rejected rows and retained
+   proof. Preserve each gateway and actuator `state_file`, evidence directory,
+   action keys, producer sequences and kill-switch state. Preserve website
+   score revisions, overrides, archive objects and appeal holds through the
+   website owner's recovery procedure. Source control cannot restore this
+   runtime state.
+3. Before a migration or storage repair, take a consistent private backup.
+   Stop all writers before copying a state directory, or use SQLite's backup
+   API for each database and coordinate the related stores and evidence.
+   A live copy of the main SQLite file alone can omit committed WAL data.
+   Retain required journal files and numeric ownership when copying stopped
+   state. Verify database integrity and that referenced evidence remains
+   readable. A backup from before an acknowledged export can be incomplete;
+   keep affected publication held until retained source proof and receiver
+   history establish what can be recovered.
+4. Apply a reviewed forward correction with compatible code, configuration
+   and migrations. Validate migrations on a copy first. Preserve existing
+   rows, stable component keys and the enrolled policy; do not reset databases,
+   counters, cursors, producer IDs or epochs to bypass a failure. Use a new
+   policy version only through the website's approved policy process. Stop
+   affected writers before replacing their installed source. The Ansible
+   roles update code and configuration in place; setting their `*_start`
+   options to false does not stop an already running service. These roles do
+   not reverse migrations or remove runtime state after a failed check.
+5. Run checks for the changed behavior and redeploy the corrected release
+   against the preserved state. Confirm credential and receiver compatibility,
+   source progress, queue delivery, archived inputs and stored revisions.
+   Fetch a fresh execution-authority snapshot before resuming actions. Keep
+   historical authority as evidence; never extend an old snapshot's expiry.
+   Reconcile actuator state and verify functional recovery before clearing
+   the kill switch. A restart must not replay a missing firewall restriction.
+
+A corrected calculation keeps `main:<criterion>` and receives the next
+delivery revision. The collector includes calculated marks in its input
+fingerprint, so changed results can produce a correction without deleting
+source cursors. Older input-only fingerprints are reevaluated once. Existing
+queued payloads and immutable evidence are not rewritten. A permanently
+rejected older row stays visible in queue metrics while an eligible higher
+revision can be delivered. Retry the same rejected payload only after fixing
+its rejection cause; changed facts or marks require a new revision. Verify
+the website's accepted revision and authorized view before resuming normal
+publication. Missing evidence or identity remains a hold.
+
+Use release rollback only for an incident where a forward correction cannot
+contain the harm adequately. Record that reason and check data compatibility
+before selecting an earlier binary. Reverting code does not reverse committed
+scores, restore database contents or remove a runtime action. A separate
+release-rollback drill is not a prerequisite for routine forward repair.
+
+For isolated integration validation, install the website's test dependencies,
+set `JENGASEC_PLATFORM_SOURCE` to its compatible checkout, and run
+`make scoring-integration-check` with that Python environment. The check uses
+a disposable test database and local functional HTTP service. Run
+`make scoring-check` for collector and AI transport, proof and failure checks.

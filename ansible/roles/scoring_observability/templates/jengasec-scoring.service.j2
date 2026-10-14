@@ -1,0 +1,30 @@
+[Unit]
+Description=JengaSec competition measurements and evidence delivery
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart={{ obs_scoring_python }} {{ obs_scoring_install_root }}/scripts/run-scoring-collector.py --config {{ obs_scoring_config_root }}/collector.json
+WorkingDirectory={{ obs_scoring_install_root }}
+Environment=PYTHONPATH={{ obs_scoring_install_root }}
+Restart=on-failure
+RestartSec=15s
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+ReadWritePaths={{ obs_scoring_state_root }} {{ obs_scoring_textfile_dir }}
+MemoryMax=768M
+TasksMax=96
+TimeoutStopSec=20s
+
+[Install]
+WantedBy=multi-user.target

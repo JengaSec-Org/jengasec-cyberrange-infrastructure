@@ -1,0 +1,179 @@
+---
+- name: Require explicit policy and private runtime configuration
+  ansible.builtin.assert:
+    that:
+      - obs_scoring_policy_source | length > 0
+      - obs_scoring_config_source | length > 0
+      - obs_scoring_credentials is sequence
+    quiet: true
+
+- name: Validate fixed installation paths
+  ansible.builtin.assert:
+    that:
+      - item is match('^/[A-Za-z0-9_./-]+$')
+      - "'..' not in item.split('/')"
+      - item | length > 10
+    quiet: true
+  loop:
+    - "{{ obs_scoring_install_root }}"
+    - "{{ obs_scoring_config_root }}"
+    - "{{ obs_scoring_state_root }}"
+    - "{{ obs_scoring_textfile_dir }}"
+    - "{{ obs_scoring_python }}"
+
+- name: Require existing evidence validation dependencies
+  ansible.builtin.command:
+    argv: ["{{ obs_scoring_python }}", -c, "import sys, ssl, sqlite3, yaml, jsonschema; assert sys.version_info >= (3, 10)"]
+  changed_when: false
+
+- name: Check existing node metrics directory
+  ansible.builtin.stat:
+    path: "{{ obs_scoring_textfile_dir }}"
+  register: obs_scoring_textfile
+
+- name: Require the existing metrics integration
+  ansible.builtin.assert:
+    that:
+      - obs_scoring_textfile.stat.isdir | default(false)
+    quiet: true
+
+- name: Create private scoring directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  loop:
+    - "{{ obs_scoring_install_root }}"
+    - "{{ obs_scoring_install_root }}/scripts"
+    - "{{ obs_scoring_install_root }}/scripts/scoring_obs"
+    - "{{ obs_scoring_install_root }}/scripts/scoring_ai"
+    - "{{ obs_scoring_install_root }}/contracts"
+    - "{{ obs_scoring_install_root }}/jengasec_scoring_policy"
+    - "{{ obs_scoring_config_root }}"
+    - "{{ obs_scoring_state_root }}"
+
+- name: Install collector and bridge modules
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ obs_scoring_install_root }}/scripts/{{ item | dirname | basename }}/{{ item | basename }}"
+    owner: root
+    group: root
+    mode: '0600'
+    backup: true
+  loop: "{{ query('ansible.builtin.fileglob', playbook_dir ~ '/../scripts/scoring_obs/*.py', playbook_dir ~ '/../scripts/scoring_ai/*.py') }}"
+  notify: Restart the scoring collector
+
+- name: Install the entrypoint and existing evidence exporters
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../scripts/{{ item }}"
+    dest: "{{ obs_scoring_install_root }}/scripts/{{ item }}"
+    owner: root
+    group: root
+    mode: '0700'
+    backup: true
+  loop:
+    - run-scoring-collector.py
+    - export-observability-evidence.py
+    - export-infrastructure-evidence.py
+    - infrastructure_events.py
+  notify: Restart the scoring collector
+
+- name: Install evidence validation contracts
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../contracts/{{ item }}"
+    dest: "{{ obs_scoring_install_root }}/contracts/{{ item }}"
+    mode: '0600'
+    backup: true
+  loop:
+    - telemetry-event-catalogue.yaml
+    - infrastructure-source.schema.json
+    - infrastructure-event.schema.json
+    - scoring-collector.schema.json
+
+- name: Install the website-owned policy package
+  ansible.builtin.copy:
+    src: "{{ obs_scoring_policy_source }}/jengasec_scoring_policy/__init__.py"
+    dest: "{{ obs_scoring_install_root }}/jengasec_scoring_policy/__init__.py"
+    mode: '0600'
+    backup: true
+  notify: Restart the scoring collector
+
+- name: Require private credential destinations inside the scoring config directory
+  ansible.builtin.assert:
+    that:
+      - item.name is match('^[A-Za-z0-9_.-]+$')
+      - item.source is match('^/')
+    quiet: true
+  loop: "{{ obs_scoring_credentials }}"
+  no_log: true
+
+- name: Install only the explicitly selected producer credentials
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "{{ obs_scoring_config_root }}/{{ item.name }}"
+    mode: '0600'
+    owner: root
+    group: root
+  loop: "{{ obs_scoring_credentials }}"
+  no_log: true
+  notify: Restart the scoring collector
+
+- name: Install the private collector configuration
+  ansible.builtin.copy:
+    src: "{{ obs_scoring_config_source }}"
+    dest: "{{ obs_scoring_config_root }}/collector.json"
+    mode: '0600'
+    owner: root
+    group: root
+    backup: true
+  no_log: true
+  notify: Restart the scoring collector
+
+- name: Validate config and its constrained writable paths
+  ansible.builtin.command:
+    argv:
+      - "{{ obs_scoring_python }}"
+      - -c
+      - >-
+        import json,sys,jsonschema;
+        c=json.load(open(sys.argv[1]));
+        jsonschema.validate(c,json.load(open(sys.argv[2])));
+        assert c['state_dir']==sys.argv[3];
+        assert c['metrics_file']==sys.argv[4]
+      - "{{ obs_scoring_config_root }}/collector.json"
+      - "{{ obs_scoring_install_root }}/contracts/scoring-collector.schema.json"
+      - "{{ obs_scoring_state_root }}"
+      - "{{ obs_scoring_textfile_dir }}/scoring.prom"
+  changed_when: false
+  no_log: true
+
+- name: Install the bounded collector service
+  ansible.builtin.template:
+    src: jengasec-scoring.service.j2
+    dest: /etc/systemd/system/jengasec-scoring.service
+    mode: '0644'
+    backup: true
+  notify: Restart the scoring collector
+
+- name: Verify source authority before the approved start
+  ansible.builtin.command:
+    argv:
+      - "{{ obs_scoring_python }}"
+      - "{{ obs_scoring_install_root }}/scripts/run-scoring-collector.py"
+      - --config
+      - "{{ obs_scoring_config_root }}/collector.json"
+      - --check
+  environment:
+    PYTHONPATH: "{{ obs_scoring_install_root }}"
+  changed_when: false
+  when: obs_scoring_start | bool
+
+- name: Start collection only during the approved rollout
+  ansible.builtin.systemd:
+    name: jengasec-scoring.service
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: obs_scoring_start | bool

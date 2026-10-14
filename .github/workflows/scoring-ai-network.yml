@@ -1,0 +1,33 @@
+name: scoring-ai-network
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/scoring-ai-network.yml
+      - scripts/scoring_ai/**
+      - observability/tests/test-scoring-ai.py
+      - observability/tests/test-scoring-ai-network.py
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/scoring-ai-network.yml
+      - scripts/scoring_ai/**
+      - observability/tests/test-scoring-ai.py
+      - observability/tests/test-scoring-ai-network.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nft-actuator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Install namespace and firewall tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y nftables iproute2
+      - name: Exercise the real actuator in disposable namespaces
+        run: sudo -- python3 observability/tests/test-scoring-ai-network.py --require-netns

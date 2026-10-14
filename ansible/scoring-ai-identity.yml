@@ -1,0 +1,7 @@
+---
+- name: Publish current authority on explicitly selected AI runtime hosts
+  hosts: scoring_ai_identity
+  become: true
+  serial: 1
+  roles:
+    - scoring_ai_identity

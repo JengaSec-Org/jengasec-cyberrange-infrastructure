@@ -12,6 +12,7 @@ from .auth import RateLimiter, load_cells, load_teams, load_tokens
 from .config import Settings
 from .models import Base
 from .routers import platform_log, router
+from .scoring_proxy import PUBLIC_PREFIX, ScoringProxy
 from .store import iso_now, json_validator, store_events, telemetry_validator
 
 
@@ -44,7 +45,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         Base.metadata.create_all(app.state.engine)
         if settings.sandbox_seed:
             seed_scenarios(app)
-        platform_log("service_started", "success", ai_teams=len(app.state.tokens), sandbox=settings.sandbox_seed)
+        platform_log("service_started", "success", ai_teams=len(app.state.tokens), sandbox=settings.sandbox_seed,
+                     scoring_mode=settings.scoring_mode)
         yield
         app.state.engine.dispose()
 
@@ -61,16 +63,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.validator = telemetry_validator(settings)
     app.state.handoff_validator = json_validator(settings, "handoff.schema.json")
     app.state.limiter = RateLimiter(settings.rate_limit_per_minute)
+    app.state.scoring_proxy = ScoringProxy(settings.scoring_gateway_port, settings.scoring_gateway_timeout_seconds)
 
     @app.middleware("http")
     async def access_log(request: Request, call_next):
         started = time.perf_counter()
         response = await call_next(request)
+        response.headers["X-JengaSec-Scoring-Mode"] = "website-v2" if settings.scoring_mode else "legacy-shadow"
         if request.url.path != "/healthz":
             print(json.dumps({
                 "ts": iso_now(), "level": "warn" if response.status_code >= 400 else "info", "service": "ai-api",
                 "event": "http_request", "outcome": "success" if response.status_code < 400 else "failure",
-                "method": request.method, "path": request.url.path, "status": response.status_code,
+                "method": request.method,
+                "path": PUBLIC_PREFIX if request.url.path.startswith(PUBLIC_PREFIX + "/") else request.url.path,
+                "status": response.status_code,
                 "caller": getattr(request.state, "caller", None),
                 "duration_ms": round((time.perf_counter() - started) * 1000, 1),
             }, separators=(",", ":")), flush=True)

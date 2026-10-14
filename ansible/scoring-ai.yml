@@ -1,0 +1,6 @@
+---
+- name: Install the reviewed AI gateway or its narrow execution component
+  hosts: scoring_ai
+  become: true
+  roles:
+    - scoring_ai

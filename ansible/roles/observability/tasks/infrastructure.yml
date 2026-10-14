@@ -15,6 +15,13 @@
       - >-
         obs_infrastructure_attribution_certificate_sha1 == '' or
         obs_infrastructure_attribution_certificate_sha1 is match('^[a-fA-F0-9]{40}$')
+      - >-
+        obs_infrastructure_scoring_certificate_sha1 == '' or
+        obs_infrastructure_scoring_certificate_sha1 is match('^[a-fA-F0-9]{40}$')
+      - >-
+        obs_infrastructure_scoring_certificate_sha1 == '' or
+        (obs_infrastructure_scoring_certificate_sha1 | lower) !=
+        (obs_infrastructure_attribution_certificate_sha1 | lower)
     quiet: true
 
 - name: Validate each metrics resource

@@ -1,0 +1,13 @@
+---
+- name: Install the competition evidence collector on existing OBS capacity
+  hosts: observability
+  become: true
+  serial: 1
+  pre_tasks:
+    - name: Require one explicitly selected collector host
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+        quiet: true
+  roles:
+    - scoring_observability

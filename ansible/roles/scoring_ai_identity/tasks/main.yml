@@ -1,0 +1,138 @@
+---
+- name: Require an explicit identity origin, credential and publication path
+  ansible.builtin.assert:
+    that:
+      - scoring_ai_identity_config.schema_version | default('') == 'scoring-ai-identity/1.0'
+      - scoring_ai_identity_config.origin | default('') is match('^https://')
+      - scoring_ai_identity_config.competition | default(0) | int > 0
+      - scoring_ai_identity_token_source is match('^/')
+      - scoring_ai_identity_config.token_file == scoring_ai_identity_config_root ~ '/identity.token'
+      - scoring_ai_identity_config.snapshot_file == scoring_ai_identity_state_root ~ '/identity.json'
+      - scoring_ai_identity_config.reader_group | default('') == scoring_ai_identity_reader_group
+  no_log: true
+
+- name: Validate fixed installation paths
+  ansible.builtin.assert:
+    that:
+      - item is match('^/[A-Za-z0-9_./-]+$')
+      - "'..' not in item.split('/')"
+      - item | length > 10
+  loop:
+    - "{{ scoring_ai_identity_python }}"
+    - "{{ scoring_ai_identity_install_root }}"
+    - "{{ scoring_ai_identity_config_root }}"
+    - "{{ scoring_ai_identity_state_root }}"
+
+- name: Require names for an existing gateway reader
+  ansible.builtin.assert:
+    that:
+      - scoring_ai_identity_reader_user is match('^[A-Za-z_][A-Za-z0-9_.-]*$')
+      - scoring_ai_identity_reader_group is match('^[A-Za-z_][A-Za-z0-9_.-]*$')
+  when: scoring_ai_identity_reader_group | length > 0
+
+- name: Verify the existing reader without changing identities or memberships
+  ansible.builtin.command:
+    argv:
+      - "{{ scoring_ai_identity_python }}"
+      - -c
+      - |
+        import grp, os, pwd, sys
+        user = pwd.getpwnam(sys.argv[1])
+        group = grp.getgrnam(sys.argv[2])
+        memberships = os.getgrouplist(user.pw_name, user.pw_gid)
+        assert user.pw_uid != 0 and 0 not in memberships and group.gr_gid != 0
+        assert group.gr_gid in memberships
+      - "{{ scoring_ai_identity_reader_user }}"
+      - "{{ scoring_ai_identity_reader_group }}"
+  changed_when: false
+  check_mode: false
+  when: scoring_ai_identity_reader_group | length > 0
+
+- name: Verify the existing Python runtime
+  ansible.builtin.command:
+    argv: ["{{ scoring_ai_identity_python }}", -c, "import ssl, sys; assert sys.version_info >= (3, 10)"]
+  changed_when: false
+
+- name: Create root-owned code and credential directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ scoring_ai_identity_install_root }}", mode: '0755'}
+    - {path: "{{ scoring_ai_identity_install_root }}/scoring_ai", mode: '0755'}
+    - {path: "{{ scoring_ai_identity_config_root }}", mode: '0700'}
+
+- name: Create the dedicated root-owned publication directory
+  ansible.builtin.file:
+    path: "{{ scoring_ai_identity_state_root }}"
+    state: directory
+    owner: root
+    group: "{{ scoring_ai_identity_reader_group | default('root', true) }}"
+    mode: "{{ '0750' if scoring_ai_identity_reader_group | length > 0 else '0700' }}"
+
+- name: Install the identity publisher modules
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../scripts/scoring_ai/{{ item }}"
+    dest: "{{ scoring_ai_identity_install_root }}/scoring_ai/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: [__init__.py, common.py, identity_sync.py]
+  notify: Reload the identity timer
+
+- name: Install the identity publisher entrypoint
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../scripts/run-scoring-ai-identity.py"
+    dest: "{{ scoring_ai_identity_install_root }}/run-scoring-ai-identity.py"
+    owner: root
+    group: root
+    mode: '0755'
+  notify: Reload the identity timer
+
+- name: Install the root-only read-only identity credential
+  ansible.builtin.copy:
+    src: "{{ scoring_ai_identity_token_source }}"
+    dest: "{{ scoring_ai_identity_config_root }}/identity.token"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  notify: Reload the identity timer
+
+- name: Install root-only identity publisher configuration
+  ansible.builtin.copy:
+    content: "{{ scoring_ai_identity_config | to_nice_json }}"
+    dest: "{{ scoring_ai_identity_config_root }}/identity.json"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  notify: Reload the identity timer
+
+- name: Install the bounded publisher and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: [jengasec-ai-identity.service, jengasec-ai-identity.timer]
+  notify: Reload the identity timer
+
+- name: Refresh authority before the approved timer starts
+  ansible.builtin.systemd:
+    name: jengasec-ai-identity.service
+    state: started
+    daemon_reload: true
+  when: scoring_ai_identity_start | bool
+
+- name: Enable continuous refresh only during the approved rollout
+  ansible.builtin.systemd:
+    name: jengasec-ai-identity.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: scoring_ai_identity_start | bool

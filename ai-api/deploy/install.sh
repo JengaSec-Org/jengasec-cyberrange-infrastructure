@@ -87,8 +87,14 @@ DATABASE_URL=sqlite:///$VAR/ai-api.db
 TOKENS_FILE=$ETC/tokens.yaml
 INGEST_TOKEN=jsingest_$(openssl rand -hex 24)
 ADMIN_TOKEN=jsadmin_$(openssl rand -hex 24)
-# 1 = load the scripted scenarios (sandbox). Set 0 for the competition, then run install.sh --reset-db.
-SANDBOX_SEED=1
+# 1 enables the additive /api/v1/scoring protocol and disables legacy writes and marks.
+SCORING_MODE=0
+SCORING_GATEWAY_PORT=9681
+SCORING_GATEWAY_TIMEOUT_SECONDS=35
+# SANDBOX_SEED defaults to 1 in legacy mode and 0 in scoring mode.
+# Set it explicitly to 0 for competition. Scoring mode rejects SANDBOX_SEED=1.
+# Use a reviewed database free of rehearsal fixtures; do not reset live history.
+# SANDBOX_SEED=1
 ACTION_BUDGET=20
 RATE_LIMIT_PER_MINUTE=600
 # The website's POST /api/feed (docs/ai-integration.md). Leave empty until the website owner gives you
@@ -197,9 +203,21 @@ OnUnitActiveSec=5min
 WantedBy=timers.target
 EOF
   systemctl daemon-reload
+  if (
+    set -a
+    # This is the existing root-owned service environment, loaded by run.sh too.
+    # shellcheck disable=SC1091
+    . "$ETC/ai-api.env"
+    "$APP/venv/bin/python" -c 'import os, sys; sys.exit(0 if os.environ.get("SCORING_MODE", "0").lower() in ("1", "true", "yes", "on") else 1)'
+  ); then
+    systemctl disable --quiet --now jengasec-ai-marks.timer
+    systemctl stop jengasec-ai-marks.service
+    log "legacy marks timer disabled: website scoring-feed/2.0 is authoritative"
+  else
+    systemctl enable --quiet --now jengasec-ai-marks.timer
+  fi
   systemctl enable --quiet jengasec-ai-api
   systemctl restart jengasec-ai-api
-  systemctl enable --quiet --now jengasec-ai-marks.timer
   for _ in $(seq 1 30); do
     curl -fsk "$SCHEME://$LOCAL:$PORT/healthz" >/dev/null 2>&1 && break
     sleep 1
