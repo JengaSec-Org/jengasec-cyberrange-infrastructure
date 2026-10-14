@@ -34,6 +34,11 @@ Add all three units to the gateway's expected node-service list. A fresh
 event-agent heartbeat alone does not prove that the capture processes are
 running. Inspect IDS packet/drop counters and stats freshness as well as
 flow observations. A running sensor with zero packets is a quiet sensor.
+The decoder requests a new NetFlow v9 template from the local exporter after
+each decoder restart. This preserves IPv4 and IPv6 decoding without waiting
+for the exporter's normal template interval. The agent records decoder error
+deltas and the last successful metrics scrape. Decoder errors also increase
+the existing collection-error counter.
 
 Capture covers the named VPN interface only. It does not imply visibility
 into unrelated host interfaces or traffic between cluster workloads. Flow

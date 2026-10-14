@@ -8,6 +8,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 import jsonschema
 from referencing import Registry, Resource
@@ -127,6 +128,19 @@ class DurableQueueTests(unittest.TestCase):
         value["environment"] = "live"
         value["attributes"]["src_ip"] = "192.0.2.2"
         self.assertEqual(agent.classify_validation(value, self.queue)["environment"], "live")
+
+    def test_decoder_errors_remain_visible_across_counter_reset(self):
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        with patch.object(agent.urllib.request, "build_opener") as opener:
+            opener.return_value.open.return_value = response
+            for counter in (2, 2, 0, 1):
+                response.read.return_value = ('goflow2_flow_decoder_error_total{name="netflow",router="127.0.0.1"} ' + str(counter) + '\n').encode()
+                with self.queue.db:
+                    agent.collect_flow_health(self.queue)
+        self.assertEqual(self.queue.get("flow_decoder_errors_total"), "3")
+        self.assertEqual(self.queue.get("collection_errors_total"), "3")
 
 
 if __name__ == "__main__":

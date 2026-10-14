@@ -5,7 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 {{ obs_network_install_root | dirname }}/run-gateway-flow-decoder.py --goflow2 {{ obs_network_install_root }}/goflow2 --config {{ obs_network_event_config }}
+ExecStart=/usr/bin/python3 {{ obs_network_install_root | dirname }}/run-gateway-flow-decoder.py --goflow2 {{ obs_network_install_root }}/goflow2 --config {{ obs_network_event_config }} --softflowctl {{ obs_network_install_root }}/vendor/usr/sbin/softflowctl --control-socket /run/jengasec-softflowd/control.sock
+Environment=LD_LIBRARY_PATH={{ obs_network_install_root }}/vendor/usr/lib/x86_64-linux-gnu:{{ obs_network_install_root }}/vendor/lib/x86_64-linux-gnu
 User=root
 Group=root
 UMask=0077

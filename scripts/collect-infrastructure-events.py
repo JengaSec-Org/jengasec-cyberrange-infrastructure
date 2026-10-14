@@ -227,6 +227,26 @@ def collect_ids(config, queue):
                            check=True, timeout=5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def collect_flow_health(queue):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with opener.open("http://127.0.0.1:8081/metrics", timeout=2) as response:
+        payload = response.read(1024 * 1024 + 1)
+    if len(payload) > 1024 * 1024:
+        raise ValueError("oversized decoder metrics")
+    errors = 0
+    for line in payload.decode("utf-8").splitlines():
+        if line.startswith("goflow2_flow_decoder_error_total{"):
+            errors += int(float(line.rsplit(" ", 1)[1]))
+    if errors < 0:
+        raise ValueError("invalid decoder counter")
+    previous = int(queue.get("flow_decoder_previous_errors"))
+    delta = errors - previous if errors >= previous else errors
+    queue.set("flow_decoder_previous_errors", errors)
+    queue.increment("flow_decoder_errors_total", delta)
+    queue.increment("collection_errors_total", delta)
+    queue.set("flow_decoder_last_scrape_timestamp_seconds", int(time.time()))
+
+
 def heartbeat(config, queue, collection_ok=True):
     current = int(time.time())
     if current - int(queue.get("health_timestamp")) < 60:
@@ -259,7 +279,7 @@ def deliver(config, queue):
 
 def write_metrics(config, queue, collection_ok):
     count, used = queue.size()
-    values = {key: int(queue.get(key)) for key in ("dropped_total", "delivered_total", "rejected_total", "collection_errors_total", "delivery_errors_total", "last_delivery_timestamp_seconds", "last_collect_timestamp_seconds", "journal_lag_seconds", "flow_last_observed_timestamp_seconds", "ids_packets_total", "ids_dropped_total", "ids_last_stats_timestamp_seconds")}
+    values = {key: int(queue.get(key)) for key in ("dropped_total", "delivered_total", "rejected_total", "collection_errors_total", "delivery_errors_total", "last_delivery_timestamp_seconds", "last_collect_timestamp_seconds", "journal_lag_seconds", "flow_last_observed_timestamp_seconds", "flow_decoder_errors_total", "flow_decoder_last_scrape_timestamp_seconds", "ids_packets_total", "ids_dropped_total", "ids_last_stats_timestamp_seconds")}
     values.update({"queue_events": count, "queue_bytes": used, "collection_success": int(collection_ok)})
     target = pathlib.Path(config["metrics_file"])
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -337,6 +357,7 @@ def main():
                 try:
                     collect_journal(config, queue)
                     if config["network"]:
+                        collect_flow_health(queue)
                         collect_ids(config, queue)
                     queue.set("last_collect_timestamp_seconds", int(time.time()))
                 except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
