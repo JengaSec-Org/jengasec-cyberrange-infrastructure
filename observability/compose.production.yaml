@@ -1,4 +1,53 @@
 services:
+  source-fixture:
+    profiles:
+      - rehearsal
+    build:
+      context: ./tests/fixtures/sources
+    user: ${JENGASEC_FIXTURE_USER:-10001}
+    depends_on:
+      vector:
+        condition: service_healthy
+      goflow2:
+        condition: service_started
+    environment:
+      JENGASEC_STAFF_REHEARSAL_INTERVAL_SECONDS: ${JENGASEC_STAFF_REHEARSAL_INTERVAL_SECONDS:-0}
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ${JENGASEC_DATA_DIR:?set JENGASEC_DATA_DIR}/fixtures:/telemetry
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  otel-collector:
+    profiles:
+      - rehearsal
+    build:
+      context: ./otel
+    depends_on:
+      source-fixture:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ${JENGASEC_DATA_DIR:?set JENGASEC_DATA_DIR}/fixtures:/telemetry:ro
+
   website-feed-mock:
     profiles:
       - rehearsal
@@ -72,6 +121,9 @@ services:
 
   vector:
     image: timberio/vector:0.58.0-debian
+    environment:
+      JENGASEC_INFRASTRUCTURE_RESOURCE_IDS: ${JENGASEC_INFRASTRUCTURE_RESOURCE_IDS:-test-host}
+      JENGASEC_V2_TELEMETRY_ENVIRONMENT: ${JENGASEC_V2_TELEMETRY_ENVIRONMENT:-rehearsal}
     command:
       - --config
       - /etc/vector/generated/vector.yaml
@@ -119,7 +171,8 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - ./prometheus/prometheus.production.yaml:/etc/prometheus/prometheus.yml:ro
+      - ${JENGASEC_PROMETHEUS_CONFIG:-./prometheus/prometheus.production.yaml}:/etc/prometheus/prometheus.yml:ro
+      - ${JENGASEC_INFRASTRUCTURE_DIR:-./prometheus}:/etc/jengasec-infrastructure:ro
       - ./prometheus/rules:/etc/prometheus/rules:ro
       - ${JENGASEC_DATA_DIR:?set JENGASEC_DATA_DIR}/prometheus:/prometheus
     healthcheck:
@@ -139,7 +192,7 @@ services:
       prometheus:
         condition: service_healthy
     ports:
-      - "${JENGASEC_FUNCTION_BIND:?set JENGASEC_FUNCTION_BIND}:9090:9090/tcp"
+      - "${JENGASEC_METRICS_BIND:-127.0.0.1}:9090:${JENGASEC_METRICS_TARGET_PORT:-9090}/tcp"
     read_only: true
     restart: unless-stopped
     security_opt:
@@ -148,7 +201,8 @@ services:
       - /var/cache/nginx
       - /var/run
     volumes:
-      - ./prometheus/remote-write-nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${JENGASEC_WRITE_PROXY_CONFIG:-./prometheus/remote-write-nginx.conf}:/etc/nginx/nginx.conf:ro
+      - ${JENGASEC_INFRASTRUCTURE_DIR:-./prometheus}:/etc/jengasec-infrastructure:ro
     healthcheck:
       test:
         - CMD

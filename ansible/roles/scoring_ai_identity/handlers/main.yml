@@ -1,0 +1,7 @@
+---
+- name: Reload the identity timer
+  ansible.builtin.systemd:
+    name: jengasec-ai-identity.timer
+    state: restarted
+    daemon_reload: true
+  when: scoring_ai_identity_start | bool

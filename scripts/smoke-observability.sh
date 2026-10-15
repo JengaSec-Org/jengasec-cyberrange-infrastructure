@@ -319,7 +319,7 @@ jq --exit-status '
   all(
     .data.result[];
     (.stream | keys | sort) ==
-      ["application", "detected_level", "enterprise", "event_type", "namespace", "service_name", "severity", "source"]
+      ["application", "detected_level", "enterprise", "environment", "event_type", "namespace", "service_name", "severity", "source"]
   )
 ' "$TEMP_DIR/source-loki-response.json" >/dev/null \
   || die "Loki stream labels contain an unapproved field"
@@ -451,7 +451,7 @@ log "Loki isolated the APP01 tenant from APP02 telemetry"
 
 quarantine_count() {
   "${COMPOSE[@]}" exec -T vector sh -c \
-    'if [ -f /var/lib/vector/quarantine/events.jsonl ]; then wc -l < /var/lib/vector/quarantine/events.jsonl; else echo 0; fi' \
+    'cat /var/lib/vector/quarantine/events*.jsonl 2>/dev/null | wc -l' \
     | tr -d '[:space:]'
 }
 
@@ -474,7 +474,7 @@ done
 (( quarantine_after >= quarantine_before + 2 )) \
   || die "Vector did not quarantine both rejected events"
 "${COMPOSE[@]}" exec -T vector \
-  sh -c 'cat /var/lib/vector/quarantine/events.jsonl' \
+  sh -c 'cat /var/lib/vector/quarantine/events*.jsonl' \
   >"$TEMP_DIR/quarantine.jsonl"
 if grep -q 'TEST-ONLY-NOT-A-CREDENTIAL' "$TEMP_DIR/quarantine.jsonl"; then
   die "quarantine retained a sensitive value"
@@ -627,4 +627,11 @@ curl --fail --silent --show-error \
   "$GRAFANA_URL/api/dashboards/uid/jengasec-observability" \
   | jq --exit-status '.dashboard.uid == "jengasec-observability"' >/dev/null
 log "Grafana enforced read-only application and staff/judge views"
+
+"${COMPOSE[@]}" run --rm --no-deps --no-TTY --interactive=false \
+  --entrypoint python contract-tests \
+  observability/tests/test-staff-dashboard.py \
+  --loki-url http://loki:3100 \
+  --prometheus-url http://prometheus:9090 \
+  --source-url http://source-fixture:8081
 log "end-to-end observability smoke check passed"

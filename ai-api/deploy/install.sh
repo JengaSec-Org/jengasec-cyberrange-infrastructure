@@ -41,6 +41,7 @@ SRC="$(cd "$(dirname "$0")/../.." && pwd)"
 for f in ai-api/app/main.py ai-api/requirements.txt contracts/telemetry-event.schema.json contracts/telemetry-event-catalogue.yaml scripts/cells.yaml scripts/ai-teams.yaml; do
   [ -e "$SRC/$f" ] || die "$SRC/$f missing: run this from the repository or the bundle"
 done
+# shellcheck source=/dev/null
 . /etc/os-release
 [ "${VERSION_ID:-}" = 12 ] || log "warning: built for Debian 12, this is ${PRETTY_NAME:-unknown}"
 
@@ -56,7 +57,7 @@ apt-get install -y -qq python3 python3-venv python3-pip openssl curl ca-certific
 
 log "service account and folders"
 id "$SVC_USER" >/dev/null 2>&1 || useradd --system --home-dir "$VAR" --shell /usr/sbin/nologin "$SVC_USER"
-install -d -m 755 "$APP"
+install -d -m 750 -o root -g "$SVC_USER" "$APP"
 install -d -m 750 -o root -g "$SVC_USER" "$ETC" "$ETC/tls"
 install -d -m 750 -o "$SVC_USER" -g "$SVC_USER" "$VAR"
 
@@ -69,13 +70,19 @@ cp "$SRC/scripts/cells.yaml" "$SRC/scripts/ai-teams.yaml" "$APP/repo.new/scripts
 find "$APP/repo.new/scenarios" -name answer-key.yaml -delete
 find "$APP/repo.new" \( -name __pycache__ -o -name '*.db' -o -name tokens.yaml -o -name .venv \) -prune -exec rm -rf {} +
 rm -rf "$APP/repo"; mv "$APP/repo.new" "$APP/repo"
-chmod -R a+rX "$APP/repo"
 
 log "python environment"
 [ -x "$APP/venv/bin/python" ] || python3 -m venv "$APP/venv"
 "$APP/venv/bin/pip" install -q --upgrade pip
 "$APP/venv/bin/pip" install -q -r "$APP/repo/ai-api/requirements.txt"
+<<<<<<< HEAD
 chmod -R a+rX "$APP/venv"   # repairs a venv made earlier under a stricter umask
+=======
+# Keep code root-owned and readable/executable by only the existing service group.
+# Do not change ownership of external targets of venv interpreter symlinks.
+chown -hR root:"$SVC_USER" "$APP/repo" "$APP/venv"
+chmod -R u=rwX,g=rX,o= "$APP/repo" "$APP/venv"
+>>>>>>> de7cf21d69937cbeab8f16bacb0ade1e1d2c00c7
 
 if [ ! -f "$ETC/ai-api.env" ]; then
   log "secrets -> $ETC/ai-api.env (new)"
@@ -87,8 +94,14 @@ DATABASE_URL=sqlite:///$VAR/ai-api.db
 TOKENS_FILE=$ETC/tokens.yaml
 INGEST_TOKEN=jsingest_$(openssl rand -hex 24)
 ADMIN_TOKEN=jsadmin_$(openssl rand -hex 24)
-# 1 = load the scripted scenarios (sandbox). Set 0 for the competition, then run install.sh --reset-db.
-SANDBOX_SEED=1
+# 1 enables the additive /api/v1/scoring protocol and disables legacy writes and marks.
+SCORING_MODE=0
+SCORING_GATEWAY_PORT=9681
+SCORING_GATEWAY_TIMEOUT_SECONDS=35
+# SANDBOX_SEED defaults to 1 in legacy mode and 0 in scoring mode.
+# Set it explicitly to 0 for competition. Scoring mode rejects SANDBOX_SEED=1.
+# Use a reviewed database free of rehearsal fixtures; do not reset live history.
+# SANDBOX_SEED=1
 ACTION_BUDGET=20
 RATE_LIMIT_PER_MINUTE=600
 # The website's POST /api/feed (docs/ai-integration.md). Leave empty until the website owner gives you
@@ -197,9 +210,21 @@ OnUnitActiveSec=5min
 WantedBy=timers.target
 EOF
   systemctl daemon-reload
+  if (
+    set -a
+    # This is the existing root-owned service environment, loaded by run.sh too.
+    # shellcheck disable=SC1091
+    . "$ETC/ai-api.env"
+    "$APP/venv/bin/python" -c 'import os, sys; sys.exit(0 if os.environ.get("SCORING_MODE", "0").lower() in ("1", "true", "yes", "on") else 1)'
+  ); then
+    systemctl disable --quiet --now jengasec-ai-marks.timer
+    systemctl stop jengasec-ai-marks.service
+    log "legacy marks timer disabled: website scoring-feed/2.0 is authoritative"
+  else
+    systemctl enable --quiet --now jengasec-ai-marks.timer
+  fi
   systemctl enable --quiet jengasec-ai-api
   systemctl restart jengasec-ai-api
-  systemctl enable --quiet --now jengasec-ai-marks.timer
   for _ in $(seq 1 30); do
     curl -fsk "$SCHEME://$LOCAL:$PORT/healthz" >/dev/null 2>&1 && break
     sleep 1

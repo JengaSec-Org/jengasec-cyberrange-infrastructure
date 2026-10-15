@@ -1,0 +1,1480 @@
+{
+  "uid": "jengasec-infrastructure",
+  "id": null,
+  "title": "JengaSec \u00b7 Infrastructure & Services",
+  "description": "Host capacity, expected services, PostgreSQL and VPN health. Missing observations remain visible.",
+  "tags": [
+    "jengasec",
+    "staff",
+    "observability"
+  ],
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "timezone": "utc",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "link",
+      "title": "Overview",
+      "url": "/d/jengasec-overview",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Team Activity",
+      "url": "/d/jengasec-observability",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Infrastructure & Services",
+      "url": "/d/jengasec-infrastructure",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Kubernetes",
+      "url": "/d/jengasec-kubernetes",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Network & Security",
+      "url": "/d/jengasec-network",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Event Investigation & Evidence",
+      "url": "/d/jengasec-investigation",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Telemetry Health",
+      "url": "/d/jengasec-telemetry-health",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Environment",
+        "type": "custom",
+        "query": "live, validation, rehearsal, unclassified",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "live"
+          ],
+          "value": [
+            "live"
+          ]
+        },
+        "options": [
+          {
+            "text": "live",
+            "value": "live",
+            "selected": true
+          },
+          {
+            "text": "validation",
+            "value": "validation",
+            "selected": false
+          },
+          {
+            "text": "rehearsal",
+            "value": "rehearsal",
+            "selected": false
+          },
+          {
+            "text": "unclassified",
+            "value": "unclassified",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "resource",
+        "label": "Resource",
+        "type": "custom",
+        "query": "vm101, vm102, vm103, vm104, vm105, vm106",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "text": "vm101",
+            "value": "vm101",
+            "selected": false
+          },
+          {
+            "text": "vm102",
+            "value": "vm102",
+            "selected": false
+          },
+          {
+            "text": "vm103",
+            "value": "vm103",
+            "selected": false
+          },
+          {
+            "text": "vm104",
+            "value": "vm104",
+            "selected": false
+          },
+          {
+            "text": "vm105",
+            "value": "vm105",
+            "selected": false
+          },
+          {
+            "text": "vm106",
+            "value": "vm106",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Read health with freshness",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Capacity charts and services use the selected resources. The collector age and status must be healthy before interpreting a quiet chart. Service **Absent** means the expected unit is not installed; **Down** means it is installed but inactive. PostgreSQL and WireGuard panels apply only to their configured hosts."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Exporter status",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "One value per selected configured exporter. The Overview always includes all six expected hosts.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Down",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Reachable",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"jengasec-node\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Collector age",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Age of the last atomic host metric refresh. Stale values must not be treated as current health.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 120
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - jengasec_collection_timestamp_seconds{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Collector result",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Independent outcomes for local services, WireGuard and PostgreSQL. A failed component emits no partial healthy data.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Failing",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Collected",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_collection_success{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}} / {{collector}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Host uptime",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Boot age. Compare recent reboots with host events.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - node_boot_time_seconds{job=\"jengasec-node\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Expected service state",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "description": "All configured expected services. Absent units are distinct from inactive units; missing rows require collector checks.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Absent",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Down",
+                  "color": "red",
+                  "index": 1
+                },
+                "2": {
+                  "text": "Running",
+                  "color": "green",
+                  "index": 2
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_service_up{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"} + jengasec_service_loaded{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}} / {{service}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "resource_id",
+                "role",
+                "service",
+                "collector",
+                "cluster",
+                "namespace",
+                "namespace",
+                "pod",
+                "workload",
+                "container",
+                "node",
+                "component_id",
+                "Value"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Recent host events",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Sanitized service, boot and authentication observations from selected hosts.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No matching events",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{record_family=\"infrastructure_telemetry\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",source=\"host\"} | json | line_format \"{{.resource_id}} \u00b7 {{.source}} \u00b7 {{.event_type}} \u00b7 {{.outcome}}{{if .resource_service}} \u00b7 {{.resource_service}}{{end}}{{if .resource_namespace}} \u00b7 {{.resource_namespace}}/{{.resource_name}}{{end}}{{if .attributes_reason}} \u00b7 {{.attributes_reason}}{{end}}\"",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      }
+    },
+    {
+      "id": 8,
+      "title": "CPU used",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - avg by (resource_id) (rate(node_cpu_seconds_total{job=\"jengasec-node\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",mode=\"idle\"}[$__rate_interval])))",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Memory available",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * node_memory_MemAvailable_bytes{job=\"jengasec-node\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"} / node_memory_MemTotal_bytes{job=\"jengasec-node\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Filesystem available",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Writable filesystem space available to services, excluding temporary and workload mounts.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * node_filesystem_avail_bytes{job=\"jengasec-node\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/var/lib/(kubelet|containerd)/.*\"} / node_filesystem_size_bytes{job=\"jengasec-node\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",fstype!~\"tmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/var/lib/(kubelet|containerd)/.*\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}} {{mountpoint}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Disk I/O time",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Percent of time a disk has I/O in progress; compare sustained saturation with service latency.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * rate(node_disk_io_time_seconds_total{job=\"jengasec-node\",environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\",device!~\"loop.*|ram.*|dm-.*\"}[$__rate_interval])",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}} {{device}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "PostgreSQL available",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Read-only aggregate statistics from PostgreSQL. A failed collector shows Missing signal, not Available.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Available",
+                  "color": "green",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Unavailable",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_postgres_up{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "PostgreSQL connections",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 6,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Total and active database connections against the configured connection limit.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_postgres_connections{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{__name__}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "jengasec_postgres_active_connections{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{__name__}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        },
+        {
+          "refId": "C",
+          "expr": "jengasec_postgres_max_connections{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{__name__}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Waiting database locks",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 32,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Locks currently waiting. Sustained waiting raises a managed alert.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_postgres_waiting_locks{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "Database size",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Aggregate size of non-template databases; no table contents or query text are collected.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_postgres_database_bytes{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "New database deadlocks",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 36,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Counter increase over the selected window. Old deadlocks do not keep the alert active.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "increase(jengasec_postgres_deadlocks_total{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}[$__range])",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "WireGuard interface",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Configured VPN interface state. Peer activity is shown separately.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Down",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Up",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_wireguard_interface_up{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "Configured / recently active VPN peers",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 6,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Recent means a handshake within three minutes. Idle or zero peers are valid; no peer keys or identity labels are collected.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_wireguard_peers{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{__name__}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "jengasec_wireguard_peers_recent{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}",
+          "editorMode": "code",
+          "legendFormat": "{{__name__}}",
+          "instant": false,
+          "range": true,
+          "queryType": "range",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "Recent database rollbacks",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 40,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Aggregate rollback counter change; a rollback alone does not establish an application failure.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing signal",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "increase(jengasec_postgres_rollbacks_total{environment=~\"${environment:regex}\",resource_id=~\"${resource:regex}\"}[$__range])",
+          "editorMode": "code",
+          "legendFormat": "{{resource_id}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "maxLines": 200,
+          "direction": "backward",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "wideLayout": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Provisioning records",
+      "description": "Native provisioning database records. These counts do not represent website signups. Zero is valid when source snapshot health is fresh; unhealthy counts are hidden.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 24,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jengasec_provisioning_snapshot_rows{environment=~\"${environment:regex}\",mode=\"source\"} and on(resource_id,mode) ((jengasec_provisioning_refresh_success{environment=~\"${environment:regex}\"} * jengasec_provisioning_snapshot_usable{environment=~\"${environment:regex}\"} * ((jengasec_provisioning_snapshot_expires_timestamp_seconds{environment=~\"${environment:regex}\"} - time()) > bool 0) * ((time() - jengasec_provisioning_last_attempt_timestamp_seconds{environment=~\"${environment:regex}\"}) < bool 120)) == 1)",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Missing"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "resource_id",
+                "table",
+                "Value"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "resource_id": "Resource",
+              "table": "Record type",
+              "Value": "Records"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

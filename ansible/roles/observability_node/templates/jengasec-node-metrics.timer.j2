@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh JengaSec local service metrics
+
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=30s
+AccuracySec=2s
+Unit=jengasec-node-metrics.service
+
+[Install]
+WantedBy=timers.target

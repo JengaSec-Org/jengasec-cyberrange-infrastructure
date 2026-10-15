@@ -1,0 +1,12 @@
+---
+scoring_ai_mode: gateway
+scoring_ai_start: false
+scoring_ai_install_root: /opt/jengasec-scoring-ai
+scoring_ai_config_root: /etc/jengasec-scoring-ai
+scoring_ai_state_root: /var/lib/jengasec-scoring-ai
+# Select reviewed existing identities. This role never creates users or groups.
+scoring_ai_gateway_user: ''
+scoring_ai_gateway_group: ''
+scoring_ai_python: /usr/bin/python3
+scoring_ai_config: {}
+scoring_ai_tokens: {}

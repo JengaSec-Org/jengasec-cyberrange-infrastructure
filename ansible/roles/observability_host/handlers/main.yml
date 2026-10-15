@@ -1,0 +1,16 @@
+---
+- name: Restart OBS containerd
+  listen: Restart OBS container runtime
+  ansible.builtin.systemd:
+    name: containerd.service
+    daemon_reload: true
+    state: restarted
+    enabled: true
+
+- name: Restart OBS Docker
+  listen: Restart OBS container runtime
+  ansible.builtin.systemd:
+    name: docker.service
+    daemon_reload: true
+    state: restarted
+    enabled: true

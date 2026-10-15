@@ -1,0 +1,27 @@
+[Unit]
+Description=JengaSec current AI execution authority
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart={{ scoring_ai_identity_python }} {{ scoring_ai_identity_install_root }}/run-scoring-ai-identity.py --config {{ scoring_ai_identity_config_root }}/identity.json
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=CAP_CHOWN
+ReadWritePaths={{ scoring_ai_identity_state_root }}
+MemoryMax=64M
+TasksMax=8
+TimeoutStartSec=12s
+TimeoutStopSec=3s

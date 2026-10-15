@@ -1,0 +1,8 @@
+---
+- name: Deploy OBS collectors to the approved Kubernetes clusters
+  hosts: observability_clusters
+  become: true
+  gather_facts: true
+  serial: 1
+  roles:
+    - observability_cluster

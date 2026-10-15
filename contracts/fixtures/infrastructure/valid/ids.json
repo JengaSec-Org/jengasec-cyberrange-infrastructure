@@ -1,0 +1,22 @@
+{
+  "schema_version": "infrastructure/1.0",
+  "record_family": "infrastructure_telemetry",
+  "environment": "validation",
+  "source": "ids",
+  "resource_id": "test-host",
+  "event_type": "ids.alert",
+  "source_event_id": "23466067f626bf8a3ae1a39cdf81f31303220b331b5064c6e00662dcc34deaaf",
+  "ts": "2026-10-14T09:00:00Z",
+  "severity": "low",
+  "outcome": "unknown",
+  "resource": {
+    "interface": "wg0"
+  },
+  "attributes": {
+    "signature_id": 9000001,
+    "ids_action": "allowed",
+    "src_ip": "192.0.2.10",
+    "dst_ip": "198.51.100.2",
+    "protocol": "ICMP"
+  }
+}

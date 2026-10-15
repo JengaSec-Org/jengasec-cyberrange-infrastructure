@@ -1,0 +1,23 @@
+{
+  "schema_version": "infrastructure/1.0",
+  "record_family": "infrastructure_telemetry",
+  "environment": "validation",
+  "source": "kubernetes",
+  "resource_id": "test-host",
+  "event_type": "kubernetes.event",
+  "source_event_id": "71fc36076f72ca5be65bb5ba749a643b87d955f189df073f17bbe8324362699f",
+  "ts": "2026-10-14T09:00:00Z",
+  "severity": "medium",
+  "outcome": "unknown",
+  "resource": {
+    "cluster": "red",
+    "namespace": "kube-system",
+    "kind": "Pod",
+    "name": "sample-pod"
+  },
+  "attributes": {
+    "reason": "BackOff",
+    "count": 2,
+    "type": "Warning"
+  }
+}

@@ -44,4 +44,71 @@ if python scripts/render-observability-lookups.py \
   fail "invalid participant allocation was accepted"
 fi
 
+python - "$rendered" <<'PY'
+import csv
+import json
+import pathlib
+import subprocess
+import sys
+
+workspace = pathlib.Path(sys.argv[1]) / "validity"
+fixtures = pathlib.Path("observability/tests/fixtures")
+clock = "2099-01-01T00:00:00Z"
+cases = [
+    ("startup-clock", None, {}, {}, 1, 1),
+    ("future-clock", clock, {}, {}, 1, 1),
+    ("allocation-start", clock, {"valid_from": clock}, {}, 1, 1),
+    ("future-allocation", clock, {"valid_from": "2100-01-01T00:00:00Z"}, {}, 0, 0),
+    ("expired-allocation", clock, {"valid_until": clock}, {}, 0, 0),
+    ("revoked-allocation", clock, {"status": "revoked"}, {}, 0, 0),
+    ("reserved-allocation", clock, {"status": "reserved"}, {}, 0, 0),
+    ("scope-start", clock, {}, {"valid_from": clock}, 1, 1),
+    ("future-scope", clock, {}, {"valid_from": "2100-01-01T00:00:00Z"}, 1, 0),
+    ("expired-scope", clock, {}, {"valid_until": clock}, 1, 0),
+    ("inactive-scope", clock, {}, {"active": "false"}, 1, 0),
+]
+
+for name, now, allocation_changes, scope_changes, allocations, scopes in cases:
+    case = workspace / name
+    case.mkdir(parents=True)
+    for filename, changes in (
+        ("ip-allocations.csv", allocation_changes),
+        ("scope-assignments.csv", scope_changes),
+    ):
+        with (fixtures / "attribution" / filename).open(newline="") as handle:
+            reader = csv.DictReader(handle)
+            fields = reader.fieldnames
+            # Isolate one allocation/scope pair for the validity boundary cases.
+            rows = [next(reader)]
+        rows[0].update(changes)
+        with (case / filename).open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    output = case / "output"
+    command = [
+        sys.executable, "scripts/render-observability-lookups.py",
+        "--ip-allocations", str(case / "ip-allocations.csv"),
+        "--scope-assignments", str(case / "scope-assignments.csv"),
+        "--applications", str(fixtures / "attribution/applications.csv"),
+        "--access-principals", str(fixtures / "access/access-principals.csv"),
+        "--output-dir", str(output),
+    ]
+    if now is not None:
+        command.extend(["--now", now])
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, f"{name}: {result.stderr}"
+    for filename, expected in (
+        ("ip-allocations.csv", allocations),
+        ("scope-assignments.csv", scopes),
+    ):
+        with (output / filename).open(newline="") as handle:
+            actual = len(list(csv.DictReader(handle)))
+        assert actual == expected, f"{name}: {filename}: {actual} != {expected}"
+    snapshot = json.loads((output / "attribution-snapshot.json").read_text())
+    assert snapshot["allocations"] == allocations, name
+    assert snapshot["scopes"] == scopes, name
+PY
+
 echo "attribution lookup fixtures passed"

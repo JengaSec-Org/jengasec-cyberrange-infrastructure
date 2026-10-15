@@ -1,0 +1,18 @@
+{
+  "schema_version": "infrastructure/1.0",
+  "record_family": "infrastructure_telemetry",
+  "environment": "validation",
+  "source": "network",
+  "resource_id": "test-host",
+  "event_type": "network.flow",
+  "source_event_id": "3b21278178ed3463f3bde3a35f088caf6d99ff1b2f647d9a0c2b8de599ec3dc6",
+  "ts": "2026-10-14T09:00:00Z",
+  "severity": "low",
+  "outcome": "unknown",
+  "resource": {
+    "interface": "wg0"
+  },
+  "attributes": {
+    "raw_payload": "do not retain"
+  }
+}

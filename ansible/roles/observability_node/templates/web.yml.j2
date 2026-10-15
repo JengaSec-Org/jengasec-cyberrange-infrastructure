@@ -1,0 +1,6 @@
+tls_server_config:
+  cert_file: /run/credentials/jengasec-node-exporter.service/server.crt
+  key_file: /run/credentials/jengasec-node-exporter.service/server.key
+  client_ca_file: /run/credentials/jengasec-node-exporter.service/ca.crt
+  client_auth_type: RequireAndVerifyClientCert
+  min_version: TLS12

@@ -1,0 +1,15 @@
+---
+obs_events_resource_id: ""
+obs_events_environment: live
+obs_events_services: []
+obs_events_endpoint: ""
+obs_events_tls_ca_file: ""
+obs_events_tls_client_cert_file: ""
+obs_events_tls_client_key_file: ""
+obs_events_network: false
+obs_events_interface: ""
+obs_events_install_root: /opt/jengasec-observability-tools
+obs_events_config_root: /etc/jengasec-event-agent
+obs_events_state_dir: /var/lib/jengasec-event-agent
+obs_events_metrics_file: /var/lib/jengasec-node-metrics/events.prom
+obs_events_start: true

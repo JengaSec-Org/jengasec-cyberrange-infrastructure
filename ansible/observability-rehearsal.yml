@@ -7,7 +7,7 @@
   vars:
     obs_rehearsal_root: >-
       {{ lookup('ansible.builtin.env', 'JENGASEC_OBS_REHEARSAL_ROOT') }}
-    obs_release_id: codespace-rehearsal
+    obs_release_id: local-rehearsal
     obs_install_root: "{{ obs_rehearsal_root }}/opt"
     obs_state_root: "{{ obs_rehearsal_root }}/state"
     obs_config_root: "{{ obs_rehearsal_root }}/etc"
@@ -19,7 +19,10 @@
     obs_validate_runtime: true
     obs_validate_network: false
     obs_start: false
-    obs_function_bind: 127.0.0.1
+    obs_function_bind: >-
+      {{ lookup('ansible.builtin.env', 'JENGASEC_OBS_REHEARSAL_BIND') |
+         default('127.0.0.1', true) }}
+    obs_grafana_bind: "{{ obs_function_bind }}"
     obs_python_command: >-
       {{ lookup('ansible.builtin.env', 'JENGASEC_OBS_PYTHON') |
          default('/usr/bin/python3', true) }}
@@ -31,6 +34,7 @@
       ansible.builtin.assert:
         that:
           - obs_rehearsal_root is match('^/tmp/[A-Za-z0-9._/-]+$')
+          - obs_function_bind is match('^127\\.[0-9]+\\.[0-9]+\\.[0-9]+$')
         fail_msg: JENGASEC_OBS_REHEARSAL_ROOT must be an isolated /tmp path
         quiet: true
   roles:

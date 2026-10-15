@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh JengaSec native provisioning {{ obs_provisioning_mode }} observations
+
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec={{ obs_provisioning_interval_seconds }}s
+AccuracySec=1s
+Unit=jengasec-provisioning-{{ obs_provisioning_mode }}.service
+
+[Install]
+WantedBy=timers.target

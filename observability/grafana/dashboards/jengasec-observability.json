@@ -6,41 +6,130 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "type": "link",
+      "title": "Overview",
+      "url": "/d/jengasec-overview",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Team Activity",
+      "url": "/d/jengasec-observability",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Infrastructure & Services",
+      "url": "/d/jengasec-infrastructure",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Kubernetes",
+      "url": "/d/jengasec-kubernetes",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Network & Security",
+      "url": "/d/jengasec-network",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Event Investigation & Evidence",
+      "url": "/d/jengasec-investigation",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    },
+    {
+      "type": "link",
+      "title": "Telemetry Health",
+      "url": "/d/jengasec-telemetry-health",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "asDropdown": false
+    }
+  ],
   "liveNow": false,
   "panels": [
     {
+      "id": 1,
+      "title": "",
+      "type": "text",
+      "transparent": true,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Connected telemetry only.** Signups, scoring, platform actions, response approvals and AI decisions need their owner feeds. Missing attribution stays unknown. **Live** excludes unclassified and rehearsal records; blank ID filters include all matching records."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Participants",
+      "type": "stat",
+      "description": "Distinct attributed participants with matching telemetry in the selected time window. This is an observed-activity count.",
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 4,
+        "h": 4
+      },
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "loki",
+        "uid": "loki"
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "fixed",
+            "fixedColor": "blue"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "No events",
+          "mappings": []
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "count(sum by (actor_participant_id)(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | actor_participant_id!=\"\" | keep actor_participant_id [$__range])))",
+          "queryType": "instant",
+          "legendFormat": "{{actor_role}}",
+          "direction": "backward"
+        }
+      ],
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -50,161 +139,1613 @@
           "fields": "",
           "values": false
         },
-        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
-      },
-      "pluginVersion": "13.2.3",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "jengasec_test_events_emitted_total",
-          "legendFormat": "events",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Test events emitted",
-      "type": "stat"
+      }
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "requests/second",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
+      "id": 3,
+      "title": "App requests",
+      "type": "stat",
+      "description": "Counts application request summaries once. Ingress and network records remain separate observations.",
       "gridPos": {
-        "h": 8,
-        "w": 18,
-        "x": 6,
-        "y": 0
+        "x": 4,
+        "y": 3,
+        "w": 4,
+        "h": 4
       },
-      "id": 2,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "13.2.3",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "rate(jengasec_test_http_requests_total[1m])",
-          "legendFormat": "{{route}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Test emitter request rate",
-      "type": "timeseries"
-    },
-    {
       "datasource": {
         "type": "loki",
         "uid": "loki"
       },
-      "gridPos": {
-        "h": 12,
-        "w": 24,
-        "x": 0,
-        "y": 8
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "No events",
+          "mappings": []
+        },
+        "overrides": []
       },
-      "id": 3,
-      "options": {
-        "dedupStrategy": "none",
-        "enableInfiniteScrolling": false,
-        "enableLogDetails": true,
-        "prettifyLogMessage": true,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "pluginVersion": "13.2.3",
       "targets": [
         {
-          "direction": "backward",
+          "refId": "A",
           "editorMode": "code",
-          "expr": "{enterprise=\"ENT-A\", application=\"APP01\", source=\"application\"} | json",
-          "queryType": "range",
-          "refId": "A"
+          "expr": "sum(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | source=\"application\" | raw_event=\"request_completed\" | event_type=\"http_request\" | keep source [$__range]))",
+          "queryType": "instant",
+          "legendFormat": "{{actor_role}}",
+          "direction": "backward"
         }
       ],
-      "title": "Normalised application events",
-      "type": "logs"
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 4,
+      "title": "HTTP 5xx",
+      "type": "stat",
+      "description": "Application request summaries with HTTP 5xx responses.",
+      "gridPos": {
+        "x": 8,
+        "y": 3,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "No events",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | source=\"application\" | raw_event=\"request_completed\" | event_type=\"http_request\" | http_status >= 500 | http_status < 600 | __error__=\"\" | keep source [$__range]))",
+          "queryType": "instant",
+          "legendFormat": "{{actor_role}}",
+          "direction": "backward"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 5,
+      "title": "Refusals",
+      "type": "stat",
+      "description": "Records with an explicit refused verdict. Use the timeline to inspect target and scope evidence.",
+      "gridPos": {
+        "x": 12,
+        "y": 3,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "No events",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | verdict=\"refused\" | keep source [$__range]))",
+          "queryType": "instant",
+          "legendFormat": "{{actor_role}}",
+          "direction": "backward"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 6,
+      "title": "IDS alerts",
+      "type": "stat",
+      "description": "IDS alert records, including the reported IDS action. Alerts need investigation.",
+      "gridPos": {
+        "x": 16,
+        "y": 3,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "No events",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | source=\"ids\" | event_type=\"ids_alert\" | keep source [$__range]))",
+          "queryType": "instant",
+          "legendFormat": "{{actor_role}}",
+          "direction": "backward"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 7,
+      "title": "Security events",
+      "type": "stat",
+      "description": "Application authentication failures, access denials, revocations, privilege changes, exports and input rejections.",
+      "gridPos": {
+        "x": 20,
+        "y": 3,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "No events",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | source=\"application\" | event_type=~\"authentication_failure|access_denied|session_revoked|privilege_change|data_export|input_rejected\" | keep source [$__range]))",
+          "queryType": "instant",
+          "legendFormat": "{{actor_role}}",
+          "direction": "backward"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 8,
+      "title": "Competition event timeline",
+      "type": "logs",
+      "description": "Actor \u2192 target \u2192 event \u2192 reported outcome. Expand a record for source, scope, evidence ID, integrity hash and request/trace IDs. The ID links open an exact filtered view in this time window. Latest 300 matching records.",
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 24,
+        "h": 12
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "No events",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "{namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | json | line_format `{{ .actor_role }} {{ if .actor_team_id }}{{ .actor_team_id }}{{ else }}\u2014{{ end }} / {{ if .actor_participant_id }}{{ .actor_participant_id }}{{ else }}\u2014{{ end }} \u2192 {{ .enterprise }}/{{ .application }} | {{ .raw_event }} | {{ .outcome }}{{ if .http_status }} HTTP {{ .http_status }}{{ end }} | {{ .verdict }}`",
+          "queryType": "range",
+          "legendFormat": "{{actor_role}}",
+          "direction": "backward",
+          "maxLines": 300
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      }
+    },
+    {
+      "id": 9,
+      "title": "Activity by team and target",
+      "type": "table",
+      "description": "Event records by attributed team and target. A click opens that team and target in the timeline. Counts include distinct source observations.",
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 14,
+        "h": 10
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "No events",
+          "mappings": [],
+          "links": [
+            {
+              "title": "Inspect team and target",
+              "url": "/d/jengasec-observability?${__url_time_range}&var-team=${__data.fields[\"Team\"]}&var-enterprise=${__data.fields[\"Enterprise\"]}&var-application=${__data.fields[\"Application\"]}"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum by (actor_role, actor_team_id, enterprise, application)(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | actor_team_id!=\"\" | keep actor_role, actor_team_id, enterprise, application [$__range]))",
+          "queryType": "instant",
+          "legendFormat": "",
+          "direction": "backward"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Events",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "actor_role": "Role",
+              "actor_team_id": "Team",
+              "enterprise": "Enterprise",
+              "application": "Application",
+              "Value": "Events",
+              "Value #A": "Events"
+            },
+            "indexByName": {
+              "actor_role": 0,
+              "actor_team_id": 1,
+              "enterprise": 2,
+              "application": 3,
+              "Value": 4
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Events by role",
+      "type": "timeseries",
+      "description": "Matching source observations per interval. A role describes attribution, not intent.",
+      "gridPos": {
+        "x": 14,
+        "y": 19,
+        "w": 10,
+        "h": 10
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum by (actor_role)(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | keep actor_role [$__interval]))",
+          "queryType": "range",
+          "legendFormat": "{{actor_role}}",
+          "direction": "backward"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Application requests by target",
+      "type": "timeseries",
+      "description": "Application request summaries per interval. Ingress copies are excluded from this request count.",
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum by (enterprise, application)(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | source=\"application\" | raw_event=\"request_completed\" | event_type=\"http_request\" | keep enterprise, application [$__interval]))",
+          "queryType": "range",
+          "legendFormat": "{{enterprise}} / {{application}}",
+          "direction": "backward"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Workload and host events",
+      "type": "logs",
+      "description": "Workload lifecycle, restarts and host alerts. Participant identity is shown only when present in source attribution. Expand a record for reason and workload details.",
+      "gridPos": {
+        "x": 12,
+        "y": 29,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "No events",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "{namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | source=~\"kubernetes|host\" | json | line_format `{{ .actor_role }} {{ if .actor_team_id }}{{ .actor_team_id }}{{ else }}\u2014{{ end }} / {{ if .actor_participant_id }}{{ .actor_participant_id }}{{ else }}\u2014{{ end }} \u2192 {{ .enterprise }}/{{ .application }} | {{ .raw_event }} | {{ .outcome }}{{ if .http_status }} HTTP {{ .http_status }}{{ end }} | {{ .verdict }}`",
+          "queryType": "range",
+          "legendFormat": "{{actor_role}}",
+          "direction": "backward",
+          "maxLines": 300
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      }
+    },
+    {
+      "id": 13,
+      "title": "Application security events",
+      "type": "logs",
+      "description": "Authentication failures, denials, revocations, privilege changes and exports, with reported outcomes and evidence links. These records do not establish scoring decisions.",
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "decimals": 0,
+          "unit": "short",
+          "noValue": "No events",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "{namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | source=\"application\" | event_type=~\"authentication_failure|access_denied|session_revoked|privilege_change|data_export|input_rejected\" | json | line_format `{{ .actor_role }} {{ if .actor_team_id }}{{ .actor_team_id }}{{ else }}\u2014{{ end }} / {{ if .actor_participant_id }}{{ .actor_participant_id }}{{ else }}\u2014{{ end }} \u2192 {{ .enterprise }}/{{ .application }} | {{ .raw_event }} | {{ .outcome }}{{ if .http_status }} HTTP {{ .http_status }}{{ end }} | {{ .verdict }}`",
+          "queryType": "range",
+          "legendFormat": "{{actor_role}}",
+          "direction": "backward",
+          "maxLines": 300
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      }
+    },
+    {
+      "id": 14,
+      "title": "Collection and delivery health",
+      "type": "row",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 15,
+          "title": "Collector targets",
+          "type": "stat",
+          "description": "Current Prometheus and Vector scrape status. Global pipeline health is independent of activity filters.",
+          "gridPos": {
+            "x": 0,
+            "y": 50,
+            "w": 6,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "blue"
+              },
+              "decimals": 0,
+              "unit": "short",
+              "noValue": "Missing signal",
+              "mappings": []
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "editorMode": "code",
+              "expr": "min(up{job=~\"prometheus|vector\",environment=~\"${environment:regex}\"})",
+              "queryType": "instant",
+              "instant": true,
+              "range": false,
+              "legendFormat": "{{actor_role}}",
+              "direction": "backward"
+            }
+          ],
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto",
+            "wideLayout": true
+          }
+        },
+        {
+          "id": 16,
+          "title": "Quarantined inputs",
+          "type": "stat",
+          "description": "Rejected input counter increase in the selected time range. Zero without a rejection counter requires a healthy live Vector scrape and its quarantine component metric. Missing collection remains unavailable; zero does not prove that validation passed.",
+          "gridPos": {
+            "x": 6,
+            "y": 50,
+            "w": 6,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0,
+              "unit": "short",
+              "noValue": "Missing signal",
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "text": "Missing signal",
+                      "color": "gray",
+                      "index": 0
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "gray",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "editorMode": "code",
+              "expr": "sum(increase(jengasec_contract_rejections_total{environment=~\"${environment:regex}\"}[$__range])) or on() (0 * sum(vector_component_received_events_total{job=\"vector\",environment=\"live\",component_id=\"quarantine_metrics\"}) and on() (max(up{job=\"vector\",environment=\"live\"}) == 1))",
+              "queryType": "instant",
+              "instant": true,
+              "range": false,
+              "legendFormat": "{{actor_role}}",
+              "direction": "backward"
+            }
+          ],
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto",
+            "wideLayout": true
+          }
+        },
+        {
+          "id": 17,
+          "title": "Unattributed records",
+          "type": "stat",
+          "description": "Matching records without a known participant, including system observations. Check the record before interpreting an attribution gap.",
+          "gridPos": {
+            "x": 12,
+            "y": 50,
+            "w": 6,
+            "h": 4
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "gray"
+              },
+              "decimals": 0,
+              "unit": "short",
+              "noValue": "No events",
+              "mappings": []
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "editorMode": "code",
+              "expr": "sum(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | attribution_status=~\"unknown|not_applicable\" | keep source [$__range]))",
+              "queryType": "instant",
+              "legendFormat": "{{actor_role}}",
+              "direction": "backward"
+            }
+          ],
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto",
+            "wideLayout": true
+          }
+        },
+        {
+          "id": 18,
+          "title": "Managed alert states",
+          "type": "alertlist",
+          "gridPos": {
+            "x": 18,
+            "y": 50,
+            "w": 6,
+            "h": 4
+          },
+          "description": "Current Grafana managed alert states; independent of team filters.",
+          "options": {
+            "alertName": "",
+            "alertInstanceLabelFilter": "{jengasec_managed=\"infrastructure\"}",
+            "dashboardAlerts": false,
+            "groupMode": "default",
+            "maxItems": 5,
+            "sortOrder": 1,
+            "showOptions": "current",
+            "stateFilter": {
+              "firing": true,
+              "pending": true,
+              "normal": false,
+              "noData": true,
+              "error": true
+            }
+          }
+        },
+        {
+          "id": 19,
+          "title": "Delivery by destination",
+          "type": "timeseries",
+          "description": "Events sent by Vector sinks. A delivered record can have more than one destination.",
+          "gridPos": {
+            "x": 0,
+            "y": 54,
+            "w": 12,
+            "h": 9
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              },
+              "noValue": "Missing signal"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "editorMode": "code",
+              "expr": "sum by (component_id) (rate(vector_component_sent_events_total{component_kind=\"sink\",environment=~\"${environment:regex}\"}[$__rate_interval]))",
+              "queryType": "range",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{component_id}}",
+              "direction": "backward"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 20,
+          "title": "Stored events by source",
+          "type": "timeseries",
+          "description": "Matching stored records per interval. Missing sources need input verification; quiet sources do not prove healthy collection.",
+          "gridPos": {
+            "x": 12,
+            "y": 54,
+            "w": 12,
+            "h": 9
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "editorMode": "code",
+              "expr": "sum by (source)(count_over_time({namespace=~\"jengasec-ent-(a|b)-app0[1-9]\", enterprise=~\"${enterprise:regex}\", application=~\"${application:regex}\", source=~\"${source:regex}\", event_type=~\"${event:regex}\", severity=~\"${severity:regex}\"} | json actor_role=\"actor.team_label\", actor_team_id=\"actor.team_id\", actor_participant_id=\"actor.participant_id\", outcome=\"outcome\", verdict=\"verdict\", request_id=\"request_id\", trace_id=\"trace_id\", event_id=\"event_id\", raw_event=\"raw_event\", http_status=\"http.status\", scope_status=\"metadata.scope_status\", attribution_status=\"metadata.attribution_status\" | __error__=\"\" | label_format observation_environment=`{{ if .environment }}{{ .environment }}{{ else }}unclassified{{ end }}` | observation_environment=~\"${environment:regex}\" | label_format actor_role=`{{ if .actor_role }}{{ .actor_role }}{{ else }}unattributed{{ end }}` | actor_role=~\"${role:regex}\" | outcome=~\"${outcome:regex}\" | verdict=~\"${verdict:regex}\" | label_format team_filter=${team:doublequote}, participant_filter=${participant:doublequote}, correlation_filter=${correlation:doublequote}, event_filter=${event_id:doublequote} | (team_filter=\"\" or actor_team_id=${team:doublequote}) | (participant_filter=\"\" or actor_participant_id=${participant:doublequote}) | (correlation_filter=\"\" or request_id=${correlation:doublequote} or trace_id=${correlation:doublequote}) | (event_filter=\"\" or event_id=${event_id:doublequote}) | keep source [$__interval]))",
+              "queryType": "range",
+              "legendFormat": "{{source}}",
+              "direction": "backward"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        }
+      ]
     }
   ],
-  "refresh": "5s",
-  "schemaVersion": 41,
+  "refresh": "30s",
+  "schemaVersion": 39,
   "tags": [
     "jengasec",
-    "observability"
+    "staff",
+    "competition"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "name": "environment",
+        "label": "Environment",
+        "type": "custom",
+        "query": "live, validation, rehearsal, unclassified",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": {
+          "text": [
+            "live"
+          ],
+          "value": [
+            "live"
+          ]
+        },
+        "options": [
+          {
+            "text": "live",
+            "value": "live",
+            "selected": true
+          },
+          {
+            "text": "validation",
+            "value": "validation",
+            "selected": false
+          },
+          {
+            "text": "rehearsal",
+            "value": "rehearsal",
+            "selected": false
+          },
+          {
+            "text": "unclassified",
+            "value": "unclassified",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "enterprise",
+        "label": "Enterprise",
+        "type": "custom",
+        "query": "ENT-A, ENT-B",
+        "options": [
+          {
+            "text": "ENT-A",
+            "value": "ENT-A",
+            "selected": false
+          },
+          {
+            "text": "ENT-B",
+            "value": "ENT-B",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "application",
+        "label": "Application",
+        "type": "custom",
+        "query": "APP01, APP02, APP03, APP04, APP05, APP06, APP07, APP08, APP09",
+        "options": [
+          {
+            "text": "APP01",
+            "value": "APP01",
+            "selected": false
+          },
+          {
+            "text": "APP02",
+            "value": "APP02",
+            "selected": false
+          },
+          {
+            "text": "APP03",
+            "value": "APP03",
+            "selected": false
+          },
+          {
+            "text": "APP04",
+            "value": "APP04",
+            "selected": false
+          },
+          {
+            "text": "APP05",
+            "value": "APP05",
+            "selected": false
+          },
+          {
+            "text": "APP06",
+            "value": "APP06",
+            "selected": false
+          },
+          {
+            "text": "APP07",
+            "value": "APP07",
+            "selected": false
+          },
+          {
+            "text": "APP08",
+            "value": "APP08",
+            "selected": false
+          },
+          {
+            "text": "APP09",
+            "value": "APP09",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "role",
+        "label": "Role",
+        "type": "custom",
+        "query": "red-app, blue-app, red-ai, blue-ai, staff, judge, system, unknown, unattributed",
+        "options": [
+          {
+            "text": "red-app",
+            "value": "red-app",
+            "selected": false
+          },
+          {
+            "text": "blue-app",
+            "value": "blue-app",
+            "selected": false
+          },
+          {
+            "text": "red-ai",
+            "value": "red-ai",
+            "selected": false
+          },
+          {
+            "text": "blue-ai",
+            "value": "blue-ai",
+            "selected": false
+          },
+          {
+            "text": "staff",
+            "value": "staff",
+            "selected": false
+          },
+          {
+            "text": "judge",
+            "value": "judge",
+            "selected": false
+          },
+          {
+            "text": "system",
+            "value": "system",
+            "selected": false
+          },
+          {
+            "text": "unknown",
+            "value": "unknown",
+            "selected": false
+          },
+          {
+            "text": "unattributed",
+            "value": "unattributed",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "team",
+        "label": "Team ID",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false,
+        "description": "Exact ID; leave blank to include all."
+      },
+      {
+        "name": "participant",
+        "label": "Participant ID",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false,
+        "description": "Exact ID; leave blank to include all."
+      },
+      {
+        "name": "source",
+        "label": "Source",
+        "type": "custom",
+        "query": "application, ingress, network, ids, kubernetes, host",
+        "options": [
+          {
+            "text": "application",
+            "value": "application",
+            "selected": false
+          },
+          {
+            "text": "ingress",
+            "value": "ingress",
+            "selected": false
+          },
+          {
+            "text": "network",
+            "value": "network",
+            "selected": false
+          },
+          {
+            "text": "ids",
+            "value": "ids",
+            "selected": false
+          },
+          {
+            "text": "kubernetes",
+            "value": "kubernetes",
+            "selected": false
+          },
+          {
+            "text": "host",
+            "value": "host",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "event",
+        "label": "Event",
+        "type": "custom",
+        "query": "authentication_success, authentication_failure, session_end, session_revoked, token_issued, access_denied, privilege_change, account_change, data_export, data_change, financial_transaction, input_rejected, notification_sent, http_request, network_flow, scope_violation, ids_alert, kubernetes_event, container_restart, host_alert",
+        "options": [
+          {
+            "text": "authentication_success",
+            "value": "authentication_success",
+            "selected": false
+          },
+          {
+            "text": "authentication_failure",
+            "value": "authentication_failure",
+            "selected": false
+          },
+          {
+            "text": "session_end",
+            "value": "session_end",
+            "selected": false
+          },
+          {
+            "text": "session_revoked",
+            "value": "session_revoked",
+            "selected": false
+          },
+          {
+            "text": "token_issued",
+            "value": "token_issued",
+            "selected": false
+          },
+          {
+            "text": "access_denied",
+            "value": "access_denied",
+            "selected": false
+          },
+          {
+            "text": "privilege_change",
+            "value": "privilege_change",
+            "selected": false
+          },
+          {
+            "text": "account_change",
+            "value": "account_change",
+            "selected": false
+          },
+          {
+            "text": "data_export",
+            "value": "data_export",
+            "selected": false
+          },
+          {
+            "text": "data_change",
+            "value": "data_change",
+            "selected": false
+          },
+          {
+            "text": "financial_transaction",
+            "value": "financial_transaction",
+            "selected": false
+          },
+          {
+            "text": "input_rejected",
+            "value": "input_rejected",
+            "selected": false
+          },
+          {
+            "text": "notification_sent",
+            "value": "notification_sent",
+            "selected": false
+          },
+          {
+            "text": "http_request",
+            "value": "http_request",
+            "selected": false
+          },
+          {
+            "text": "network_flow",
+            "value": "network_flow",
+            "selected": false
+          },
+          {
+            "text": "scope_violation",
+            "value": "scope_violation",
+            "selected": false
+          },
+          {
+            "text": "ids_alert",
+            "value": "ids_alert",
+            "selected": false
+          },
+          {
+            "text": "kubernetes_event",
+            "value": "kubernetes_event",
+            "selected": false
+          },
+          {
+            "text": "container_restart",
+            "value": "container_restart",
+            "selected": false
+          },
+          {
+            "text": "host_alert",
+            "value": "host_alert",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "severity",
+        "label": "Severity",
+        "type": "custom",
+        "query": "low, medium, high, critical",
+        "options": [
+          {
+            "text": "low",
+            "value": "low",
+            "selected": false
+          },
+          {
+            "text": "medium",
+            "value": "medium",
+            "selected": false
+          },
+          {
+            "text": "high",
+            "value": "high",
+            "selected": false
+          },
+          {
+            "text": "critical",
+            "value": "critical",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "outcome",
+        "label": "Outcome",
+        "type": "custom",
+        "query": "success, failure, denied, error, unknown",
+        "options": [
+          {
+            "text": "success",
+            "value": "success",
+            "selected": false
+          },
+          {
+            "text": "failure",
+            "value": "failure",
+            "selected": false
+          },
+          {
+            "text": "denied",
+            "value": "denied",
+            "selected": false
+          },
+          {
+            "text": "error",
+            "value": "error",
+            "selected": false
+          },
+          {
+            "text": "unknown",
+            "value": "unknown",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "verdict",
+        "label": "Verdict",
+        "type": "custom",
+        "query": "allowed, refused, unknown, not_applicable",
+        "options": [
+          {
+            "text": "allowed",
+            "value": "allowed",
+            "selected": false
+          },
+          {
+            "text": "refused",
+            "value": "refused",
+            "selected": false
+          },
+          {
+            "text": "unknown",
+            "value": "unknown",
+            "selected": false
+          },
+          {
+            "text": "not_applicable",
+            "value": "not_applicable",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "correlation",
+        "label": "Request / trace ID",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false,
+        "description": "Exact ID; leave blank to include all."
+      },
+      {
+        "name": "event_id",
+        "label": "Event ID",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "text": "",
+            "value": "",
+            "selected": true
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false,
+        "description": "Exact ID; leave blank to include all."
+      }
+    ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-1h",
     "to": "now"
   },
-  "timezone": "browser",
-  "title": "JengaSec Observability",
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "timezone": "utc",
+  "title": "JengaSec \u00b7 Team Activity",
+  "description": "Observed red and blue application and AI activity. Attribution is supplied by authoritative platform data. Empty activity does not establish collector health; use Telemetry Health.",
   "uid": "jengasec-observability",
-  "version": 1
+  "version": 1,
+  "weekStart": ""
 }

@@ -1,0 +1,15 @@
+[Unit]
+Description=JengaSec local service metrics snapshot
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 {{ obs_node_install_root }}/collect-infrastructure-metrics.py --config {{ obs_node_config_root }}/collector.json --output {{ obs_node_textfile_dir }}/jengasec.prom
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths={{ obs_node_textfile_dir }}
+TimeoutStartSec=60s
+MemoryMax=96M
+CPUQuota=25%

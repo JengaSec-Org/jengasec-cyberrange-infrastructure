@@ -1,0 +1,7 @@
+---
+- name: Restart OBS host container reader
+  ansible.builtin.systemd_service:
+    name: jengasec-container-logs.service
+    state: restarted
+    daemon_reload: true
+  when: obs_cluster_apply | bool

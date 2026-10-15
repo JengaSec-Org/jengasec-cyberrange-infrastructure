@@ -21,7 +21,7 @@ CR="$(printf '\r')"
 crlf="$(grep -rlIU --include='*.sh' --include='*.py' --exclude-dir=__pycache__ --exclude-dir=.venv \
   --exclude-dir=venv -e "$CR" "${PATHS[@]}" 2>/dev/null || true)"
 if [ -n "$crlf" ]; then
-  echo "refusing: these scripts have CRLF line endings (fix each with: sed -i 's/\\r\$//' FILE):" >&2
+  printf '%s\n' "refusing: these scripts have CRLF line endings (fix each with: sed -i 's/\\r\$//' FILE):" >&2
   echo "$crlf" >&2
   exit 1
 fi

@@ -1,0 +1,70 @@
+---
+- name: Require the supported local K3s storage and guard limits
+  ansible.builtin.assert:
+    that:
+      - obs_cluster_kubeconfig == '/etc/rancher/k3s/k3s.yaml'
+      - obs_cluster_kubectl == '/usr/local/bin/k3s'
+      - obs_cluster_wal_max_bytes | int > 0
+      - obs_cluster_wal_min_free_bytes | int > 0
+
+- name: Inspect the existing node exporter textfile directory
+  ansible.builtin.stat:
+    path: /var/lib/jengasec-node-metrics
+  register: obs_cluster_wal_textfile
+
+- name: Require the independent node metrics collector for guard visibility
+  ansible.builtin.assert:
+    that:
+      - obs_cluster_wal_textfile.stat.isdir | default(false)
+      - not obs_cluster_wal_textfile.stat.islnk | default(false)
+
+- name: Create private persistent WAL guard state
+  ansible.builtin.file:
+    path: /var/lib/jengasec-observability-wal-guard
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Install the OBS-only WAL guard
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../scripts/guard-observability-wal.py"
+    dest: "{{ obs_cluster_root }}/guard-observability-wal.py"
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Configure bounded WAL collection without deleting data
+  ansible.builtin.copy:
+    content: >-
+      {{ {'cluster': obs_cluster_name,
+          'host_enabled': obs_cluster_host_logs_enabled | bool,
+          'max_wal_bytes': obs_cluster_wal_max_bytes | int,
+          'min_free_bytes': obs_cluster_wal_min_free_bytes | int} | to_nice_json }}
+    dest: "{{ obs_cluster_root }}/wal-guard.json"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Install the WAL guard service and timer
+  ansible.builtin.template:
+    src: "jengasec-observability-wal-guard.{{ item }}.j2"
+    dest: "/etc/systemd/system/jengasec-observability-wal-guard.{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: [service, timer]
+
+- name: Refuse implicit restart of any paused OBS collector
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - "{{ obs_cluster_root }}/guard-observability-wal.py"
+      - can-start
+      - --target
+      - "{{ item }}"
+      - --config
+      - "{{ obs_cluster_root }}/wal-guard.json"
+  when: obs_cluster_apply | bool
+  loop: [cluster, host]
+  changed_when: false

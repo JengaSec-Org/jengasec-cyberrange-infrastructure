@@ -44,6 +44,13 @@ def main() -> int:
     ap.add_argument("--all", action="store_true", help="one set of marks for the whole event (testing only)")
     ap.add_argument("--preview", action="store_true", help="print the marks, send nothing")
     a = ap.parse_args()
+    mode = os.environ.get("SCORING_MODE", "0").lower()
+    if mode not in ("1", "true", "yes", "on", "0", "false", "no", "off"):
+        print("invalid SCORING_MODE: legacy publication refused", file=sys.stderr)
+        return 2
+    if mode in ("1", "true", "yes", "on"):
+        print("legacy marks publisher disabled: website scoring-feed/2.0 is authoritative")
+        return 0
     token = os.environ.get("ADMIN_TOKEN", "")
     if not token:
         print("ADMIN_TOKEN is not set", file=sys.stderr)

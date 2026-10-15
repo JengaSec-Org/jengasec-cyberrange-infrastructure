@@ -1,0 +1,179 @@
+---
+- name: Validate observation role inputs
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - obs_provisioning_mode in ['source', 'cache']
+      - obs_provisioning_database is match('^[A-Za-z_][A-Za-z0-9_]{0,62}$')
+      - obs_provisioning_max_age_seconds | int >= 30
+      - obs_provisioning_max_age_seconds | int <= 300
+      - obs_provisioning_interval_seconds | int >= 15
+      - obs_provisioning_interval_seconds | int < obs_provisioning_max_age_seconds | int
+      - obs_provisioning_port | int > 1024
+      - obs_provisioning_port | int < 65536
+      - obs_provisioning_mode != 'cache' or obs_provisioning_source_address | length > 0
+      - obs_provisioning_attribution_endpoint | length == 0 or obs_provisioning_mode == 'cache'
+      - not obs_provisioning_endpoint_enabled or obs_provisioning_mode == 'source'
+      - not obs_provisioning_endpoint_enabled or obs_provisioning_listen_address | length > 0
+      - not obs_provisioning_endpoint_enabled or obs_provisioning_allowed_client_address | length > 0
+      - not obs_provisioning_endpoint_enabled or obs_provisioning_allowed_client_certificate_sha256 is match('^[a-f0-9]{64}$')
+    quiet: true
+
+- name: Require safe absolute OBS paths
+  ansible.builtin.assert:
+    that:
+      - item is match('^/[A-Za-z0-9_./-]+$')
+      - "'..' not in item.split('/')"
+      - item | length > 10
+    quiet: true
+  loop:
+    - "{{ obs_provisioning_install_root }}"
+    - "{{ obs_provisioning_config_root }}"
+    - "{{ obs_provisioning_output_dir }}"
+    - "{{ obs_provisioning_textfile_dir }}"
+    - "{{ obs_provisioning_tls_ca_path }}"
+    - "{{ obs_provisioning_tls_cert_path }}"
+    - "{{ obs_provisioning_tls_key_path }}"
+
+- name: Record authentication configuration before deployment
+  ansible.builtin.command:
+    argv: [sha256sum, /etc/passwd, /etc/shadow, /etc/ssh/sshd_config]
+  register: obs_provisioning_auth_before
+  changed_when: false
+  no_log: true
+
+- name: Require the existing node textfile directory
+  ansible.builtin.stat:
+    path: "{{ obs_provisioning_textfile_dir }}"
+  register: obs_provisioning_textfile
+
+- name: Validate node textfile prerequisite
+  ansible.builtin.assert:
+    that:
+      - obs_provisioning_textfile.stat.isdir | default(false)
+    quiet: true
+
+- name: Inspect the existing OBS snapshot endpoint
+  ansible.builtin.stat:
+    path: /etc/systemd/system/jengasec-provisioning-endpoint.service
+  register: obs_provisioning_existing_endpoint
+
+- name: Inspect the selected endpoint listener
+  ansible.builtin.command:
+    argv: [ss, -H, -lnt, "sport = :{{ obs_provisioning_port }}"]
+  register: obs_provisioning_listener
+  changed_when: false
+  when: obs_provisioning_endpoint_enabled
+
+- name: Reject an unrelated listener
+  ansible.builtin.assert:
+    that:
+      - obs_provisioning_existing_endpoint.stat.exists or obs_provisioning_listener.stdout | length == 0
+    quiet: true
+  when: obs_provisioning_endpoint_enabled
+
+- name: Require existing runtime dependencies
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, -c, "import ssl; import http.client; import fcntl"]
+  changed_when: false
+
+- name: Create private OBS observation directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ obs_provisioning_install_root }}"
+    - "{{ obs_provisioning_install_root }}/scripts"
+    - "{{ obs_provisioning_install_root }}/observability/provisioning"
+    - "{{ obs_provisioning_config_root }}"
+    - "{{ obs_provisioning_output_dir }}"
+
+- name: Install the read-only adapter and exchange entry point
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../scripts/{{ item }}"
+    dest: "{{ obs_provisioning_install_root }}/scripts/{{ item }}"
+    mode: "0700"
+    backup: true
+  loop:
+    - refresh-provisioning-observability.py
+    - provisioning-observability-service.py
+  notify: Restart provisioning snapshot endpoint
+
+- name: Install the bounded source query
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../observability/provisioning/snapshot.sql"
+    dest: "{{ obs_provisioning_install_root }}/observability/provisioning/snapshot.sql"
+    mode: "0600"
+    backup: true
+
+- name: Configure only the selected observation source or cache
+  ansible.builtin.copy:
+    content: >-
+      {{ {'listen_address': obs_provisioning_listen_address,
+          'allowed_client_address': obs_provisioning_allowed_client_address,
+          'allowed_client_certificate_sha256': obs_provisioning_allowed_client_certificate_sha256,
+          'source_address': obs_provisioning_source_address,
+          'attribution_endpoint': obs_provisioning_attribution_endpoint,
+          'port': obs_provisioning_port | int} | to_nice_json }}
+    dest: "{{ obs_provisioning_config_root }}/config.json"
+    mode: "0600"
+    backup: true
+  no_log: true
+  notify: Restart provisioning snapshot endpoint
+
+- name: Install periodic refresh units
+  ansible.builtin.template:
+    src: "refresh.{{ item }}.j2"
+    dest: "/etc/systemd/system/jengasec-provisioning-{{ obs_provisioning_mode }}.{{ item }}"
+    mode: "0644"
+    backup: true
+  loop: [service, timer]
+
+- name: Install the optional restricted snapshot endpoint
+  ansible.builtin.template:
+    src: endpoint.service.j2
+    dest: /etc/systemd/system/jengasec-provisioning-endpoint.service
+    mode: "0644"
+    backup: true
+  when: obs_provisioning_endpoint_enabled
+  notify: Restart provisioning snapshot endpoint
+
+- name: Refresh observations and metrics immediately
+  ansible.builtin.systemd:
+    name: "jengasec-provisioning-{{ obs_provisioning_mode }}.service"
+    state: started
+    daemon_reload: true
+
+- name: Enable periodic observation refresh
+  ansible.builtin.systemd:
+    name: "jengasec-provisioning-{{ obs_provisioning_mode }}.timer"
+    state: started
+    enabled: true
+
+- name: Start the optional restricted snapshot endpoint
+  ansible.builtin.systemd:
+    name: jengasec-provisioning-endpoint.service
+    state: started
+    enabled: true
+  when: obs_provisioning_endpoint_enabled
+
+- name: Stop a disabled OBS snapshot endpoint
+  ansible.builtin.systemd:
+    name: jengasec-provisioning-endpoint.service
+    state: stopped
+    enabled: false
+  when: obs_provisioning_existing_endpoint.stat.exists and not obs_provisioning_endpoint_enabled
+
+- name: Apply observation endpoint changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify authentication configuration is unchanged
+  ansible.builtin.command:
+    argv: [sha256sum, /etc/passwd, /etc/shadow, /etc/ssh/sshd_config]
+  register: obs_provisioning_auth_after
+  changed_when: false
+  failed_when: obs_provisioning_auth_after.stdout != obs_provisioning_auth_before.stdout
+  no_log: true

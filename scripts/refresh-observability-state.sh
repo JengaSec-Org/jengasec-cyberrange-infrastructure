@@ -14,9 +14,10 @@ COMPOSE_FILE=""
 ENV_FILE=""
 GRAFANA_ADMIN_PASSWORD_FILE=""
 GRAFANA_URL=""
+MANAGE_GRAFANA_ACCESS=true
 
 usage() {
-  echo "usage: $0 --service-file PATH --lookup-dir PATH --dashboard-dir PATH --compose-file PATH --env-file PATH --grafana-url URL --grafana-admin-password-file PATH"
+  echo "usage: $0 --service-file PATH --lookup-dir PATH --dashboard-dir PATH --compose-file PATH --env-file PATH [--manage-grafana-access true|false] [--grafana-url URL --grafana-admin-password-file PATH]"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -49,6 +50,11 @@ while [[ $# -gt 0 ]]; do
       GRAFANA_URL="${2:-}"
       shift 2
       ;;
+    --manage-grafana-access)
+      [[ $# -ge 2 ]] || die "--manage-grafana-access requires true or false"
+      MANAGE_GRAFANA_ACCESS="$2"
+      shift 2
+      ;;
     --help)
       usage
       exit 0
@@ -60,17 +66,22 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+[[ "$MANAGE_GRAFANA_ACCESS" == true || "$MANAGE_GRAFANA_ACCESS" == false ]] \
+  || die "--manage-grafana-access must be true or false"
 for path in \
   "$SERVICE_FILE" \
   "$COMPOSE_FILE" \
-  "$ENV_FILE" \
-  "$GRAFANA_ADMIN_PASSWORD_FILE"; do
+  "$ENV_FILE"; do
   [[ -f "$path" ]] || die "required file is missing: $path"
 done
 [[ -n "$LOOKUP_DIR" && -n "$DASHBOARD_DIR" ]] \
   || die "lookup and dashboard directories are required"
-[[ "$GRAFANA_URL" =~ ^https?://[^[:space:]@]+$ ]] \
-  || die "--grafana-url must be an HTTP(S) URL without credentials"
+if [[ "$MANAGE_GRAFANA_ACCESS" == true ]]; then
+  [[ -f "$GRAFANA_ADMIN_PASSWORD_FILE" ]] \
+    || die "--grafana-admin-password-file must name an existing file"
+  [[ "$GRAFANA_URL" =~ ^https?://[^[:space:]@]+$ ]] \
+    || die "--grafana-url must be an HTTP(S) URL without credentials"
+fi
 need docker
 need python3
 
@@ -112,7 +123,8 @@ if [[ "$before" != "$after" ]] \
   log "Vector reloaded with the refreshed attribution snapshot"
 fi
 
-if [[ -n "$("${compose[@]}" ps --status running --quiet grafana)" ]]; then
+if [[ "$MANAGE_GRAFANA_ACCESS" == true ]] \
+  && [[ -n "$("${compose[@]}" ps --status running --quiet grafana)" ]]; then
   python3 "$(dirname "$0")/provision-grafana-access.py" \
     --grafana-url "$GRAFANA_URL" \
     --admin-password-file "$GRAFANA_ADMIN_PASSWORD_FILE" \

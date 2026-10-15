@@ -1,0 +1,30 @@
+[Unit]
+Description=JengaSec read-only native provisioning snapshot endpoint
+After=network-online.target jengasec-provisioning-source.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 {{ obs_provisioning_install_root }}/scripts/provisioning-observability-service.py serve --output-dir {{ obs_provisioning_output_dir }} --config {{ obs_provisioning_config_root }}/config.json
+LoadCredential=ca.crt:{{ obs_provisioning_tls_ca_path }}
+LoadCredential=tls.crt:{{ obs_provisioning_tls_cert_path }}
+LoadCredential=tls.key:{{ obs_provisioning_tls_key_path }}
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6
+InaccessiblePaths=/var/run/postgresql /etc/shadow
+Restart=on-failure
+RestartSec=5s
+MemoryMax=192M
+TasksMax=8
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+---
+- name: Reload OBS node units
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart OBS node exporter
+  ansible.builtin.systemd:
+    name: jengasec-node-exporter.service
+    state: restarted
+    daemon_reload: true

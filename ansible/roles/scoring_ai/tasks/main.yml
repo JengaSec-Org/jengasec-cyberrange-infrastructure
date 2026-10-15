@@ -1,0 +1,150 @@
+---
+- name: Require the exact component and private runtime configuration
+  ansible.builtin.assert:
+    that:
+      - scoring_ai_mode in ['gateway', 'actuator', 'probe']
+      - not (scoring_ai_install_root is match('^/opt/jengasec-ai(/|$)'))
+      - not (scoring_ai_config_root is match('^/etc/jengasec-ai(/|$)'))
+      - not (scoring_ai_state_root is match('^/var/lib/jengasec-ai(/|$)'))
+      - scoring_ai_config | length > 0
+      - scoring_ai_mode == 'probe' or scoring_ai_tokens.principals | default([]) | length > 0
+      - scoring_ai_mode == 'probe' or scoring_ai_config.identity_file is defined
+      - scoring_ai_mode == 'probe' or scoring_ai_config.competition_networks | default([]) | length > 0
+      - scoring_ai_mode == 'probe' or scoring_ai_config.protected_networks | default([]) | length > 0
+      - scoring_ai_mode != 'gateway' or scoring_ai_config.actuator_command | default([]) | length > 0
+      - scoring_ai_mode != 'gateway' or scoring_ai_config.cursor_secret | default('') | length >= 32
+      - scoring_ai_mode != 'gateway' or scoring_ai_config.listen_address | default('127.0.0.1') == '127.0.0.1'
+      - scoring_ai_mode == 'probe' or scoring_ai_config.tokens_file == scoring_ai_config_root ~ '/tokens.json'
+      - scoring_ai_mode == 'probe' or scoring_ai_config.state_file is match('^' ~ scoring_ai_state_root ~ '/')
+      - scoring_ai_mode == 'actuator' or scoring_ai_config.evidence_directory is match('^' ~ scoring_ai_state_root ~ '/')
+      - scoring_ai_mode != 'actuator' or scoring_ai_config.verifier_command | default([]) | length > 0
+      - scoring_ai_mode != 'probe' or scoring_ai_config.checks | default([]) | length > 0
+  no_log: true
+
+- name: Verify the existing Python runtime
+  ansible.builtin.command:
+    argv: ["{{ scoring_ai_python }}", -c, "import sys; assert sys.version_info >= (3, 10)"]
+  changed_when: false
+
+- name: Require reviewed existing gateway account and group names
+  ansible.builtin.assert:
+    that:
+      - scoring_ai_gateway_user is match('^[A-Za-z_][A-Za-z0-9_.-]*$')
+      - scoring_ai_gateway_group is match('^[A-Za-z_][A-Za-z0-9_.-]*$')
+    fail_msg: Select an existing unprivileged gateway account and one of its existing groups.
+  when: scoring_ai_mode == 'gateway'
+
+- name: Validate gateway identity without changing account or group membership
+  ansible.builtin.command:
+    argv:
+      - "{{ scoring_ai_python }}"
+      - -c
+      - |
+        import grp, os, pwd, sys
+        try:
+            account = pwd.getpwnam(sys.argv[1])
+            group = grp.getgrnam(sys.argv[2])
+        except KeyError:
+            raise SystemExit('The configured gateway account and group must already exist')
+        memberships = set(os.getgrouplist(account.pw_name, account.pw_gid))
+        privileged = {'root', 'sudo', 'wheel', 'admin', 'docker', 'lxd', 'incus', 'disk', 'shadow'}
+        if account.pw_uid == 0 or 0 in memberships or group.gr_gid == 0:
+            raise SystemExit('The gateway account and group must not use UID or GID 0')
+        if group.gr_gid not in memberships:
+            raise SystemExit('The gateway account must already belong to the configured group')
+        if any(grp.getgrgid(gid).gr_name in privileged for gid in memberships):
+            raise SystemExit('The gateway account must not belong to a privileged system group')
+      - "{{ scoring_ai_gateway_user }}"
+      - "{{ scoring_ai_gateway_group }}"
+  changed_when: false
+  check_mode: false
+  when: scoring_ai_mode == 'gateway'
+
+- name: Select component state owner
+  ansible.builtin.set_fact:
+    scoring_ai_owner: "{{ scoring_ai_gateway_user if scoring_ai_mode == 'gateway' else 'root' }}"
+    scoring_ai_group: "{{ scoring_ai_gateway_group if scoring_ai_mode == 'gateway' else 'root' }}"
+
+- name: Create code and private runtime directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ scoring_ai_install_root }}", owner: root, group: root, mode: '0755'}
+    - {path: "{{ scoring_ai_install_root }}/scoring_ai", owner: root, group: root, mode: '0755'}
+    - {path: "{{ scoring_ai_config_root }}", owner: "{{ scoring_ai_owner }}", group: "{{ scoring_ai_group }}", mode: '0700'}
+    - {path: "{{ scoring_ai_state_root }}", owner: "{{ scoring_ai_owner }}", group: "{{ scoring_ai_group }}", mode: '0700'}
+    - {path: "{{ scoring_ai_state_root }}/evidence", owner: "{{ scoring_ai_owner }}", group: "{{ scoring_ai_group }}", mode: '0700'}
+
+- name: Install dependency-free AI service source
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ scoring_ai_install_root }}/scoring_ai/{{ item | basename }}"
+    owner: root
+    group: root
+    mode: '0644'
+    directory_mode: '0755'
+  loop: "{{ query('ansible.builtin.fileglob', playbook_dir ~ '/../scripts/scoring_ai/*.py') }}"
+  notify: Restart the AI gateway
+
+- name: Install AI component entrypoint
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../scripts/run-scoring-ai.py"
+    dest: "{{ scoring_ai_install_root }}/run-scoring-ai.py"
+    owner: root
+    group: root
+    mode: '0755'
+  notify: Restart the AI gateway
+
+- name: Install private component configuration
+  ansible.builtin.copy:
+    content: "{{ scoring_ai_config | to_nice_json }}"
+    dest: "{{ scoring_ai_config_root }}/config.json"
+    owner: "{{ scoring_ai_owner }}"
+    group: "{{ scoring_ai_group }}"
+    mode: '0600'
+  no_log: true
+  notify: Restart the AI gateway
+
+- name: Install private producer token hashes
+  ansible.builtin.copy:
+    content: "{{ scoring_ai_tokens | to_nice_json }}"
+    dest: "{{ scoring_ai_config_root }}/tokens.json"
+    owner: "{{ scoring_ai_owner }}"
+    group: "{{ scoring_ai_group }}"
+    mode: '0600'
+  no_log: true
+  when: scoring_ai_mode != 'probe'
+
+- name: Install the bounded HTTP gateway unit
+  ansible.builtin.template:
+    src: jengasec-scoring-ai.service.j2
+    dest: /etc/systemd/system/jengasec-scoring-ai.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart the AI gateway
+  when: scoring_ai_mode == 'gateway'
+
+- name: Check gateway identity and private configuration without executing actions
+  ansible.builtin.command:
+    argv:
+      - "{{ scoring_ai_python }}"
+      - "{{ scoring_ai_install_root }}/run-scoring-ai.py"
+      - check
+      - --config
+      - "{{ scoring_ai_config_root }}/config.json"
+  become_user: "{{ scoring_ai_gateway_user }}"
+  changed_when: false
+  when: scoring_ai_mode == 'gateway' and scoring_ai_start | bool
+
+- name: Start the gateway only in the approved rollout
+  ansible.builtin.systemd:
+    name: jengasec-scoring-ai.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: scoring_ai_mode == 'gateway' and scoring_ai_start | bool

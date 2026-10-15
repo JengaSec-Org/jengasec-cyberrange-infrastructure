@@ -1,0 +1,27 @@
+[Unit]
+Description=JengaSec OBS remote-write disk guard
+After=k3s.service jengasec-node-exporter.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 {{ obs_cluster_root }}/guard-observability-wal.py check --config {{ obs_cluster_root }}/wal-guard.json
+TimeoutStartSec=180s
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/jengasec-observability-wal-guard /var/lib/jengasec-node-metrics
+MemoryMax=256M
+Nice=10

@@ -4,7 +4,9 @@ import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from starlette.concurrency import run_in_threadpool
+from starlette.requests import ClientDisconnect
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -15,6 +17,7 @@ from .schemas import (ActionRecord, ActionRequest, ActionType, DecisionIn, Decis
                       IngestResult, KillSwitch)
 from .marks import marks_for, publish
 from .scoring import score_blue, score_red
+from .scoring_proxy import MAX_BODY, PUBLIC_PREFIX, ProxyFailure
 from .store import (decode_cursor, encode_cursor, events_after, first_error, iso_now, parse_body, parse_ts,
                     store_events)
 
@@ -39,6 +42,90 @@ def platform_log(event, outcome, **fields):
     """One JSON line on stdout, so the shared observability module records what the gateway did."""
     line = {"ts": iso_now(), "level": "info", "service": "ai-api", "event": event, "outcome": outcome, **fields}
     print(json.dumps(line, separators=(",", ":")), flush=True)
+
+
+def legacy_writes_only(request: Request):
+    if request.app.state.settings.scoring_mode:
+        raise HTTPException(409, {"error": "structured_scoring_request_required", "api_prefix": PUBLIC_PREFIX,
+                                  "authority": "website-v2", "shadow_fallback": False})
+
+
+def legacy_marks_only(request: Request):
+    if request.app.state.settings.scoring_mode:
+        raise HTTPException(409, {"error": "website_scoring_authority", "api_prefix": PUBLIC_PREFIX,
+                                  "authority": "website-v2", "legacy_publication": False})
+
+
+def _proxy_response(result):
+    headers = {"Content-Type": result.content_type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+    if result.retry_after:
+        headers["Retry-After"] = result.retry_after
+    return Response(result.body, status_code=result.status, headers=headers)
+
+
+async def _forward_scoring(request: Request, path: str, native_body: bytes | None = None):
+    """The caller's original bearer is checked by the gateway, including operators."""
+    if not request.app.state.settings.scoring_mode:
+        raise HTTPException(404, "scoring_mode_disabled")
+    try:
+        authorization = request.headers.getlist("authorization")
+        if len(authorization) != 1:
+            raise ProxyFailure("unauthorized", 401)
+        if request.headers.get("transfer-encoding") or request.headers.get("content-encoding"):
+            raise ProxyFailure("unsupported_body_encoding", 400)
+        lengths = request.headers.getlist("content-length")
+        if len(lengths) > 1 or (lengths and (not lengths[0].isdigit() or len(lengths[0]) > 10)):
+            raise ProxyFailure("invalid_content_length", 400)
+        if request.method == "POST" and not lengths:
+            raise ProxyFailure("content_length_required", 411)
+        expected = int(lengths[0]) if lengths else 0
+        if expected > MAX_BODY:
+            raise ProxyFailure("body_too_large", 413)
+        if request.method == "GET" and expected:
+            raise ProxyFailure("unexpected_request_body", 400)
+
+        async def read_body():
+            data = bytearray()
+            async for chunk in request.stream():
+                if len(data) + len(chunk) > MAX_BODY:
+                    raise ProxyFailure("body_too_large", 413)
+                data.extend(chunk)
+            if len(data) != expected:
+                raise ProxyFailure("incomplete_request", 400)
+            return bytes(data)
+
+        incoming = await asyncio.wait_for(read_body(), timeout=5)
+        body = native_body if native_body is not None else incoming
+        content_type = "application/json" if native_body is not None else request.headers.get("content-type", "")
+        return await run_in_threadpool(request.app.state.scoring_proxy.forward, request.method, path,
+                                      authorization[0], body, request.scope.get("query_string", b""), content_type)
+    except ProxyFailure as error:
+        raise HTTPException(error.status, {"error": error.code, "authority": "website-v2", "shadow_fallback": False}) from None
+    except (TimeoutError, ClientDisconnect):
+        raise HTTPException(408, "incomplete_scoring_request") from None
+
+
+@router.api_route("/scoring/{path:path}", methods=["GET", "POST"], include_in_schema=False)
+async def scoring_protocol(path: str, request: Request):
+    raw_path = request.scope.get("raw_path", b"")
+    if b"%" in raw_path or len(raw_path) > 4096:
+        raise HTTPException(400, "invalid_scoring_request_target")
+    return _proxy_response(await _forward_scoring(request, path))
+
+
+async def _actual_kill_switch(request: Request, enabled: bool | None = None):
+    body = json.dumps({"enabled": enabled}, separators=(",", ":")).encode() if enabled is not None else None
+    result = await _forward_scoring(request, "kill-switch", body)
+    if result.status != 200:
+        return _proxy_response(result)
+    state = json.loads(result.body)
+    on, unresolved = state.get("kill_switch"), state.get("unresolved_actions")
+    if type(on) is not bool or type(unresolved) is not int or unresolved < 0 or (enabled is not None and on != enabled):
+        raise HTTPException(502, "invalid_scoring_kill_switch_response")
+    if on and unresolved:
+        return JSONResponse(status_code=503, content={"error": "scoring_revocation_incomplete", "on": on,
+                                                      "unresolved_actions": unresolved})
+    return {"on": on}
 
 
 # --------------------------------------------------------------------------- telemetry
@@ -125,6 +212,7 @@ def _record(a: Action, remaining=None) -> dict:
 @router.post("/actions/{type}", status_code=202, response_model=ActionRecord, response_model_exclude_none=True)
 def request_action(type: ActionType, req: ActionRequest, request: Request,
                    team: Team = Depends(blue_auth), db: Session = Depends(get_db)):
+    legacy_writes_only(request)
     target = request.app.state.cells.get(req.target.namespace)
     if target is None or not target.get("enabled"):
         raise HTTPException(403, f"{req.target.namespace} is not an enabled application in the range")
@@ -152,7 +240,8 @@ def request_action(type: ActionType, req: ActionRequest, request: Request,
 
 
 @router.post("/actions/{id}/revert", status_code=202, response_model=ActionRecord, response_model_exclude_none=True)
-def revert_action(id: str, team: Team = Depends(blue_auth), db: Session = Depends(get_db)):
+def revert_action(id: str, request: Request, team: Team = Depends(blue_auth), db: Session = Depends(get_db)):
+    legacy_writes_only(request)
     action = db.scalar(select(Action).where(Action.action_id == id))
     if action is None:
         raise HTTPException(404, "no such action")
@@ -170,6 +259,7 @@ def revert_action(id: str, team: Team = Depends(blue_auth), db: Session = Depend
 
 @router.post("/decisions", status_code=201, response_model=DecisionRecord)
 def post_decision(body: DecisionIn, request: Request, team: Team = Depends(blue_auth), db: Session = Depends(get_db)):
+    legacy_writes_only(request)
     found = set(db.scalars(select(Event.event_id).where(Event.event_id.in_(body.evidence))))
     missing = [e for e in body.evidence if e not in found]
     if missing:
@@ -215,12 +305,16 @@ async def ingest(request: Request):
 # --------------------------------------------------------------------------- staff and judges (not in the AI team contract)
 
 @router.get("/admin/kill-switch", response_model=KillSwitch, dependencies=[Depends(admin_auth)], include_in_schema=False)
-def get_kill_switch(db: Session = Depends(get_db)):
+async def get_kill_switch(request: Request, db: Session = Depends(get_db)):
+    if request.app.state.settings.scoring_mode:
+        return await _actual_kill_switch(request)
     return KillSwitch(on=kill_switch_on(db))
 
 
 @router.post("/admin/kill-switch", response_model=KillSwitch, dependencies=[Depends(admin_auth)], include_in_schema=False)
-def set_kill_switch(body: KillSwitch, db: Session = Depends(get_db)):
+async def set_kill_switch(body: KillSwitch, request: Request, db: Session = Depends(get_db)):
+    if request.app.state.settings.scoring_mode:
+        return await _actual_kill_switch(request, body.on)
     row = db.get(Setting, KILL_SWITCH) or Setting(key=KILL_SWITCH, value="off")
     row.value = "on" if body.on else "off"
     db.merge(row)
@@ -262,16 +356,21 @@ def export_team(code: str, request: Request, db: Session = Depends(get_db)):
                            "status": a.status, "effective": a.effective, "target": a.target,
                            "justification": a.justification, "incident_id": a.incident_id, "evidence": a.evidence}
                           for a in db.scalars(select(Action).where(Action.team == code).order_by(Action.id))]
-        out["ground_truth"] = score_blue(db, code)
+        if not state.settings.scoring_mode:
+            out["ground_truth"] = score_blue(db, code)
     else:
         enabled = sum(1 for c in state.cells.values() if c.get("enabled")) or 18
-        out["ground_truth"] = score_red(db, Team(code, "ai-red", t.get("paired"), t["team_id"]), t.get("paired"), enabled)
+        if not state.settings.scoring_mode:
+            out["ground_truth"] = score_red(db, Team(code, "ai-red", t.get("paired"), t["team_id"]), t.get("paired"), enabled)
+    if state.settings.scoring_mode:
+        out["scoring"] = {"official": False, "authority": "website-v2", "receipts": PUBLIC_PREFIX + "/receipts"}
     return out
 
 
 @router.get("/admin/marks", dependencies=[Depends(admin_auth)], include_in_schema=False)
 def preview_marks(request: Request, day: int | None = None, db: Session = Depends(get_db)):
     """The marks that publishing would send to the website, without sending them."""
+    legacy_marks_only(request)
     try:
         return marks_for(db, request.app.state, day)
     except ValueError as e:
@@ -281,6 +380,7 @@ def preview_marks(request: Request, day: int | None = None, db: Session = Depend
 @router.post("/admin/publish-marks", dependencies=[Depends(admin_auth)], include_in_schema=False)
 def publish_marks(request: Request, day: int | None = None, db: Session = Depends(get_db)):
     """Push proposed AI marks to the website's POST /api/feed (idempotent per criterion and day)."""
+    legacy_marks_only(request)
     settings = request.app.state.settings
     if not (settings.website_feed_url and settings.website_feed_token):
         raise HTTPException(409, "WEBSITE_FEED_URL and WEBSITE_FEED_TOKEN are not set on this VM")

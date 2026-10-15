@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the OBS remote-write disk bound
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=30s
+AccuracySec=1s
+Unit=jengasec-observability-wal-guard.service
+
+[Install]
+WantedBy=timers.target

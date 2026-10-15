@@ -1,10 +1,22 @@
+{{- $cluster := .Files.Get "files/cluster.yaml" | fromYaml -}}
+{{- if not .Values.obs.eventsEnabled -}}
+{{- $_ := unset $cluster.receivers "k8sobjects/events" -}}
+{{- $_ := unset $cluster.processors "transform/kubernetes_events" -}}
+{{- $_ := unset $cluster.service.pipelines "logs" -}}
+{{- $_ := unset $cluster.exporters "otlp/obs" -}}
+{{- end -}}
+{{- if not .Values.obs.tls.insecure -}}
+{{- $tls := dict "insecure" false "ca_file" "/etc/otelcol-tls/ca.crt" "cert_file" "/etc/otelcol-tls/tls.crt" "key_file" "/etc/otelcol-tls/tls.key" "min_version" "1.2" -}}
+{{- $_ := set (index $cluster.exporters "prometheusremotewrite/obs") "tls" $tls -}}
+{{- if .Values.obs.eventsEnabled -}}
+{{- $_ := set (index $cluster.exporters "otlp/obs") "tls" $tls -}}
+{{- end -}}
+{{- end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: observability-agent-config
   namespace: {{ .Values.namespace }}
 data:
-  logs.yaml: |
-{{ .Files.Get "files/logs.yaml" | indent 4 }}
   cluster.yaml: |
-{{ .Files.Get "files/cluster.yaml" | indent 4 }}
+{{ toYaml $cluster | indent 4 }}

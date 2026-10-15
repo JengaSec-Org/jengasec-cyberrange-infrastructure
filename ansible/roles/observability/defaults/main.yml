@@ -7,9 +7,26 @@ obs_config_root: /etc/jengasec-observability
 obs_systemd_root: /etc/systemd/system
 
 obs_rehearsal_mode: false
+obs_rehearsal_event_interval_seconds: 0
+obs_attribution_mode: "{{ 'rehearsal' if obs_rehearsal_mode else 'platform' }}"
+obs_infrastructure_enabled: false
+obs_metrics_bind: "{{ obs_function_bind }}"
+obs_metrics_interface: "{{ obs_function_interface }}"
+obs_infrastructure_config_root: "{{ obs_config_root }}/infrastructure"
+obs_metrics_environment: live
+obs_metrics_resource_id: collector
+obs_metrics_targets: []
+obs_metrics_tls_ca_file: ""
+obs_metrics_tls_cert_file: ""
+obs_metrics_tls_key_file: ""
+obs_ingest_tls_cert_file: ""
+obs_ingest_tls_key_file: ""
+obs_infrastructure_attribution_certificate_sha1: ""
+obs_infrastructure_scoring_certificate_sha1: ""
 obs_manage_packages: true
 obs_manage_systemd: true
 obs_manage_storage_ownership: true
+obs_manage_grafana_access: true
 obs_validate_runtime: true
 obs_validate_network: false
 obs_start: false
@@ -26,6 +43,11 @@ obs_retention_hours: 168
 obs_event_window_hours: 72
 obs_appeal_window_hours: 96
 obs_refresh_seconds: 60
+obs_spool_maintenance_enabled: true
+obs_spool_metrics_dir: "{{ obs_state_root }}/metrics"
+obs_spool_quarantine_max_bytes: 268435456
+obs_spool_ai_handoff_max_bytes: 1073741824
+obs_spool_close_grace_seconds: 120
 obs_compose_minimum_version: 2.24.0
 obs_python_command: /usr/bin/python3
 

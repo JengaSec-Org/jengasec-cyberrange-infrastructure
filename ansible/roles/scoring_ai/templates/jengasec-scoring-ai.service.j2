@@ -1,0 +1,31 @@
+[Unit]
+Description=JengaSec private scoring observations and bounded AI actions
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ scoring_ai_gateway_user }}
+Group={{ scoring_ai_gateway_group }}
+ExecStart={{ scoring_ai_python }} {{ scoring_ai_install_root }}/run-scoring-ai.py serve --config {{ scoring_ai_config_root }}/config.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+ReadWritePaths={{ scoring_ai_state_root }}
+MemoryMax=192M
+TasksMax=64
+LimitNOFILE=256
+
+[Install]
+WantedBy=multi-user.target

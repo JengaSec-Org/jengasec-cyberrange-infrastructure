@@ -1,0 +1,153 @@
+---
+- name: Validate collector inputs
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - ansible_facts.architecture == 'x86_64'
+      - obs_node_address | length > 0
+      - obs_node_address not in ['0.0.0.0', '::']
+      - obs_node_port | int > 1024
+      - obs_node_tls_ca_file | length > 0
+      - obs_node_tls_cert_file | length > 0
+      - obs_node_tls_key_file | length > 0
+    quiet: true
+
+- name: Record existing authentication configuration
+  ansible.builtin.command:
+    argv: [sha256sum, /etc/passwd, /etc/shadow, /etc/ssh/sshd_config]
+  register: obs_node_auth_before
+  changed_when: false
+  no_log: true
+
+- name: Configure optional collector ingress
+  ansible.builtin.import_tasks: ufw.yml
+  tags: [obs-node-ufw]
+
+- name: Inspect an existing collector service
+  ansible.builtin.stat:
+    path: /etc/systemd/system/jengasec-node-exporter.service
+  register: obs_node_existing_service
+
+- name: Inspect the collector listener
+  ansible.builtin.command:
+    argv: [ss, -H, -lnt, "sport = :{{ obs_node_port }}"]
+  register: obs_node_listener
+  changed_when: false
+
+- name: Reject an unrelated listener
+  ansible.builtin.assert:
+    that:
+      - obs_node_existing_service.stat.exists or obs_node_listener.stdout | length == 0
+    fail_msg: The collector port is already in use
+    quiet: true
+
+- name: Create OBS collector directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ obs_node_install_root }}", mode: "0755"}
+    - {path: "{{ obs_node_install_root }}/archives", mode: "0755"}
+    - {path: "{{ obs_node_config_root }}", mode: "0755"}
+    - {path: "{{ obs_node_config_root }}/tls", mode: "0700"}
+    - {path: "{{ obs_node_textfile_dir }}", mode: "0755"}
+
+- name: Download the official node exporter archive
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/prometheus/node_exporter/releases/download/v{{ obs_node_exporter_version }}/node_exporter-{{ obs_node_exporter_version }}.linux-amd64.tar.gz
+    dest: "{{ obs_node_install_root }}/archives/node_exporter-{{ obs_node_exporter_version }}.tar.gz"
+    checksum: >-
+      sha256:https://github.com/prometheus/node_exporter/releases/download/v{{ obs_node_exporter_version }}/sha256sums.txt
+    mode: "0644"
+  register: obs_node_archive
+
+- name: Unpack the verified exporter
+  ansible.builtin.unarchive:
+    src: "{{ obs_node_archive.dest }}"
+    dest: "{{ obs_node_install_root }}"
+    remote_src: true
+    creates: "{{ obs_node_install_root }}/node_exporter-{{ obs_node_exporter_version }}.linux-amd64/node_exporter"
+
+- name: Install collector TLS credentials
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "{{ obs_node_config_root }}/tls/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - {source: "{{ obs_node_tls_ca_file }}", name: ca.crt}
+    - {source: "{{ obs_node_tls_cert_file }}", name: server.crt}
+    - {source: "{{ obs_node_tls_key_file }}", name: server.key}
+  no_log: true
+  notify: Restart OBS node exporter
+
+- name: Install the bounded metrics collector
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../scripts/collect-infrastructure-metrics.py"
+    dest: "{{ obs_node_install_root }}/collect-infrastructure-metrics.py"
+    mode: "0755"
+  tags: [obs-metrics]
+
+- name: Configure local metrics sources
+  ansible.builtin.copy:
+    content: >-
+      {{ {'services': obs_node_services,
+          'wireguard_interface': obs_node_wireguard_interface,
+          'postgresql': obs_node_postgresql} | to_nice_json }}
+    dest: "{{ obs_node_config_root }}/collector.json"
+    mode: "0644"
+  tags: [obs-metrics]
+
+- name: Install the exporter web configuration
+  ansible.builtin.template:
+    src: web.yml.j2
+    dest: "{{ obs_node_config_root }}/web.yml"
+    mode: "0644"
+  notify: Restart OBS node exporter
+
+- name: Install collector systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - jengasec-node-exporter.service
+    - jengasec-node-metrics.service
+    - jengasec-node-metrics.timer
+  notify:
+    - Reload OBS node units
+    - Restart OBS node exporter
+
+- name: Apply collector unit changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Collect the first local metrics snapshot
+  ansible.builtin.systemd:
+    name: jengasec-node-metrics.service
+    state: started
+  tags: [obs-metrics]
+
+- name: Enable the local metrics timer
+  ansible.builtin.systemd:
+    name: jengasec-node-metrics.timer
+    state: started
+    enabled: true
+
+- name: Enable the authenticated exporter
+  ansible.builtin.systemd:
+    name: jengasec-node-exporter.service
+    state: started
+    enabled: true
+
+- name: Verify authentication configuration is unchanged
+  ansible.builtin.command:
+    argv: [sha256sum, /etc/passwd, /etc/shadow, /etc/ssh/sshd_config]
+  register: obs_node_auth_after
+  changed_when: false
+  failed_when: obs_node_auth_after.stdout != obs_node_auth_before.stdout
+  no_log: true

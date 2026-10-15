@@ -82,3 +82,79 @@ this view but never writes back through the OBS database role.
   policy refusal.
 - Missing or stale attribution is explicit (`unknown`) and raises a pipeline
   health signal. OBS never guesses an identity.
+
+## Versioned scoring interface
+
+The website also exposes an authenticated HTTPS interface for scoring. The
+database views above remain observation interfaces. Their last-known lookup
+behavior does not authorize scores or AI actions after authority expires.
+
+| Route | Authority and result |
+|---|---|
+| `GET /api/scoring/identity/` | `X-Feed-Token` or the separate read-only `X-Scoring-Identity-Token`; timed canonical teams, workloads, addresses, scopes, producer registrations and approved exclusions |
+| `GET /api/scoring/receipts/` | `X-Feed-Token`; immutable producer receipts and platform-issued cases, using independent receipt and case cursors |
+| `POST /api/scoring/receipts/` | A separate bearer credential for the named producer; observations only |
+| `POST /api/scoring/evidence/` | `X-Feed-Token`; private, verified evidence bound to one calculation input snapshot |
+| `POST /api/scoring/readiness/` | `X-Feed-Token`; operational state, with no authority to create marks |
+| `POST /api/feed/` | `X-Feed-Token`; strict `scoring-feed/2.0` cumulative criterion revisions |
+
+The website owns the complete request contracts in `docs/CONTRACT-feed.md` and
+`docs/observability-interface.md`. The exact trailing slash matters. Clients
+must not forward credentials through redirects. An HTTP 202 response contains
+individual outcomes: only an exact accepted or duplicate revision is delivered.
+Retry a pending row with its original revision. Keep a rejected row for operator
+repair; do not silently discard it or invent a different team.
+
+The read-only identity credential authorizes only identity GET requests. AI
+hosts use it through a root-owned publisher that refreshes current authority
+every 30 seconds. The publisher removes the local snapshot when refresh fails.
+Snapshots expire within 120 seconds. Historical snapshots support score
+reproduction but never authorize an action.
+
+The `main-scoring/1.0` calculator ships from the website's
+`jengasec_scoring_policy` package. OBS imports that package and sends measured
+facts, collection quality and the resulting mark. The receiver independently
+calculates the mark. Entry, Documentation and authorized bonus workflows remain
+website-owned. Application Red uses its reviewed finding workflow and cannot
+receive automatic telemetry awards.
+
+Cases freeze their scenario, expected assertions, opportunity, defender,
+target owner, actor, assignment and required producer IDs. The defender and
+workload owner can differ for an explicitly assigned AI defender. External
+producers cannot set labels or change scope. A competitor's own detection is
+different from a central IDS observation. Every required runner, verifier and
+gateway must have complete target-specific source coverage for the issued
+case. Process health and a healthy unrelated producer cannot prove silence.
+Independent verifier coverage must include the defender's receipt transport.
+
+The collector uses UTC half-open cumulative windows, a 120-second delivery
+grace and a 60-second calculation interval. Functional probes run every 15
+seconds with bounded requests; readiness alone cannot satisfy the functional
+assertion. Missing probes remain in expected coverage. The policy requires
+at least 99 percent completed coverage and at most two seconds of clock
+uncertainty. Missing source coverage holds a criterion. A measured failure
+or a verified missed attack can produce zero. Scenario rehearsals do not earn
+official marks.
+
+Receipt sequence cursors discover late observations without rescanning time
+windows. The collector consumes both cursor streams before calculating. The
+platform's derived paired-build and reviewed-finding state may change; issued
+labels and identity do not. Late finding corrections can remove protection
+credit. Before finalization, a correction replaces one logical criterion
+component and preserves earlier revisions. After finalization, the website's
+appeal and judge correction workflow applies.
+
+The collector archives original typed proof, scenario receipts, identity,
+policy inputs and query definitions before it queues a score. Application
+`evt_` and infrastructure `infra_` records keep their native identities. AI
+proof uses a typed archive wrapper around the unchanged native receipt.
+References must resolve to retained proof; a reference string alone is not
+evidence. Raw application and infrastructure records continue to use their
+existing exporters and access boundaries. Participants cannot retrieve staff
+proof through a score link.
+
+The delivery queue is limited to 64 MiB and 50,000 pending rows. It warns at
+75 percent and holds new work at capacity, without eviction. The source cache
+and website archive require explicit byte budgets. Referenced archives remain
+available through the configured appeal window and every open appeal hold.
+These archives do not change the seven-day raw telemetry retention policy.
