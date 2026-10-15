@@ -82,8 +82,15 @@ printf '        AI-01 ground truth: precision %s, recall %s, decisions %s
 
 if [ -n "${WEBSITE_FEED_URL:-}" ]; then
   echo "Website link ($WEBSITE_FEED_URL)"
-  expect 200 "$(call POST /admin/publish-marks "$ADMIN_TOKEN")" "AI marks pushed to the website"
-  printf '        website answered %s\n' "$(json "d['website_status'], d['website_answer']")"
+  expect 200 "$(call POST /admin/publish-marks "$ADMIN_TOKEN")" "AI API published its marks"
+  # The publish call succeeds even when the website refuses; what counts is the website's own answer.
+  ws=$(json "d.get('website_status') or ''")
+  case "$ws" in
+    2??) ok "the website accepted them (HTTP $ws)" ;;
+    404) bad "the website answered 404: DJANGO_FEED_TOKEN is not set there (website vault: vault_django_feed_token, then make platform)" ;;
+    403) bad "the website answered 403: WEBSITE_FEED_TOKEN here differs from the website's DJANGO_FEED_TOKEN" ;;
+    *)   bad "the website answered ${ws:-nothing}: $(json "d.get('website_answer')")" ;;
+  esac
 fi
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]

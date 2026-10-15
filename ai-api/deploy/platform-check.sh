@@ -7,8 +7,9 @@
 #         ./platform-check.sh probe <address>      from another VM or a WireGuard laptop: can I reach VM 101?
 #         settings via environment (defaults from the server VM sheet):
 #           OBS_IP=192.168.40.60 K8S_BLUE_IP=192.168.40.59 PG_IP=192.168.40.45 WG_VM_IP=192.168.40.47
-#           VLAN109_IP=10.109.0.10 WG_NEXT_HOP=10.109.0.40 WEBSITE_LOCAL=http://127.0.0.1:8000
-#           WEB_ENV=/etc/jengasec/web.env AI_ENV=/etc/jengasec-ai/ai-api.env KUBECONFIG_WEBSITE=~/website.kubeconfig
+#           VLAN109_IP=10.109.0.10 WG_NEXT_HOP=10.109.0.40 WEBSITE_LOCAL=https://192.168.40.11
+#           WEB_ENV=/opt/jengasec/.env (written by the website's Ansible) AI_ENV=/etc/jengasec-ai/ai-api.env
+#           KUBECONFIG_WEBSITE=~/website.kubeconfig
 # reads:  the two env files above (for the database host and the feed settings); never prints secrets
 # changes:nothing (read-only checks; one POST to /api/feed WITHOUT a token, which the website refuses)
 # safe to run again: yes
@@ -22,8 +23,8 @@ PG_IP="${PG_IP:-192.168.40.45}"
 WG_VM_IP="${WG_VM_IP:-192.168.40.47}"
 VLAN109_IP="${VLAN109_IP:-10.109.0.10}"
 WG_NEXT_HOP="${WG_NEXT_HOP:-10.109.0.40}"
-WEBSITE_LOCAL="${WEBSITE_LOCAL:-http://127.0.0.1:8000}"
-WEB_ENV="${WEB_ENV:-/etc/jengasec/web.env}"
+WEBSITE_LOCAL="${WEBSITE_LOCAL:-https://192.168.40.11}"   # the address the AI marks use; the certificate names it
+WEB_ENV="${WEB_ENV:-/opt/jengasec/.env}"
 AI_ENV="${AI_ENV:-/etc/jengasec-ai/ai-api.env}"
 KUBECONFIG_WEBSITE="${KUBECONFIG_WEBSITE:-$HOME/website.kubeconfig}"
 
@@ -71,8 +72,8 @@ local_checks() {
 
   head_ "Services on this VM"
   local c
-  c=$(code "$WEBSITE_LOCAL/healthz/"); [ "$c" = 200 ] && ok "website (gunicorn) answers on $WEBSITE_LOCAL" || bad "website on $WEBSITE_LOCAL answered $c (is gunicorn running?)"
-  c=$(code "https://127.0.0.1/healthz/"); [ "$c" = 200 ] && ok "nginx serves the website on 443" || warn "nginx on 443 answered $c (website docs/VENUE-HOSTING.md: nginx + TLS)"
+  c=$(code "$WEBSITE_LOCAL/healthz/"); [ "$c" = 200 ] && ok "website answers through nginx on $WEBSITE_LOCAL" || bad "website on $WEBSITE_LOCAL answered $c (systemctl status nginx gunicorn; website: make platform)"
+  [ -S /run/gunicorn/gunicorn.sock ] && ok "gunicorn listens on its unix socket" || warn "no /run/gunicorn/gunicorn.sock (systemctl status gunicorn.socket)"
   c=$(code "https://127.0.0.1:8443/healthz"); [ "$c" = 200 ] && ok "AI API answers on 8443" || bad "AI API on 8443 answered $c (systemctl status jengasec-ai-api)"
   c=$(code "http://127.0.0.1:11434/api/tags"); [ "$c" = 200 ] && ok "Ollama answers locally (proposal scoring)" || warn "Ollama not answering on 127.0.0.1:11434 (only needed for proposal scoring)"
 
@@ -85,7 +86,7 @@ local_checks() {
     c=$(code -X POST -H 'Content-Type: application/json' --data '{}' "$feed")
     case "$c" in
       403) ok "website feed exists and refuses a request without the token (as it should)" ;;
-      404) bad "website feed answered 404: DJANGO_FEED_TOKEN is not set on the website" ;;
+      404) bad "website feed answered 404: DJANGO_FEED_TOKEN is not set on the website (vault_django_feed_token, then make platform)" ;;
       *)   bad "website feed answered $c at $feed" ;;
     esac
   fi
@@ -125,9 +126,13 @@ local_checks() {
     ss -ltnH 2>/dev/null | awk '{print $4}' | grep -qE ':11434$' && \
       { ss -ltnH | awk '{print $4}' | grep -qE '^127\.0\.0\.1:11434$' && ok "Ollama only on 127.0.0.1" || bad "Ollama listens beyond 127.0.0.1"; }
   fi
-  if command -v nft >/dev/null && [ "$(id -u)" = 0 ]; then
-    if nft list ruleset 2>/dev/null | grep -q 'dport 8443'; then ok "host firewall loaded (8443 rule present)"; else warn "no host firewall rule for 8443 (docs/platform-vm.md section 5)"; fi
-  else warn "cannot read nftables (not root or nft missing)"; fi
+  # The website's Ansible manages the firewall with ufw (docs/platform-vm.md section 5)
+  if [ "$(id -u)" = 0 ] && command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
+    if ufw status | grep -q '^8443/tcp'; then ok "ufw is active and has the AI API (8443) rules"
+    else bad "ufw is active but 8443 is not allowed: OBS and the AI teams are blocked (website repo: firewall_rules_ai_api in host_vars/jengasec.yml, then make networking)"; fi
+  elif [ "$(id -u)" = 0 ] && command -v nft >/dev/null && nft list ruleset 2>/dev/null | grep -q 'dport 8443'; then
+    ok "nftables has an 8443 rule"
+  else warn "no active host firewall found (not root, or the website's Ansible has not run yet)"; fi
 
   printf '\nNext: run "platform-check.sh probe 192.168.40.11" on the OBS VM, and "platform-check.sh probe %s" from a WireGuard laptop.\n' "$VLAN109_IP"
 }

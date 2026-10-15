@@ -1,0 +1,94 @@
+--- a/scripts/bootstrap_event.py
++++ b/scripts/bootstrap_event.py
+@@ -3,7 +3,19 @@
+ import argparse,csv,os,ipaddress,sys,json
+ from pathlib import Path
+ 
++import re
++# The full-house plan: 18 App Blue, 54 App Red, 3 AI Blue, 6 AI Red. Used only when STRICT_TEAM_COUNTS=1;
++# otherwise the event is the teams the CSVs name (real turnout), within the limits below.
+ TEAM_COUNTS={('blue','application'):18,('red','application'):54,('blue','ai'):3,('red','ai'):6}
++STRICT=os.getenv('STRICT_TEAM_COUNTS','0')=='1'
++MAX_RED_PER_APP=int(os.getenv('MAX_RED_PER_APP_TARGET','3'))     # the 1:3 rule, as a ceiling
++MAX_RED_PER_AI=int(os.getenv('MAX_RED_PER_AI_TARGET','2'))
++MAX_AI_TARGETS_PER_RED=int(os.getenv('MAX_AI_TARGETS_PER_RED','2'))  # an AI Red team may pair with two AI Blue teams
++TEAM_CODE=re.compile(r'^(BLUE|RED)-(APP|AI)-(\d{2})$')
++def parse_code(c):
++    m=TEAM_CODE.match(c or '')
++    if not m: raise ValueError(f"Team code must look like BLUE-APP-01 or RED-AI-02: {c!r}")
++    return ('blue' if m[1]=='BLUE' else 'red'),('application' if m[2]=='APP' else 'ai'),int(m[3])
+ def code(side,category,n): return f"{side.upper()}-{'APP' if category=='application' else 'AI'}-{n:02d}"
+ def load_csv(path):
+     with open(path,newline='',encoding='utf-8-sig') as f:return list(csv.DictReader(f))
+@@ -46,7 +58,13 @@
+     for row in assignments:
+         if row['target_code'] not in target_codes: raise ValueError(f"Unknown or non-Blue target_code {row['target_code']}")
+     valid_roles={'blue_participant','red_participant','judge','infrastructure_staff'}
+-    known_teams={code(side,category,n) for (side,category),count in TEAM_COUNTS.items() for n in range(1,count+1)}
++    if STRICT:
++        known_teams={code(side,category,n) for (side,category),count in TEAM_COUNTS.items() for n in range(1,count+1)}
++    else:
++        known_teams={r['owner_team'] for r in targets} | {r['red_team_code'] for r in assignments}
++    for c in known_teams: parse_code(c)
++    teams_by_kind={}
++    for c in sorted(known_teams): teams_by_kind.setdefault(parse_code(c)[:2],[]).append(c)
+     policy_keys=set()
+     for row in policies:
+         policy_key=(row['subject_role'],row['target_code'],(row['protocol'] or '').lower(),row['port'],row['action'],(row.get('source_team_code') or '').strip())
+@@ -88,26 +106,26 @@
+             owner=row['owner_team']; category=row['category']; expected=3 if category=='application' else 2
+             expected_owner_prefix='BLUE-APP-' if category=='application' else 'BLUE-AI-'
+             if not owner.startswith(expected_owner_prefix): raise ValueError(f"Target owner/category mismatch: {owner} ({category})")
+-            if counts[row['target_code']] != expected: raise ValueError(f"{row['target_code']} needs exactly {expected} assigned Red teams in window {win}; found {counts[row['target_code']]}")
++            if STRICT and counts[row['target_code']] != expected: raise ValueError(f"{row['target_code']} needs exactly {expected} assigned Red teams in window {win}; found {counts[row['target_code']]}")
++            ceiling=MAX_RED_PER_APP if category=='application' else MAX_RED_PER_AI
++            if not STRICT and counts[row['target_code']] > ceiling: raise ValueError(f"{row['target_code']} has {counts[row['target_code']]} Red teams in window {win}; at most {ceiling}")
+             for ass in [x for x in window_rows if x['target_code']==row['target_code']]:
+                 prefix='RED-APP-' if category=='application' else 'RED-AI-'
+                 if not ass['red_team_code'].startswith(prefix): raise ValueError(f"Assignment category mismatch: {ass['red_team_code']} -> {row['target_code']}")
+                 window_red_usage[ass['red_team_code']]=window_red_usage.get(ass['red_team_code'],0)+1
+         # Fix: check every Red team inside EACH window (before, only the last window was checked).
+         for side,category in [('red','application'),('red','ai')]:
+-            count=TEAM_COUNTS[(side,category)]
+-            for n in range(1,count+1):
+-                team=code(side,category,n)
+-                if window_red_usage.get(team,0)!=1: raise ValueError(f"Expected exactly one Blue target assignment for {team} in window {win}; found {window_red_usage.get(team,0)}")
++            for team in teams_by_kind.get((side,category),[]):
++                used=window_red_usage.get(team,0)
++                most=1 if (category=='application' or STRICT) else MAX_AI_TARGETS_PER_RED
++                if not 1<=used<=most: raise ValueError(f"Expected {'exactly one' if most==1 else f'1 to {most}'} Blue target assignment(s) for {team} in window {win}; found {used}")
+     # Fix: an empty assignments.csv gives a clear message instead of a crash.
+     if not windows: raise ValueError('assignments.csv has no Red-to-Blue assignments')
+     for side,category in [('blue','application'),('blue','ai')]:
+-        count=TEAM_COUNTS[(side,category)]
+-        for n in range(1,count+1):
+-            team=code(side,category,n)
++        for team in teams_by_kind.get((side,category),[]):
+             if owner_counts.get(team,0)!=1: raise ValueError(f"Expected exactly one target for {team}; found {owner_counts.get(team,0)}")
+     if not a.apply:
+-        print(f"DRY RUN OK: event={a.event_name}, {sum(TEAM_COUNTS.values())} teams, {len(targets)} Blue targets, {len(infra_targets)} infrastructure targets, {len(assignments)} Red assignments, {len(policies)} access policies. Use --apply to write database.")
++        print(f"DRY RUN OK: event={a.event_name}, {len(known_teams)} teams ({', '.join(f'{len(v)} {s} {c}' for (s,c),v in sorted(teams_by_kind.items()))}), {len(targets)} Blue targets, {len(infra_targets)} infrastructure targets, {len(assignments)} Red assignments, {len(policies)} access policies. Use --apply to write database.")
+         return 0
+     dsn=os.getenv('JENGASEC_DATABASE_URL')
+     if not dsn: print('JENGASEC_DATABASE_URL is required for --apply',file=sys.stderr); return 2
+@@ -127,9 +145,8 @@
+             cur.execute('UPDATE event_config SET event_name=%s,starts_at=%s,ends_at=%s WHERE event_id=%s',(a.event_name,starts,ends,existing_event['event_id']))
+         else:
+             cur.execute('INSERT INTO event_config(event_name,starts_at,ends_at) VALUES (%s,%s,%s)',(a.event_name,starts,ends))
+-        for (side,category),count in TEAM_COUNTS.items():
+-            for n in range(1,count+1):
+-                c=code(side,category,n)
++        for c in sorted(known_teams):
++                side,category,n=parse_code(c)
+                 cur.execute("INSERT INTO teams(team_code,category,side,team_number) VALUES (%s,%s,%s,%s) ON CONFLICT(team_code) DO UPDATE SET category=EXCLUDED.category,side=EXCLUDED.side,team_number=EXCLUDED.team_number",(c,category,side,n))
+         teammap={}
+         cur.execute('SELECT team_id,team_code,side,category FROM teams')
+@@ -162,7 +179,7 @@
+             if row.get('source_team_code') and source_team is None: raise ValueError(f"Unknown source_team_code {row['source_team_code']}")
+             cur.execute("INSERT INTO access_policies(subject_role,source_team_id,target_id,protocol,port,action,rationale,enabled) SELECT %s,%s,target_id,%s,%s,%s,%s,true FROM targets WHERE target_code=%s",
+                         (row['subject_role'],source_team,row['protocol'].lower(),int(row['port']),row['action'],row.get('rationale') or 'Imported from approved access-policies.csv',row['target_code']))
+-        cur.execute("INSERT INTO audit_events(actor,action,subject_type,subject_id,outcome,details) VALUES ('bootstrap-event','event_topology_loaded','event','jengasec','success',%s)",(Jsonb({'event_name':a.event_name,'starts_at':a.starts_at,'ends_at':a.ends_at,'teams':sum(TEAM_COUNTS.values()),'blue_targets':len(targets),'infrastructure_targets':len(infra_targets),'assignments':len(assignments),'policies':len(policies)}),))
++        cur.execute("INSERT INTO audit_events(actor,action,subject_type,subject_id,outcome,details) VALUES ('bootstrap-event','event_topology_loaded','event','jengasec','success',%s)",(Jsonb({'event_name':a.event_name,'starts_at':a.starts_at,'ends_at':a.ends_at,'teams':len(known_teams),'blue_targets':len(targets),'infrastructure_targets':len(infra_targets),'assignments':len(assignments),'policies':len(policies)}),))
+     print('EVENT_TOPOLOGY_IMPORTED')
+     return 0
+ if __name__=='__main__': raise SystemExit(main())

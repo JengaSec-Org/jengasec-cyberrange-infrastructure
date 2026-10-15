@@ -7,7 +7,7 @@
 - the database quick reference
 - NET's kit `jengasec-update-2026-10-14-wifi` (address plan, OPNsense handoff, WireGuard worker)
 - NET's `JengaSec_VLAN_Ranges.pdf` (14 October 2026): VLANs 101–109, the fixed VLAN 109 addresses, the VPN ranges
-- the website's `docs/VENUE-HOSTING.md`
+- the website's Ansible, `jengasec-website-infrastructure` (`inventories/v1`: VM 101 is its own control node) and its `scripts/cutover/` (website database on postgres-vm)
 - the observability contracts on `main`
 
 **Rule for this page:** where it gives an address that is not live yet, it says so. Nothing here changes a live system.
@@ -16,15 +16,15 @@
 
 | Service | Listens on | Reached by |
 |---|---|---|
-| nginx → website (Django, gunicorn `127.0.0.1:8000`) | **443** (TLS, internal CA) | Participants, staff and judges over WireGuard; Render stays the public copy |
+| nginx → website (Django, gunicorn on the unix socket `/run/gunicorn/gunicorn.sock`), deployed by the website's Ansible (`make platform`) | **443** (TLS, the Ansible internal CA) | Participants, staff and judges over WireGuard and the venue Wi-Fi; Render is suspended after the cutover |
 | AI API (`ai-api/`, uvicorn) | **8443** (TLS) | AI Blue and AI Red teams over WireGuard; Vector on the OBS VM (`/ingest`); staff |
-| AI marks timer (`jengasec-ai-marks.timer`) | — | Calls the website **on the same machine**: `http://127.0.0.1:8000/api/feed/` |
+| AI marks timer (`jengasec-ai-marks.timer`) | — | Calls the website **on the same machine** through nginx: `https://192.168.40.11/api/feed/` (the website's certificate names that address; traffic stays on the VM) |
 | Ollama (proposal scoring model) | `127.0.0.1:11434` only | The website, locally |
-| NET's control plane and Ansible controller (already here, from NET's kit) | as NET's kit sets it | NET; check its port does not clash with 443, 8443 or 8000 |
+| NET's control plane and Ansible controller (already here, from NET's kit) | as NET's kit sets it | NET; check its port does not clash with 443 or 8443 (the range portal API uses `127.0.0.1:8080`) |
 
 Putting the AI API next to the website removes one network hop: the marks go to `127.0.0.1` and never cross a network. It also removes a VM, and a clash: NET has given `10.109.0.40` to wireguard-vm, which is the address the separate AI VM was going to use.
 
-**Size it for the model.** The architecture's web VM is 4 vCPU / 6 GB. Ollama with a 4B model needs about 3–4 GB on its own (website `docs/VENUE-HOSTING.md`). With the website, the AI API and 324 people, give VM 101 at least **6 vCPU / 12 GB** (16 GB if you move to a 7–8B model).
+**Size it for the model.** VM 101 is 4 vCPU / 8 GB (the website's `host_vars/jengasec.yml`), shared by nginx, gunicorn, Redis, Bind9, Prometheus, Grafana, the AI API and Ollama. The AI API needs little: about 150 MB. Ollama is the heavy one: about 3–4 GB for a 4B model and about 5 GB for `llama3` (8B) while it scores. Either run proposal scoring outside the busy hours, or ask for 12 GB.
 
 ## 2. Two networks, two addresses
 
@@ -51,22 +51,22 @@ Putting the AI API next to the website removes one network hop: the marks go to 
 
 | # | From VM 101 | To | Port | What |
 |---|---|---|---:|---|
-| O1 | website | **Neon** (internet) | 5432 | The website's database. It is shared with Render (`VENUE-HOSTING.md`), so **an internet outage stops the venue site too** |
+| O1 | website | postgres-vm 103 `192.168.40.45` | 5432 | The website's database `jengasec_web` (`scripts/cutover/setup-database-vm.sh`; only `192.168.40.11` and `10.109.0.10` may log in). The campus blocks outgoing 5432, so Neon is out; Render is suspended at the cutover |
 | O2 | website (deploy agent, APP) | k8s-blue VM 106 `192.168.40.59` | 6443 | Scoped kubeconfig made by `website-access.sh grant` on VM 106 (it opens 6443 to `192.168.40.11` only) |
-| O3 | NET control plane | postgres-vm 103 `192.168.40.45` | 5432 | NET's VPN pipeline database (provisioning jobs, allocations) |
+| O3 | NET control plane | postgres-vm 103 `192.168.40.45` | 5432 | NET's VPN pipeline database (provisioning jobs, allocations), on the same server as O1 |
 | O4 | website | Brevo (mail), S3 storage (internet) | 443 | As on Render |
-| O5 | AI marks | website on the same VM | 8000 | `127.0.0.1`, no network |
+| O5 | AI marks | website on the same VM | 443 | via nginx on its own address; never leaves the VM |
 
 ### Between the other VMs (they matter to you, but someone else configures them)
 
 | From | To | Port | What | Owner |
 |---|---|---:|---|---|
-| OBS 104 | website's database (Neon today) | 5432 | Read-only `obs_*_v1` attribution views | Website + OBS |
+| OBS 104 | website's database on postgres-vm `192.168.40.45` | 5432 | Read-only `obs_*_v1` attribution views (needs its own read-only login and a `pg_hba` line for `192.168.40.60`; `setup-database-vm.sh` allows only the website) | Website + OBS |
 | wireguard-vm 102 `.47` | postgres-vm 103 `.45` | 5432 | Provisioning worker | NET |
 | k8s-blue 106 | OBS 104 | 4317, 9090 | App logs and metrics | OBS / APP |
 | gateway (OPNsense) | OBS 104 | 514, 2055 | Flow and IDS logs | NET / OBS |
 
-**Where the attribution data lives.** OBS's contract reads the platform database's views. On the venue plan that database is Neon, on the internet. During an outage OBS keeps its last good snapshot (its contract says so), but new WireGuard allocations stop resolving. That leaves new traffic `unknown`, AI Red sees nothing new, and scoring loses ground truth. Decide this with the website and OBS owners before the event: either a local read replica on postgres-vm 103, or accept it as a known risk.
+**Where the attribution data lives.** OBS's contract reads the platform database's views. After the cutover that database is on postgres-vm, on the range, so an internet outage no longer stops attribution, the website or scoring. Only uploads and downloads (Backblaze, over 443) and email stop. Ask the database owner for OBS's read-only login.
 
 ## 4. Routing: replies must go back through the VPN
 
@@ -90,33 +90,26 @@ iface ens19 inet static
 
 If NET prefers to send everything through OPNsense instead, the next hop is `10.109.0.1`. Either way, check it with `ip route get 10.60.2.13`. The answer must name `ens19`, never `192.168.40.1`; `platform-check.sh` checks this for you.
 
-Do **not** add a default route on `ens19`. VM 101 keeps `192.168.40.1` as its way to the internet (Neon, mail, storage).
+Do **not** add a default route on `ens19`. VM 101 keeps `192.168.40.1` as its way to the internet (mail, Backblaze storage).
 
 ## 5. Firewall on VM 101
 
-The gateway and wireguard-vm already filter. This is the last layer, and it is what stops a mistake elsewhere from exposing the database-backed admin pages:
+The gateway and wireguard-vm already filter, and this is the last layer. **The website's Ansible owns it, with ufw** (`roles/firewall`). Never load an nftables ruleset beside it: two firewalls on one host means the second silently undoes the first.
 
-```text
-table inet filter {
-  chain input {
-    type filter hook input priority 0; policy drop;
-    ct state established,related accept
-    iif lo accept
-    ip saddr 192.168.40.0/24 tcp dport 22 accept                          # I5 staff SSH
-    ip saddr 192.168.40.60 tcp dport { 443, 8443 } accept                 # I1, I2 OBS (Vector and website feed)
-    ip saddr { 10.60.0.0/14, 10.64.0.0/16 } tcp dport 443 accept          # I3 everyone over WireGuard
-    ip saddr { 10.62.0.0/16, 10.64.0.0/16, 10.63.0.0/24 } tcp dport 8443 accept   # I4 AI teams and staff
-    # ip saddr 10.105.0.0/24 tcp dport 443 accept                         # venue Wi-Fi -> website only (NET item 5)
-    icmp type echo-request accept
-  }
-}
-```
+All the rules for this VM live in `inventories/v1/host_vars/jengasec.yml` in `jengasec-website-infrastructure`. That is the only place they work, because group rules are dropped on a host that is in seven groups.
 
-Save it as `/etc/nftables.conf`, starting with the line `flush ruleset`, then run `systemctl enable --now nftables`. The ruleset uses the same syntax as the one checked with `nft -c` on Debian 12 in `runbooks/ai-api-vm.md`. Re-check after any edit with `sudo nft -c -f /etc/nftables.conf`.
+| List | Opens | Flows |
+|---|---|---|
+| `firewall_rules_common` | 22 from `192.168.40.0/24` | I5 |
+| `firewall_rules_lab` | 443 (and DNS, Grafana, Prometheus) from `192.168.40.0/24` | I2 (OBS's website feed) |
+| `firewall_rules_venue` | 80 and 443 from the Wi-Fi `10.105.0.0/24`, VLAN 109 and every WireGuard range | I3 |
+| `firewall_rules_ai_api` (added for this layout) | 8443 from `192.168.40.60`, `10.62.0.0/16`, `10.64.0.0/16` and `10.63.0.0/24` only | I1, I4 |
+
+App Red / App Blue (`10.60.0.0/15`) and the Wi-Fi never reach 8443. Apply it with `make networking INVENTORY=inventories/v1`, then check with `sudo ufw status numbered`.
 
 ## 6. What the other owners must do
 
-### NET: five items, without them no participant can reach VM 101
+### NET: seven items, without them no participant can reach VM 101
 
 1. **Apply `docs/net-platform-services.patch`** to `services/provision_worker.py` in NET's kit.
 
@@ -135,7 +128,20 @@ Save it as `/etc/nftables.conf`, starting with the line `flush ruleset`, then ru
 5. **Venue Wi-Fi reaches the servers directly.** NET (14 October) has said the Wi-Fi is a `/24`, `10.105.0.0/24`. The sheet and `contracts/address-plan.md` both still say `/22` and need correcting. NET is also setting the Wi-Fi up so that it can reach the servers at Kindaruma without the VPN. That solves the bootstrap problem: participants can open the website and download their WireGuard profile before they have one. Three things to agree with NET while they set it up:
    - **Only the website, port 443.** Allow `10.105.0.0/24` to reach `10.109.0.10` TCP 443, plus ping if wanted. Do not open the AI API, the database, SSH or the applications on `10.108.0.0/24` to the Wi-Fi. The applications especially must stay VPN-only: scoring and OBS attribution identify a team by its WireGuard address, so a hit from `10.105.x.x` is `unknown` and cannot be scored.
    - **Return path.** Replies to `10.105.0.0/24` must go back the way the request came. If the Wi-Fi reaches VM 101 on `10.109.0.10`, uncomment the `10.105.0.0/24 via 10.109.0.1` route in §4. If it reaches VM 101 on `192.168.40.11` instead, the replies use the default gateway `192.168.40.1`, which must know that `10.105.0.0/24` lives behind OPNsense. Either way, check with `ip route get 10.105.0.20`.
-   - **VM 101's firewall.** Uncomment the `10.105.0.0/24 tcp dport 443` line in §5.
+   - **VM 101's firewall.** Already done: `firewall_rules_venue` opens 80/443, and only those, to `10.105.0.0/24` (§5).
+
+6. **Load the event data, with turnout, not the full house.** `scripts/bootstrap_event.py` accepts only 18 / 54 / 3 / 6 teams and exactly 3 Red teams per app; the roster has 7 App Blue, 20 App Red, 6 AI Blue and 3 AI Red, so it refuses to load and no peer is ever made. Apply `docs/net-bootstrap-turnout.patch`:
+   - It loads the teams the CSVs name.
+   - It allows up to 3 Red teams per app and 2 per AI target.
+   - Each App Red team must have exactly one app; each AI Red team has one or two AI targets.
+   - `STRICT_TEAM_COUNTS=1` restores the old rule.
+
+   The CSVs come from the website, never by hand: `jengasec-manage export_range --competition <id> --out <dir>` writes `net-targets.csv`, `net-assignments.csv`, `net-infrastructure-targets.csv` and `net-access-policies.csv`. Copy them into `config/csv-templates/` without the `net-` prefix, then run `jengasecctl.sh bootstrap`.
+
+   Each AI Blue team's target is the AI API (`10.109.0.10:8443`), so AI Blue and its paired AI Red teams reach it through the kit's ordinary rules.
+
+   Tested: the website's export of a turnout-sized event passes the patched bootstrap's dry run, which the original rejects. The database-writing path also ran against a stand-in database.
+7. **Registration → VPN.** The website does not yet call the control plane's `POST /v1/participants` (`jengasec-control-plane.service`, `127.0.0.1:8080` on VM 101), so no registration ever becomes a peer. That code is still to be written, against the control plane's API.
 
 ### OBS
 
@@ -159,25 +165,19 @@ Save it as `/etc/nftables.conf`, starting with the line `flush ruleset`, then ru
 
 ## 7. Install on VM 101
 
-```bash
-# AI API (no --bind: it must answer on 192.168.40.11 for OBS and on 10.109.0.10 for teams)
-sudo ./ai-api/deploy/install.sh
-sudo sed -i 's|^WEBSITE_FEED_URL=.*|WEBSITE_FEED_URL=http://127.0.0.1:8000/api/feed/|' /etc/jengasec-ai/ai-api.env
-#   + WEBSITE_FEED_TOKEN (= the website's DJANGO_FEED_TOKEN), WEBSITE_COMPETITION, ENGAGEMENT_DAYS
-sudo systemctl restart jengasec-ai-api
-# Website: follow the website repo's docs/VENUE-HOSTING.md (gunicorn on 127.0.0.1:8000, nginx on 443)
-# then check everything:
-sudo ./ai-api/deploy/platform-check.sh
-```
+The exact steps, start to finish, are in [`runbooks/platform-vm-install.md`](../runbooks/platform-vm-install.md). In short:
 
-For the website itself, read the HTTPS trap in `VENUE-HOSTING.md` before the event. Without TLS and with `DJANGO_DEBUG=False`, nobody can log in at the venue.
+1. The database VM has `jengasec_web` (`setup-database-vm.sh`).
+2. The website goes on with its Ansible (`make bootstrap`, `networking`, `security`, `database`, `platform`), with `vault_jengasec_db_url` and `vault_django_feed_token` in the vault.
+3. The AI API goes on from the bundle (`sudo ./ai-api/deploy/install.sh`), with `WEBSITE_FEED_URL=https://192.168.40.11/api/feed/` and the same feed token.
+4. Check: `platform-check.sh` on the VM, then `platform-probe.ps1` / `platform-check.sh probe` from elsewhere.
 
 ## 8. Check it: `ai-api/deploy/platform-check.sh`
 
 | Run | Where | Proves |
 |---|---|---|
-| `sudo platform-check.sh` | VM 101 | Local services are up; it can reach Neon, k8s-blue 6443 and postgres-vm; replies to participants route through wireguard-vm; the firewall is loaded |
+| `sudo platform-check.sh` | VM 101 | Local services are up; it can reach the website database, k8s-blue 6443 and postgres-vm; replies to participants route through wireguard-vm; ufw has the 8443 rules |
 | `platform-check.sh probe 192.168.40.11` | OBS VM 104 | OBS can reach the AI API's ingest and the website |
-| `platform-check.sh probe 10.109.0.10` | A laptop with a participant WireGuard profile | The website (and, with an AI team's profile, the AI API) is reachable through the VPN, as the patched worker intends |
+| `platform-check.sh probe 10.109.0.10` (Windows: `platform-probe.ps1 10.109.0.10`) | A laptop with a participant WireGuard profile | The website (and, with an AI team's profile, the AI API) is reachable through the VPN, as the patched worker intends |
 
 Run the three in that order. A failure tells you which row of §3 is broken, and §6 tells you whose change fixes it.

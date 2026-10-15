@@ -108,7 +108,7 @@ The steps are the same as for a test VM, with these differences:
 sudo ./ai-api/deploy/install.sh      # on the platform VM: listen on both addresses; the firewall decides who gets in
 ```
 
-**Host firewall.** On the platform VM use the combined website + AI ruleset in `docs/platform-vm.md` §5 instead of this one. The ruleset below is for a dedicated AI VM only:
+**Host firewall.** On the platform VM the website's Ansible owns the firewall (ufw, `docs/platform-vm.md` §5): do **not** load this ruleset there. The ruleset below is for a dedicated AI VM only:
 
 ```bash
 sudo apt-get install -y nftables
@@ -140,7 +140,7 @@ sudo systemctl enable --now nftables
    Hand each team only its own line of `/etc/jengasec-ai/team-tokens.txt`.
 2. In `/etc/jengasec-ai/ai-api.env`, set:
    - `SANDBOX_SEED=0`
-   - `WEBSITE_FEED_URL=http://127.0.0.1:8000/api/feed/` (the website on the same VM), `WEBSITE_FEED_TOKEN` (= the website's `DJANGO_FEED_TOKEN`) and `WEBSITE_COMPETITION`
+   - `WEBSITE_FEED_URL=https://192.168.40.11/api/feed/` (the website on the same VM, through nginx), `WEBSITE_FEED_TOKEN` (= the website vault's `vault_django_feed_token`) and `WEBSITE_COMPETITION`
    - `ENGAGEMENT_DAYS=1=…,2=…,3=…`
 3. Run `sudo ./ai-api/deploy/install.sh --reset-db`. This empties the database: no scenario data, decisions or actions remain.
 4. Give OBS the ingest token and the certificate (`docs/ai-integration.md` §1). After they reload Vector, a request to any test app should appear in `GET /telemetry/events` within seconds, with its `team_label`.

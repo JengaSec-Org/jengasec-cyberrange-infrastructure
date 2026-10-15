@@ -34,6 +34,9 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 [ "$BIND" = 0.0.0.0 ] || LOCAL="$BIND"   # health checks and the marks timer call the address the API listens on
 [ "$(id -u)" = 0 ] || die "run as root (sudo)"
+# Hardened hosts (the website's Ansible sets umask 027) would make the code and the venv unreadable to the
+# service user: "Failed to execute .../venv/bin/uvicorn: Permission denied". Secrets below set their own modes.
+umask 022
 SRC="$(cd "$(dirname "$0")/../.." && pwd)"
 for f in ai-api/app/main.py ai-api/requirements.txt contracts/telemetry-event.schema.json contracts/telemetry-event-catalogue.yaml scripts/cells.yaml scripts/ai-teams.yaml; do
   [ -e "$SRC/$f" ] || die "$SRC/$f missing: run this from the repository or the bundle"
@@ -72,6 +75,7 @@ log "python environment"
 [ -x "$APP/venv/bin/python" ] || python3 -m venv "$APP/venv"
 "$APP/venv/bin/pip" install -q --upgrade pip
 "$APP/venv/bin/pip" install -q -r "$APP/repo/ai-api/requirements.txt"
+chmod -R a+rX "$APP/venv"   # repairs a venv made earlier under a stricter umask
 
 if [ ! -f "$ETC/ai-api.env" ]; then
   log "secrets -> $ETC/ai-api.env (new)"

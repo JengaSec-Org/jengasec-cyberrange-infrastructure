@@ -3,7 +3,7 @@
 # what:   Pack exactly what the AI API VM needs into one tarball (works with uncommitted changes)
 # owner:  AIC
 # usage:  ./ai-api/deploy/make-bundle.sh [out-dir]       default: out/
-# reads:  ai-api/, contracts/, scenarios/, scripts/cells.yaml, scripts/ai-teams.yaml, runbooks/ai-api-vm.md
+# reads:  ai-api/, contracts/, scenarios/, scripts/cells.yaml, scripts/ai-teams.yaml, the VM runbooks, docs/platform-vm.md
 # changes:writes <out-dir>/jengasec-ai-api.tar.gz only (out/ is gitignored)
 # safe to run again: yes (overwrites the tarball)
 # runbook: runbooks/ai-api-vm.md
@@ -11,7 +11,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${1:-$ROOT/out}"
-PATHS=(ai-api contracts scenarios scripts/cells.yaml scripts/ai-teams.yaml runbooks/ai-api-vm.md)
+PATHS=(ai-api contracts scenarios scripts/cells.yaml scripts/ai-teams.yaml runbooks/ai-api-vm.md runbooks/platform-vm-install.md docs/platform-vm.md)
 mkdir -p "$OUT"
 cd "$ROOT"
 
